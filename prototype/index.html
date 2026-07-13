@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="description" content="Promessa — protótipo do chute. Da várzea ao estrelato." />
+<title>Promessa — Protótipo do Chute</title>
+<style>
+  :root {
+    --bg: #14101F;
+    --card: #1E1731;
+    --line: #322850;
+    --text: #EFE9DC;
+    --muted: #9C93B3;
+    --accent: #FFD23F;
+    --accent-dark: #B8901A;
+    --hot: #E85D75;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  html { background: var(--bg); }
+  body {
+    font-family: var(--mono);
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 20px 16px 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .wrap { width: min(100%, 500px); display: flex; flex-direction: column; gap: 18px; }
+
+  header { text-align: center; display: flex; flex-direction: column; gap: 6px; }
+  .eyebrow {
+    color: var(--accent);
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 0;
+    font-size: 34px;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-wrap: balance;
+  }
+  .sub { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 0; }
+
+  .stage {
+    position: relative;
+    width: min(100%, calc(86vh * 0.5625));
+    aspect-ratio: 9 / 16;
+    align-self: center;
+    border: 2px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    background: #000;
+  }
+  .stage .bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  canvas {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+    cursor: crosshair;
+  }
+  .overlay {
+    z-index: 2;
+    position: absolute;
+    inset: 0;
+    background: rgba(16, 12, 26, 0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 24px;
+    text-align: center;
+  }
+  .overlay[hidden] { display: none; }
+  .overlay h2 {
+    margin: 0;
+    font-size: 20px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    text-wrap: balance;
+  }
+  .overlay p { margin: 0; color: var(--text); font-size: 13px; line-height: 1.55; max-width: 30ch; }
+  .overlay .placar {
+    font-size: 44px;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .overlay .manchete { color: var(--muted); font-style: italic; }
+  .btn {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: var(--accent);
+    color: #1A1428;
+    border: 2px solid var(--accent-dark);
+    border-radius: 4px;
+    padding: 12px 22px;
+    cursor: pointer;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: 3px solid var(--hot); outline-offset: 2px; }
+
+  .hints { display: flex; flex-direction: column; gap: 10px; }
+  .hint {
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 11px 14px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text);
+  }
+  .hint b { color: var(--accent); font-weight: 700; white-space: nowrap; }
+
+  .teste {
+    border: 1px dashed var(--accent-dark);
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+  .teste strong { color: var(--accent); }
+
+  footer { text-align: center; color: var(--muted); font-size: 11px; letter-spacing: 0.06em; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn:hover, .btn:active { transform: none; }
+  }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Promessa &middot; Protótipo nº 01</div>
+    <h1>O Chute</h1>
+    <p class="sub">Se este gesto for gostoso, o jogo existe.<br>10 chutes. O goleiro melhora a cada um.</p>
+  </header>
+
+  <div class="stage">
+    <img class="bg" src="assets/bg-varzea.jpg" alt="" />
+    <canvas id="game" width="180" height="320" aria-label="Mini-game de chute ao gol"></canvas>
+
+    <div class="overlay" id="intro">
+      <h2>Treino de finalização</h2>
+      <p>Arraste da bola em direção ao gol e solte. Traço longo = chute forte e alto. Traço curvado = efeito na bola.</p>
+      <button class="btn" id="btnStart">Começar &#9656;</button>
+    </div>
+
+    <div class="overlay" id="end" hidden>
+      <h2>Fim do treino</h2>
+      <div class="placar" id="placarFinal">0/10</div>
+      <p class="manchete" id="manchete"></p>
+      <button class="btn" id="btnAgain">Jogar de novo</button>
+    </div>
+  </div>
+
+  <div class="hints">
+    <div class="hint"><b>Mira</b><span>O traço aponta o canto: arraste pra cima-esquerda pra buscar o ângulo esquerdo.</span></div>
+    <div class="hint"><b>Força</b><span>Traço mais longo = mais forte e mais alto. Força demais perde a colocação.</span></div>
+    <div class="hint"><b>Efeito</b><span>Desenhe o traço em curva: a bola faz banana e o goleiro lê errado.</span></div>
+  </div>
+
+  <div class="teste">
+    <strong>O que este protótipo testa:</strong> o chute dá vontade de repetir? Jogue 3 rodadas e dê sua nota mental de 0 a 10. Se der 7+, seguimos pro MVP.
+  </div>
+
+  <footer>PROMESSA &middot; protótipo descartável &middot; arte e física provisórias</footer>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const W = 180, H = 320;          // coordenadas lógicas do jogo
+  const SCALE = 3;                 // resolução física 3× — sprites e traços suaves
+  const canvas = document.getElementById('game');
+  canvas.width = W * SCALE;
+  canvas.height = H * SCALE;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(SCALE, SCALE);
+
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- geometria do campo ----------
+  // Geometria calibrada sobre a imagem de fundo v3 (linha de fundo ≈ 42% da altura)
+  const GOAL = { left: 44, right: 136, barH: 40, floorY: 134, postW: 3 };
+  const TOTAL_SHOTS = 10;
+  const BALL_START_Y = 256; // cobrança da entrada da área — marca de cal desenhada pela engine
+  const START_OFFSETS = [0, -18, 20, -30, 32, -8, 26, -38, 40, 12];
+
+  // ---------- sprites pré-recortados no build (robusto em qualquer navegador) ----------
+  const loadSprite = (src) => {
+    const holder = { img: null, w: 1, h: 1 };
+    const img = new Image();
+    img.onload = () => {
+      holder.w = img.naturalWidth;
+      holder.h = img.naturalHeight;
+      holder.img = img;
+    };
+    img.src = src;
+    return holder;
+  };
+
+  const SPRITES = {
+    keeper: {
+      idle: loadSprite('assets/sprites/k_idle.png'),
+      crouch: loadSprite('assets/sprites/k_crouch.png'),
+      diveL: loadSprite('assets/sprites/k_divel.png'),
+      diveR: loadSprite('assets/sprites/k_diver.png'),
+      jump: loadSprite('assets/sprites/k_jump.png'),
+      sad: loadSprite('assets/sprites/k_sad.png'),
+    },
+    striker: {
+      back: loadSprite('assets/sprites/s_back.png'),
+      run: loadSprite('assets/sprites/s_run.png'),
+      kick: loadSprite('assets/sprites/s_kick.png'),
+      celebrate: loadSprite('assets/sprites/s_celebrate.png'),
+      lament: loadSprite('assets/sprites/s_lament.png'),
+    },
+    ball: loadSprite('assets/sprites/ball.png'),
+  };
+
+  // ---------- áudio ----------
+  let ac = null;
+  let noiseBuf = null;
+
+  // samples reais de torcida (síntese abaixo fica como fallback)
+  const SAMPLE_SRCS = {
+    goal: 'assets/sons/gol.m4a',
+    gasp: 'assets/sons/quase.m4a',
+    ambience: 'assets/sons/ambiente.m4a',
+  };
+  const samples = {};
+  let ambienceOn = false;
+  const playSample = (key, vol, loop = false) => {
+    if (!ac || !samples[key]) return false;
+    const src = ac.createBufferSource();
+    src.buffer = samples[key];
+    src.loop = loop;
+    const g = ac.createGain();
+    g.gain.value = vol;
+    src.connect(g).connect(ac.destination);
+    src.start();
+    return true;
+  };
+  const loadSample = (key, src) => {
+    const finish = (arrayBuf) => ac.decodeAudioData(arrayBuf).then((buf) => {
+      samples[key] = buf;
+      if (key === 'ambience' && !ambienceOn) {
+        ambienceOn = true;
+        playSample('ambience', 0.07, true); // murmúrio constante da arquibancada
+      }
+    }).catch(() => { /* mantém síntese */ });
+    if (src.startsWith('data:')) {
+      const bin = atob(src.split(',')[1]);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      finish(bytes.buffer);
+    } else {
+      fetch(src).then((r) => r.arrayBuffer()).then(finish).catch(() => {});
+    }
+  };
+
+  const initAudio = () => {
+    if (ac) return;
+    try {
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      const len = Math.floor(ac.sampleRate * 3);
+      noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
+      const data = noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      for (const [key, src] of Object.entries(SAMPLE_SRCS)) loadSample(key, src);
+    } catch { ac = null; }
+  };
+  const beep = (f0, f1, dur, type, vol) => {
+    if (!ac) return;
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, ac.currentTime);
+    o.frequency.exponentialRampToValueAtTime(Math.max(40, f1), ac.currentTime + dur);
+    g.gain.setValueAtTime(vol, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    o.connect(g).connect(ac.destination);
+    o.start();
+    o.stop(ac.currentTime + dur);
+  };
+  const noiseBurst = (dur, freq, vol) => {
+    if (!ac) return;
+    const len = Math.floor(ac.sampleRate * dur);
+    const buf = ac.createBuffer(1, len, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ac.createBufferSource();
+    const filt = ac.createBiquadFilter();
+    const g = ac.createGain();
+    src.buffer = buf;
+    filt.type = 'bandpass';
+    filt.frequency.value = freq;
+    g.gain.value = vol;
+    src.connect(filt).connect(g).connect(ac.destination);
+    src.start();
+  };
+  // torcida: ruído em banda com envelope — camadas somadas soam como multidão
+  const crowdLayer = (dur, f0, f1, q, vol, attack, release) => {
+    if (!ac || !noiseBuf) return;
+    const t0 = ac.currentTime;
+    const src = ac.createBufferSource();
+    src.buffer = noiseBuf;
+    src.loop = true;
+    const filt = ac.createBiquadFilter();
+    filt.type = 'bandpass';
+    filt.Q.value = q;
+    filt.frequency.setValueAtTime(f0, t0);
+    filt.frequency.linearRampToValueAtTime(f1, t0 + dur);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + attack);
+    g.gain.setValueAtTime(vol, t0 + Math.max(attack, dur - release));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(filt).connect(g).connect(ac.destination);
+    src.start(t0);
+    src.stop(t0 + dur + 0.05);
+  };
+  const crowdRoar = () => {           // explosão de gol: grave encorpado + "vozes" agudas
+    crowdLayer(2.4, 380, 820, 0.8, 0.45, 0.1, 1.5);
+    crowdLayer(2.4, 1300, 1900, 1.4, 0.14, 0.14, 1.6);
+  };
+  const crowdGasp = (vol) => {        // "OHHH" coletivo de quase-gol
+    crowdLayer(0.9, 350, 640, 1.1, vol, 0.09, 0.55);
+  };
+  const sfx = {
+    kick: () => { noiseBurst(0.09, 500, 0.5); beep(140, 90, 0.08, 'sine', 0.3); },
+    goal: () => {
+      if (!playSample('goal', 0.85)) crowdRoar();
+      beep(523, 523, 0.1, 'square', 0.12);
+      setTimeout(() => beep(659, 659, 0.1, 'square', 0.12), 110);
+      setTimeout(() => beep(784, 784, 0.22, 'square', 0.14), 220);
+    },
+    save: () => { beep(190, 120, 0.16, 'sawtooth', 0.25); noiseBurst(0.1, 300, 0.3); if (!playSample('gasp', 0.5)) crowdGasp(0.28); },
+    post: () => { beep(1250, 750, 0.28, 'triangle', 0.3); if (!playSample('gasp', 0.75)) crowdGasp(0.45); },
+    miss: () => { beep(300, 170, 0.3, 'sine', 0.15); if (!playSample('gasp', 0.6)) crowdGasp(0.35); },
+  };
+
+  // ---------- estado do jogo ----------
+  const game = {
+    state: 'intro',           // intro | ready | flying | result | end
+    shot: 0,
+    goals: 0,
+    results: [],              // 'goal' | 'save' | 'post' | 'miss'
+    ballX: 90, ballY: BALL_START_Y,
+    time: 0,
+    msg: null,                // { text, color, t }
+    shake: 0,
+    netBulge: null,           // { x, y, t }
+    flight: null,             // dados do chute em voo
+    post: null,               // fase pós-impacto { kind, x, y, vx, vy, t }
+    keeper: { x: 90, diveX: 90, diveP: 0, side: 0 },
+    resultTimer: 0,
+    drag: null,               // { pts: [{x,y}] }
+  };
+
+  const resetShot = () => {
+    game.ballX = 90 + START_OFFSETS[game.shot % START_OFFSETS.length];
+    game.ballY = BALL_START_Y;
+    game.flight = null;
+    game.post = null;
+    game.netBulge = null;
+    game.missMark = null;
+    game.confetti = null;
+    game.keeper = { x: 90, diveX: 90, diveP: 0, side: 0 };
+    game.state = 'ready';
+  };
+
+  const resetGame = () => {
+    game.shot = 0;
+    game.goals = 0;
+    game.results = [];
+    game.msg = null;
+    resetShot();
+  };
+
+  // ---------- input ----------
+  const toCanvas = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (H / r.height) };
+  };
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (game.state !== 'ready') return;
+    canvas.setPointerCapture(e.pointerId);
+    game.drag = { pts: [toCanvas(e)] };
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!game.drag) return;
+    const p = toCanvas(e);
+    const pts = game.drag.pts;
+    const last = pts[pts.length - 1];
+    if (Math.hypot(p.x - last.x, p.y - last.y) > 1.5) pts.push(p);
+    if (pts.length > 40) pts.shift();
+  });
+  canvas.addEventListener('pointerup', () => {
+    if (!game.drag) return;
+    const pts = game.drag.pts;
+    game.drag = null;
+    if (pts.length >= 3) tryShoot(pts);
+  });
+  canvas.addEventListener('pointercancel', () => { game.drag = null; });
+
+  // ---------- física do chute ----------
+  const flightX = (f, t) => f.sx + (f.tx - f.sx) * t + f.curve * Math.sin(Math.PI * t);
+  const flightGroundY = (f, t) => f.sy + (GOAL.floorY - f.sy) * t;
+  const flightH = (f, t) => f.targetH * t + f.arc * Math.sin(Math.PI * t);
+
+  function tryShoot(pts) {
+    const s = pts[0];
+    const e = pts[pts.length - 1];
+    const dx = e.x - s.x;
+    const dy = e.y - s.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 18 || dy > -10) return; // gesto muito curto ou não foi pra cima
+
+    const power = Math.min(1, Math.max(0.25, len / 145));
+
+    // curva = quanto o traço "barriga" pro lado em relação à corda
+    const mid = pts[Math.floor(pts.length / 2)];
+    const chordMidX = (s.x + e.x) / 2;
+    let curve = Math.max(-20, Math.min(20, (mid.x - chordMidX) * 0.9));
+
+    let tx = game.ballX + dx * 1.25;
+    let targetH = Math.min(52, Math.max(1, ((-dy - 14) / 125) * 46));
+
+    // força demais = dispersão (trade-off potência vs colocação)
+    const err = Math.max(0, power - 0.78);
+    tx += (Math.random() * 2 - 1) * err * 45;
+    targetH += (Math.random() * 2 - 1) * err * 12;
+    targetH = Math.max(1, targetH);
+
+    // chute fraco sai rasteiro
+    if (power < 0.42) targetH = Math.min(targetH, 10);
+
+    const skill = 0.22 + game.shot * 0.06; // goleiro melhora a cada chute
+    const f = {
+      sx: game.ballX, sy: game.ballY,
+      tx, targetH, curve, power,
+      arc: Math.max(1, targetH * 0.45 + power * 8),
+      dur: 0.72 - power * 0.24,
+      t: 0,
+      trail: [],
+    };
+
+    // goleiro lê a trajetória cedo e extrapola RETO — a curva engana ele
+    const reactT = Math.max(0.14, 0.42 - skill * 0.22 + (Math.random() - 0.5) * 0.06);
+    const x1 = flightX(f, reactT);
+    const x2 = flightX(f, reactT + 0.08);
+    let est = x1 + ((x2 - x1) / 0.08) * (1 - reactT);
+    est += (Math.random() * 2 - 1) * (1 - skill) * 22;
+    const maxDive = 24 + skill * 18;
+    const diveX = Math.max(90 - maxDive, Math.min(90 + maxDive, est));
+
+    // desfecho decidido já no chute (animação só encena)
+    const finalX = flightX(f, 1);
+    const inX = finalX > GOAL.left + GOAL.postW && finalX < GOAL.right - GOAL.postW;
+    const underBar = targetH < GOAL.barH - 2;
+    const hitPost =
+      (Math.abs(finalX - GOAL.left) <= GOAL.postW && underBar) ||
+      (Math.abs(finalX - GOAL.right) <= GOAL.postW && underBar) ||
+      (inX && targetH >= GOAL.barH - 2 && targetH <= GOAL.barH + 4);
+
+    let outcome;
+    if (hitPost) outcome = 'post';
+    else if (!inX || targetH > GOAL.barH + 4) outcome = 'miss';
+    else {
+      let reach = 7 + skill * 5;
+      if (targetH > 28) reach *= 0.5;                     // bola no ângulo é quase indefensável
+      if (power < 0.38 && Math.abs(finalX - 90) < 14) reach = 99; // fraquinho na mão do goleiro
+      outcome = Math.abs(diveX - finalX) <= reach ? 'save' : 'goal';
+    }
+
+    f.outcome = outcome;
+    f.finalX = finalX;
+    game.flight = f;
+    game.keeper.diveX = diveX;
+    game.keeper.reactT = reactT;
+    game.keeper.diveP = 0;
+    game.runP = 0;
+    game.state = 'runup'; // primeiro a corrida até a bola; o voo começa no contato
+  }
+
+  function resolveFlight() {
+    const f = game.flight;
+    const finalY = GOAL.floorY - f.targetH;
+    game.results.push(f.outcome);
+
+    if (f.outcome === 'goal') {
+      game.goals++;
+      const golaço = Math.abs(f.curve) > 12 || f.targetH > 32 || f.power > 0.86;
+      game.msg = { text: golaço ? 'GOLAÇO!!' : 'GOOOL!', color: '#FFD23F', t: 0 };
+      game.netBulge = { x: f.finalX, y: finalY, t: 0 };
+      if (!reducedMotion) game.shake = 3;
+      // torcida joga confete atrás do gol
+      game.confetti = Array.from({ length: 26 }, () => ({
+        x: 20 + Math.random() * 140,
+        y: 118 + Math.random() * 14,
+        vy: -(14 + Math.random() * 22),
+        color: ['#FFD23F', '#E85D75', '#F5F0E6', '#FF8C42'][Math.floor(Math.random() * 4)],
+        t: -Math.random() * 0.25,
+      }));
+      game.post = { kind: 'goal', x: f.finalX, y: finalY, vx: 0, vy: 14, t: 0 };
+      sfx.goal();
+    } else if (f.outcome === 'save') {
+      game.msg = { text: 'DEFENDEU!', color: '#E85D75', t: 0 };
+      game.post = { kind: 'save', x: f.finalX, y: finalY, vx: (f.finalX < 90 ? -1 : 1) * 26, vy: 30, t: 0 };
+      sfx.save();
+    } else if (f.outcome === 'post') {
+      game.msg = { text: 'NA TRAVE!', color: '#FF8C42', t: 0 };
+      game.post = { kind: 'post', x: f.finalX, y: finalY, vx: (90 - f.finalX) * 0.6, vy: 46, t: 0 };
+      if (!reducedMotion) game.shake = 2;
+      sfx.post();
+    } else {
+      game.msg = { text: 'PRA FORA!', color: '#9AA3B5', t: 0 };
+      game.post = { kind: 'miss', x: f.finalX, y: finalY, vx: (f.tx - f.sx) * 0.06, vy: -8, t: 0 };
+      game.missMark = { x: f.finalX, y: finalY };
+      sfx.miss();
+    }
+
+    game.state = 'result';
+    game.resultTimer = 0;
+  }
+
+  function nextShot() {
+    game.shot++;
+    if (game.shot >= TOTAL_SHOTS) {
+      game.state = 'end';
+      showEnd();
+    } else {
+      resetShot();
+    }
+  }
+
+  // ---------- overlays ----------
+  const introEl = document.getElementById('intro');
+  const endEl = document.getElementById('end');
+  const mancheteEl = document.getElementById('manchete');
+  const placarEl = document.getElementById('placarFinal');
+
+  const MANCHETES = [
+    [9, 'FENÔMENO! O olheiro já ligou pro seu empresário.'],
+    [7, 'CRAQUE! A promessa é real, diz a mesa-redonda.'],
+    [5, 'Promete, mas oscila. O debate segue quente.'],
+    [3, 'A torcida pede paciência… muita paciência.'],
+    [0, 'Volta pra várzea, menino.'],
+  ];
+  function showEnd() {
+    placarEl.textContent = game.goals + '/' + TOTAL_SHOTS;
+    mancheteEl.textContent = '“' + MANCHETES.find(([min]) => game.goals >= min)[1] + '”';
+    endEl.hidden = false;
+  }
+
+  document.getElementById('btnStart').addEventListener('click', () => {
+    initAudio();
+    introEl.hidden = true;
+    resetGame();
+  });
+  document.getElementById('btnAgain').addEventListener('click', () => {
+    endEl.hidden = true;
+    resetGame();
+  });
+
+  // ---------- desenho ----------
+  const px = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); };
+
+  function drawScene() {
+    // o cenário é a imagem de fundo — aqui o gol e a marca de cal, desenhados sobre ela
+    const markX = game.flight ? game.flight.sx : game.ballX;
+    ctx.fillStyle = 'rgba(240,235,220,0.55)';
+    ctx.beginPath(); ctx.ellipse(markX, BALL_START_Y + 2, 7, 2.2, 0, 0, 7); ctx.fill();
+
+    const top = GOAL.floorY - GOAL.barH;
+    // rede
+    ctx.strokeStyle = 'rgba(240,240,255,0.28)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = GOAL.left + 3; x < GOAL.right; x += 6) { ctx.moveTo(x, top + 3); ctx.lineTo(x, GOAL.floorY); }
+    for (let y = top + 5; y < GOAL.floorY; y += 6) { ctx.moveTo(GOAL.left + 2, y); ctx.lineTo(GOAL.right - 2, y); }
+    ctx.stroke();
+    // rede estufando no gol
+    if (game.netBulge && game.netBulge.t < 0.5) {
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.6 - game.netBulge.t) + ')';
+      ctx.beginPath(); ctx.arc(game.netBulge.x, game.netBulge.y, 5 + game.netBulge.t * 6, 0, 7); ctx.stroke();
+    }
+    // traves
+    px(GOAL.left - 1, top - 1, 3, GOAL.barH + 1, '#F8F6EE');
+    px(GOAL.right - 2, top - 1, 3, GOAL.barH + 1, '#F8F6EE');
+    px(GOAL.left - 1, top - 3, GOAL.right - GOAL.left + 3, 3, '#F8F6EE');
+  }
+
+  function drawKeeper(t) {
+    const k = game.keeper;
+    const f = game.flight;
+
+    if (f && f.t >= (k.reactT || 1)) {
+      k.diveP = Math.min(1, k.diveP + 0.09);
+    }
+
+    let x = 90;
+    let pose = 'idle';
+    if (k.diveP > 0) {
+      const d = k.diveP * k.diveP * (3 - 2 * k.diveP); // smoothstep
+      x = 90 + (k.diveX - 90) * d;
+      const dist = k.diveX - 90;
+      pose = Math.abs(dist) > 14 ? (dist < 0 ? 'diveL' : 'diveR') : 'jump';
+    } else {
+      x = 90 + Math.sin(t * 2.2) * 1.5; // balançinho de goleiro ansioso
+      pose = game.state === 'flying' || game.state === 'runup' ? 'crouch' : 'idle';
+    }
+    if (game.state === 'result' && game.results[game.results.length - 1] === 'goal') pose = 'sad';
+
+    const kd = SPRITES.keeper;
+    if (!kd.idle.img) { drawKeeperFallback(x, k); return; }
+
+    const sp = kd[pose] && kd[pose].img ? kd[pose] : kd.idle;
+    const scale = 32 / kd.idle.h;
+    const w = sp.w * scale;
+    const h = sp.h * scale;
+    const isDive = pose === 'diveL' || pose === 'diveR';
+    // arco de mergulho: sobe no meio do movimento e ATERRISSA no fim (sin vai a zero)
+    const lift = isDive ? Math.sin(k.diveP * Math.PI) * 7 : pose === 'jump' ? Math.sin(k.diveP * Math.PI) * 9 : 0;
+    ctx.drawImage(sp.img, Math.round(x - w / 2), Math.round(GOAL.floorY - h - lift), Math.round(w), Math.round(h));
+  }
+
+  function drawKeeperFallback(x, k) {
+    const stretch = k.diveP > 0 && Math.abs(k.diveX - 90) > 16 ? k.diveP : 0;
+    ctx.save();
+    ctx.translate(Math.round(x), GOAL.floorY);
+    px(-4, -8, 3, 8, '#1A1428');
+    px(1, -8, 3, 8, '#1A1428');
+    px(-5, -20, 10, 12, '#6B7FA3');
+    px(-4, -25, 8, 6, '#D99E6A');
+    px(-4, -26, 8, 2, '#2B2118');
+    if (stretch > 0) {
+      const dir = k.diveX < 90 ? -1 : 1;
+      px(dir * 5, -22 - stretch * 4, dir * 6, 3, '#6B7FA3');
+      px(dir * 10, -23 - stretch * 4, dir * 3, 3, '#F5F0E6');
+    } else {
+      px(-8, -18, 3, 3, '#F5F0E6');
+      px(5, -18, 3, 3, '#F5F0E6');
+    }
+    ctx.restore();
+  }
+
+  function drawStriker() {
+    const sd = SPRITES.striker;
+    if (!sd.back.img) return;
+    const f = game.flight;
+    let pose = null;
+    let footX = game.ballX - 30;
+    let footY = BALL_START_Y + 20;
+    if (game.state === 'ready') {
+      pose = 'back'; // preparado, alguns passos atrás da bola
+    } else if (game.state === 'runup' && f) {
+      pose = 'run';
+      const p = game.runP;
+      footX = f.sx - 30 + 23 * p;
+      footY = f.sy + 20 - 17 * p - Math.abs(Math.sin(p * Math.PI * 3)) * 1.5;
+    } else if (game.state === 'flying' && f) {
+      pose = f.t < 0.3 ? 'kick' : 'back';
+      footX = f.t < 0.3 ? f.sx - 7 : f.sx - 14;
+      footY = f.sy + 3;
+    } else if (game.state === 'result' && f) {
+      pose = f.outcome === 'goal' ? 'celebrate' : 'lament';
+      footX = f.sx - 18;
+      footY = f.sy + 3;
+    }
+    if (!pose) return;
+    const sp = sd[pose] && sd[pose].img ? sd[pose] : sd.back;
+    const scale = 54 / sd.back.h;
+    const w = sp.w * scale;
+    const h = sp.h * scale;
+    ctx.drawImage(sp.img, Math.round(footX - w / 2), Math.round(footY - h), Math.round(w), Math.round(h));
+  }
+
+  function drawBall(x, y, r, groundY, spin = 0) {
+    // sombra
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(x, groundY + 1, r * 1.3, r * 0.45, 0, 0, 7); ctx.fill();
+    // sprite gerado, girando com o voo
+    if (SPRITES.ball.img) {
+      const sp = SPRITES.ball;
+      const s = (r * 2) / Math.max(sp.w, sp.h);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(spin);
+      ctx.drawImage(sp.img, (-sp.w * s) / 2, (-sp.h * s) / 2, sp.w * s, sp.h * s);
+      ctx.restore();
+      return;
+    }
+    // fallback: corpo com sombreamento
+    const grad = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.2, x, y, r);
+    grad.addColorStop(0, '#FFFFFF');
+    grad.addColorStop(0.75, '#EDE9DF');
+    grad.addColorStop(1, '#B4AF9F');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+    // gomos girando com o voo
+    ctx.fillStyle = '#2A2A33';
+    for (let i = 0; i < 3; i++) {
+      const a = spin + (i * Math.PI * 2) / 3;
+      ctx.beginPath();
+      ctx.ellipse(x + Math.cos(a) * r * 0.55, y + Math.sin(a) * r * 0.55, r * 0.26, r * 0.2, a, 0, 7);
+      ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(60,60,70,0.45)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.arc(x, y, r - 0.25, 0, 7); ctx.stroke();
+  }
+
+  function drawAim() {
+    const d = game.drag;
+    if (!d || d.pts.length < 2) return;
+    // rastro do dedo
+    ctx.strokeStyle = 'rgba(255,210,63,0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(d.pts[0].x, d.pts[0].y);
+    for (const p of d.pts) ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    // barra de força
+    const s = d.pts[0], e = d.pts[d.pts.length - 1];
+    const power = Math.min(1, Math.hypot(e.x - s.x, e.y - s.y) / 130);
+    px(6, 210, 4, 70, 'rgba(0,0,0,0.4)');
+    const hgt = 70 * power;
+    px(6, 280 - hgt, 4, hgt, power > 0.68 ? '#E85D75' : '#FFD23F');
+  }
+
+  function drawHUD() {
+    ctx.font = 'bold 8px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#F5F0E6';
+    ctx.fillText('CHUTE ' + Math.min(game.shot + 1, TOTAL_SHOTS) + '/' + TOTAL_SHOTS, 6, 12);
+    for (let i = 0; i < TOTAL_SHOTS; i++) {
+      const r = game.results[i];
+      const c = r === 'goal' ? '#7ACC6E' : r ? '#E85D75' : 'rgba(245,240,230,0.3)';
+      px(102 + i * 7, 7, 5, 5, c);
+    }
+    if (game.msg && game.msg.t < 1.1) {
+      const m = game.msg;
+      const pop = Math.min(1, m.t * 6);
+      const alpha = m.t > 0.8 ? Math.max(0, 1 - (m.t - 0.8) / 0.3) : 1;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(90, 60);
+      ctx.scale(pop, pop);
+      ctx.font = 'bold 17px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#1A1428';
+      ctx.fillText(m.text, 1, 1);
+      ctx.fillStyle = m.color;
+      ctx.fillText(m.text, 0, 0);
+      ctx.restore();
+    }
+  }
+
+  // ---------- loop ----------
+  let lastTs = 0;
+  function frame(ts) {
+    const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0.016);
+    lastTs = ts;
+    game.time += dt;
+
+    // update
+    if (game.state === 'runup') {
+      game.runP += dt / 0.45;
+      if (game.runP >= 1) {
+        game.runP = 1;
+        game.state = 'flying';
+        sfx.kick();
+      }
+    }
+    if (game.state === 'flying' && game.flight) {
+      const f = game.flight;
+      f.t += dt / f.dur;
+      if (f.t >= 1) { f.t = 1; resolveFlight(); }
+    }
+    if (game.state === 'result') {
+      game.resultTimer += dt;
+      if (game.msg) game.msg.t += dt;
+      if (game.netBulge) game.netBulge.t += dt;
+      if (game.confetti) {
+        for (const c of game.confetti) {
+          c.t += dt;
+          if (c.t > 0) { c.y += c.vy * dt; c.vy += 50 * dt; }
+        }
+      }
+      if (game.post) {
+        const p = game.post;
+        p.t += dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        if (p.kind !== 'miss') p.vy += 120 * dt;
+        if (p.y > GOAL.floorY + 4 && p.kind !== 'goal') { p.vy *= -0.4; p.y = GOAL.floorY + 4; }
+      }
+      if (game.resultTimer > 1.2) nextShot();
+    }
+    if (game.shake > 0) game.shake = Math.max(0, game.shake - dt * 10);
+
+    // draw
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    if (game.shake > 0) ctx.translate((Math.random() - 0.5) * game.shake * 2, (Math.random() - 0.5) * game.shake * 2);
+    drawScene();
+    if (game.confetti) {
+      for (const c of game.confetti) {
+        if (c.t <= 0 || c.t > 1.4) continue;
+        ctx.globalAlpha = Math.max(0, 1 - c.t / 1.4);
+        px(c.x, c.y, 1.5, 3, c.color);
+      }
+      ctx.globalAlpha = 1;
+    }
+    drawKeeper(game.time);
+    drawStriker();
+
+    if (game.state === 'ready' || game.state === 'runup') {
+      drawBall(game.ballX, game.ballY, 4, game.ballY);
+      drawAim();
+    } else if (game.state === 'flying' && game.flight) {
+      const f = game.flight;
+      const gy = flightGroundY(f, f.t);
+      const x = flightX(f, f.t);
+      const y = gy - flightH(f, f.t);
+      f.trail.push({ x, y });
+      if (f.trail.length > 7) f.trail.shift();
+      ctx.fillStyle = 'rgba(245,240,230,0.3)';
+      for (const tr of f.trail) { ctx.beginPath(); ctx.arc(tr.x, tr.y, 1, 0, 7); ctx.fill(); }
+      drawBall(x, y, 4 - 2 * f.t, gy, f.t * 14);
+    } else if (game.state === 'result' && game.post) {
+      const p = game.post;
+      const alpha = p.t > 0.7 ? Math.max(0, 1 - (p.t - 0.7) / 0.4) : 1;
+      ctx.globalAlpha = alpha;
+      drawBall(p.x, p.y, 2.2, Math.max(p.y, GOAL.floorY + 4), p.t * 8);
+      ctx.globalAlpha = 1;
+      if (game.missMark) { // onde a bola passou — pra calibrar a mira
+        const m = game.missMark;
+        ctx.strokeStyle = 'rgba(245,240,230,0.85)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(m.x - 3, m.y - 3); ctx.lineTo(m.x + 3, m.y + 3);
+        ctx.moveTo(m.x + 3, m.y - 3); ctx.lineTo(m.x - 3, m.y + 3);
+        ctx.stroke();
+      }
+    }
+
+    if (game.state !== 'intro') drawHUD();
+    ctx.restore();
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
