@@ -4,6 +4,7 @@ import type { GameSprites, KeeperPose, SpriteHolder, StrikerPose } from './asset
 import { flightX } from '../engine/shot/flight'
 import {
   ballFlightPosition,
+  barTAt,
   CFG,
   confettoAlpha,
   isConfettoVisible,
@@ -31,7 +32,16 @@ const drawScene = (ctx: CanvasRenderingContext2D, state: StageState): void => {
 
   const { goal } = CFG
   const top = goal.floorY - goal.barHeight
-  ctx.strokeStyle = 'rgba(240,240,255,0.28)'
+
+  // boca do gol escurecida: a rede se destaca do cenário (alambrado/torcida)
+  // mesmo com o gol maior que a boca desenhada na arte de fundo
+  const mouth = ctx.createLinearGradient(0, top, 0, goal.floorY)
+  mouth.addColorStop(0, 'rgba(8,10,18,0.82)')
+  mouth.addColorStop(1, 'rgba(8,10,18,0.55)')
+  ctx.fillStyle = mouth
+  ctx.fillRect(goal.left + 1, top, goal.right - goal.left - 2, goal.barHeight)
+
+  ctx.strokeStyle = 'rgba(240,240,255,0.32)'
   ctx.lineWidth = 1
   ctx.beginPath()
   for (let x = goal.left + 3; x < goal.right; x += 6) {
@@ -58,54 +68,128 @@ const drawScene = (ctx: CanvasRenderingContext2D, state: StageState): void => {
 
 const smoothstep = (t: number): number => t * t * (3 - 2 * t)
 
+const KEEPER_SAVED_HOLD = 0.6
+/** Mergulho a partir daqui é VOO — corpo totalmente esticado. */
+const KEEPER_LONG_DIVE = 32
+
 const keeperPoseFor = (
   state: StageState,
   drag: readonly Vec2[] | null,
-): { pose: KeeperPose; x: number; lift: number } => {
+): { pose: KeeperPose; x: number; lift: number; flip: boolean } => {
   const center = goalCenter(CFG)
   const lastResult = state.results[state.results.length - 1]
 
   if (state.keeperDiveP > 0 && state.sim) {
     const d = smoothstep(state.keeperDiveP)
-    const dist = state.sim.keeper.diveX - center
+    let dist = state.sim.keeper.diveX - center
+    // encenação honesta: se foi gol por pouco, o goleiro cai AO LADO da bola —
+    // nunca visualmente em cima dela (o sprite é bem mais largo que a luva real)
+    if (state.sim.outcome.kind === 'goal' && state.sim.flight.targetHeight <= CFG.highBallHeight) {
+      const finalX = flightX(state.sim.flight, 1)
+      const gap = state.sim.keeper.diveX - finalX
+      const clearance = 18
+      if (Math.abs(gap) < clearance) {
+        dist = finalX + (gap >= 0 ? 1 : -1) * clearance - center
+      }
+    }
+    // sequência da defesa: espalmada no ângulo / soco no voo longo / abraçado
+    // na bola — congela a grande defesa, depois levanta comemorando
+    if (state.phase === 'result' && lastResult === 'save') {
+      const landed = state.resultTimer >= KEEPER_SAVED_HOLD
+      const isHighSave = state.sim.flight.targetHeight > CFG.highBallHeight
+      const isLongDive = Math.abs(dist) > KEEPER_LONG_DIVE
+      const holdPose: KeeperPose = isHighSave ? 'tip' : isLongDive ? 'punch' : 'saved'
+      // espalmada/soco aterrissam suavemente durante o congelamento
+      const airborne = holdPose === 'saved' ? 0 : Math.max(0, 1 - state.resultTimer / KEEPER_SAVED_HOLD) * 8
+      return {
+        pose: landed ? 'getup' : holdPose,
+        x: center + dist,
+        lift: landed ? 0 : airborne,
+        flip: dist < 0,
+      }
+    }
+    // antecipação: um instante agachado ANTES de voar (impulso de verdade)
+    const anticipating = state.keeperDiveP < 0.22 && state.phase === 'flying'
+    // decolagem: corpo na horizontal saindo do chão, antes do mergulho pleno
+    const takingOff = state.keeperDiveP < 0.55 && state.phase === 'flying' && Math.abs(dist) > 14
     const pose: KeeperPose =
       state.phase === 'result' && lastResult === 'goal'
         ? 'sad'
-        : Math.abs(dist) > 14
-          ? dist < 0 ? 'diveL' : 'diveR'
-          : 'jump'
+        : anticipating
+          ? 'crouch'
+          : takingOff
+            ? 'takeoff'
+            : Math.abs(dist) > KEEPER_LONG_DIVE
+              ? 'fly'
+              : Math.abs(dist) > 14
+                ? dist < 0 ? 'diveL' : 'diveR'
+                : 'jump'
+    // voo acompanha a BOLA: rasteira = mergulho raso no chão; alta = voo alto.
+    // Mergulho longe ganha um empurrão extra de altura (espetáculo).
+    const ballHigh = Math.min(1, state.sim.flight.targetHeight / 30)
+    const flightBoost = Math.min(1, Math.abs(dist) / 40)
     const lift =
-      pose === 'diveL' || pose === 'diveR'
-        ? Math.sin(state.keeperDiveP * Math.PI) * 9
+      pose === 'diveL' || pose === 'diveR' || pose === 'takeoff' || pose === 'fly'
+        ? Math.sin(state.keeperDiveP * Math.PI) * (2 + ballHigh * 11 + flightBoost * 4)
         : pose === 'jump'
-          ? Math.sin(state.keeperDiveP * Math.PI) * 11
+          ? Math.sin(state.keeperDiveP * Math.PI) * (3 + ballHigh * 10)
           : 0
-    return { pose, x: center + dist * d, lift }
+    const mirrored = (pose === 'takeoff' || pose === 'fly') && dist < 0
+    return { pose, x: center + dist * d, lift, flip: mirrored }
   }
 
   // defesa: o goleiro acompanha o dedo durante o arrasto (feedback imediato)
   if (state.mode === 'defend' && state.phase === 'flying' && drag && drag.length > 1) {
     const dragDx = drag[drag.length - 1].x - drag[0].x
     const preview = Math.max(-16, Math.min(16, dragDx * 0.5))
-    return { pose: 'crouch', x: center + preview, lift: 0 }
+    return { pose: 'crouch', x: center + preview, lift: 0, flip: false }
   }
 
   // ataque: o goleiro IA "lê" a bola em voo, deslocando-se sutilmente
   if (state.mode === 'shoot' && state.phase === 'flying' && state.sim) {
     const ballX = flightX(state.sim.flight, state.flightT)
     const track = Math.max(-10, Math.min(10, (ballX - center) * 0.3))
-    return { pose: 'crouch', x: center + track, lift: 0 }
+    return { pose: 'crouch', x: center + track, lift: 0, flip: false }
   }
 
   const alive = Math.sin(state.time * 1.6) * 4
   const bob = Math.abs(Math.sin(state.time * 3.2)) * 1.2
-  const pose: KeeperPose =
-    state.phase === 'result' && lastResult === 'goal'
-      ? 'sad'
-      : state.phase === 'flying' || state.phase === 'runup'
-        ? 'crouch'
-        : 'idle'
-  return { pose, x: center + alive, lift: bob }
+  if (state.phase === 'result' && lastResult === 'goal') {
+    return { pose: 'sad', x: center + alive, lift: bob, flip: false }
+  }
+  if (state.phase === 'flying' || state.phase === 'runup') {
+    return { pose: 'crouch', x: center + alive, lift: bob, flip: false }
+  }
+  // parado: passinhos laterais alternados no lugar de ficar congelado
+  const stepCycle = Math.floor(state.time * 1.8) % 4
+  const isStepping = stepCycle === 1 || stepCycle === 3
+  return {
+    pose: isStepping ? 'step' : 'idle',
+    x: center + alive,
+    lift: bob,
+    flip: stepCycle === 3,
+  }
+}
+
+/** Desenha um sprite ancorado nos pés, com rotação, squash e espelhamento opcionais. */
+const drawSpriteAnchored = (
+  ctx: CanvasRenderingContext2D,
+  sp: SpriteHolder,
+  footX: number,
+  footY: number,
+  w: number,
+  h: number,
+  angle = 0,
+  scaleY = 1,
+  flipX = false,
+): void => {
+  if (!sp.img) return
+  ctx.save()
+  ctx.translate(footX, footY - (h * scaleY) / 2)
+  if (angle !== 0) ctx.rotate(angle)
+  ctx.scale(flipX ? -1 : 1, scaleY)
+  ctx.drawImage(sp.img, -w / 2, -h / 2, w, h)
+  ctx.restore()
 }
 
 const drawKeeper = (
@@ -114,14 +198,21 @@ const drawKeeper = (
   sprites: GameSprites,
   drag: readonly Vec2[] | null,
 ): void => {
-  const { pose, x, lift } = keeperPoseFor(state, drag)
+  const { pose, x, lift, flip } = keeperPoseFor(state, drag)
   const kd = sprites.keeper
   if (!kd.idle.img) return
   const sp = kd[pose].img ? kd[pose] : kd.idle
   const scale = KEEPER_HEIGHT / kd.idle.h
   const w = sp.w * scale
   const h = sp.h * scale
-  ctx.drawImage(sp.img!, Math.round(x - w / 2), Math.round(CFG.goal.floorY - h - lift), Math.round(w), Math.round(h))
+
+  // física de animação: inclinar durante o voo, esticar no pulo
+  const isDive = pose === 'diveL' || pose === 'diveR' || pose === 'takeoff' || pose === 'fly'
+  const diveDir = state.sim ? Math.sign(state.sim.keeper.diveX - goalCenter(CFG)) || 1 : 1
+  const angle =
+    isDive && state.phase === 'flying' ? diveDir * Math.min(1, state.keeperDiveP * 1.3) * 0.28 : 0
+  const stretch = pose === 'jump' ? 1.06 : pose === 'crouch' && state.keeperDiveP > 0 ? 0.9 : 1
+  drawSpriteAnchored(ctx, sp, x, CFG.goal.floorY - lift, w, h, angle, stretch, flip)
 }
 
 const strikerPoseFor = (state: StageState): { pose: StrikerPose; footX: number; footY: number } | null => {
@@ -132,16 +223,19 @@ const strikerPoseFor = (state: StageState): { pose: StrikerPose; footX: number; 
       return { pose: 'back', footX: startX - 30, footY: startY + 20 }
     case 'runup': {
       const p = state.runP
+      // passada alternada: dois frames de corrida intercalados
+      const stride = Math.floor(p * 6) % 2 === 0 ? 'run' : 'run2'
       return {
-        pose: 'run',
+        pose: stride,
         footX: startX - 30 + 23 * p,
         footY: startY + 20 - 17 * p - Math.abs(Math.sin(p * Math.PI * 3)) * 1.5,
       }
     }
     case 'flying':
-      return state.flightT < 0.3
-        ? { pose: 'kick', footX: startX - 7, footY: startY + 3 }
-        : { pose: 'back', footX: startX - 14, footY: startY + 3 }
+      // impacto → follow-through com a perna esticada → recompõe
+      if (state.flightT < 0.14) return { pose: 'kick', footX: startX - 7, footY: startY + 3 }
+      if (state.flightT < 0.42) return { pose: 'kick2', footX: startX - 5, footY: startY + 3 }
+      return { pose: 'back', footX: startX - 14, footY: startY + 3 }
     case 'result': {
       const lastResult = state.results[state.results.length - 1]
       return {
@@ -196,7 +290,13 @@ const drawStriker = (ctx: CanvasRenderingContext2D, state: StageState, sprites: 
   const scale = STRIKER_HEIGHT / sd.back.h
   const w = sp.w * scale
   const h = sp.h * scale
-  ctx.drawImage(sp.img!, Math.round(placement.footX - w / 2), Math.round(placement.footY - h), Math.round(w), Math.round(h))
+
+  // corpo inclinado na corrida, follow-through girando no chute
+  let angle = 0
+  if (placement.pose === 'run' || placement.pose === 'run2') angle = -0.09
+  if (placement.pose === 'kick') angle = -0.16 + Math.min(1, state.flightT / 0.3) * 0.3
+  if (placement.pose === 'kick2') angle = 0.08
+  drawSpriteAnchored(ctx, sp, placement.footX, placement.footY, w, h, angle)
 }
 
 const drawBall = (
@@ -236,13 +336,30 @@ const drawAim = (ctx: CanvasRenderingContext2D, drag: readonly Vec2[] | null): v
   ctx.moveTo(drag[0].x, drag[0].y)
   for (const p of drag) ctx.lineTo(p.x, p.y)
   ctx.stroke()
+}
 
-  const start = drag[0]
-  const end = drag[drag.length - 1]
-  const power = Math.min(1, Math.hypot(end.x - start.x, end.y - start.y) / CFG.powerDragLength)
-  px(ctx, 6, 210, 4, 70, 'rgba(0,0,0,0.4)')
-  const height = 70 * power
-  px(ctx, 6, 280 - height, 4, height, power > CFG.dispersionThreshold ? '#E85D75' : '#FFD23F')
+const BAR_X = 7
+const BAR_TOP = 200
+const BAR_HEIGHT = 80
+
+/** Régua de chute: marcador varre topo (alto/forte) ⇄ base (rasteiro). */
+const drawShotBar = (ctx: CanvasRenderingContext2D, barT: number): void => {
+  px(ctx, BAR_X - 1, BAR_TOP - 1, 8, BAR_HEIGHT + 2, 'rgba(0,0,0,0.45)')
+  // zonas: topo = ângulo/travessão (risco), meio = meia altura, base = rasteiro
+  px(ctx, BAR_X, BAR_TOP, 6, BAR_HEIGHT * 0.12, '#E85D75')
+  px(ctx, BAR_X, BAR_TOP + BAR_HEIGHT * 0.12, 6, BAR_HEIGHT * 0.4, '#FFD23F')
+  px(ctx, BAR_X, BAR_TOP + BAR_HEIGHT * 0.52, 6, BAR_HEIGHT * 0.48, '#7ACC6E')
+
+  const markerY = BAR_TOP + (1 - barT) * BAR_HEIGHT
+  px(ctx, BAR_X - 2, markerY - 1, 10, 3, '#1A1428')
+  px(ctx, BAR_X - 2, markerY - 0.5, 10, 2, '#F5F0E6')
+
+  ctx.font = 'bold 6px monospace'
+  ctx.textAlign = 'center'
+  ctx.fillStyle = 'rgba(245,240,230,0.75)'
+  ctx.fillText('ALTO', BAR_X + 3, BAR_TOP - 4)
+  ctx.fillText('RASO', BAR_X + 3, BAR_TOP + BAR_HEIGHT + 8)
+  ctx.textAlign = 'left'
 }
 
 const drawHud = (ctx: CanvasRenderingContext2D, state: StageState, totalShots: number): void => {
@@ -328,14 +445,28 @@ export const drawStage = (
   if (state.phase === 'ready' || state.phase === 'runup') {
     drawBall(ctx, sprites.ball, state.ballX, state.ballStartY, 4, state.ballStartY, 0)
     drawAim(ctx, drag)
+    if (state.mode === 'shoot') {
+      // pronto: régua varrendo; corrida: congelada onde o chute travou
+      const barT = state.phase === 'ready'
+        ? barTAt(state.time)
+        : state.sim
+          ? state.sim.command.targetHeight / CFG.barMaxHeight
+          : 0
+      drawShotBar(ctx, barT)
+    }
   } else if (state.phase === 'flying') {
     const ball = ballFlightPosition(state)
     if (ball) drawBall(ctx, sprites.ball, ball.x, ball.y, ball.r, ball.groundY, state.flightT * 14)
   } else if (state.phase === 'result' && state.post) {
-    const alpha = state.post.t > 0.7 ? Math.max(0, 1 - (state.post.t - 0.7) / 0.4) : 1
-    ctx.globalAlpha = alpha
-    drawBall(ctx, sprites.ball, state.post.x, state.post.y, 2.2, Math.max(state.post.y, CFG.goal.floorY + 4), state.post.t * 8)
-    ctx.globalAlpha = 1
+    // defesa: a bola está NA LUVA do goleiro (embutida no sprite) — nada de
+    // segunda bola rebatendo pelo gramado
+    const ballHeld = state.results[state.results.length - 1] === 'save'
+    if (!ballHeld) {
+      const alpha = state.post.t > 0.7 ? Math.max(0, 1 - (state.post.t - 0.7) / 0.4) : 1
+      ctx.globalAlpha = alpha
+      drawBall(ctx, sprites.ball, state.post.x, state.post.y, 2.2, Math.max(state.post.y, CFG.goal.floorY + 4), state.post.t * 8)
+      ctx.globalAlpha = 1
+    }
     if (state.missMark) {
       ctx.strokeStyle = 'rgba(245,240,230,0.85)'
       ctx.lineWidth = 1

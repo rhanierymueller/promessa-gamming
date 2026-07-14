@@ -1,5 +1,6 @@
 import { Hand } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../engine/career/attributes'
 import type { ShotOutcomeKind, Vec2 } from '../engine/shot/types'
 import { BACKGROUND_URL, loadGameSprites, tintSprite, type GameSprites } from './assets'
 import { initAudio, playStageEvent } from './audio'
@@ -10,6 +11,7 @@ import {
   createStage,
   tick,
   TOTAL_SHOTS,
+  TRAINING_KEEPER_QUALITY,
   tryDive,
   tryStartShot,
   type Phase,
@@ -38,6 +40,12 @@ interface ShotStageProps {
   readonly wallColor?: string
   /** Modo defesa: o RIVAL cobra e você mergulha arrastando para o lado. */
   readonly defense?: { readonly skill: number; readonly kitColor: string }
+  /** Atributos do craque (afinam chute, cobrança e defesa). */
+  readonly attrs?: PlayerAttributes
+  /** Comemoração escolhida no Perfil (índice em celeb_0..3). */
+  readonly celebrationId?: number
+  /** Qualidade do goleiro rival (treino < liga < copa). */
+  readonly keeperQuality?: number
   readonly onRoundEnd?: (summary: RoundSummary) => void
 }
 
@@ -59,13 +67,16 @@ export const ShotStage = ({
   freeKick = false,
   wallColor,
   defense,
+  attrs = DEFAULT_ATTRIBUTES,
+  celebrationId = 0,
+  keeperQuality = TRAINING_KEEPER_QUALITY,
   onRoundEnd,
 }: ShotStageProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stateRef = useRef<StageState>(
     defense
-      ? createDefenseStage(Date.now() & 0xffffffff, defense.skill)
-      : createStage(Date.now() & 0xffffffff, shots, freeKick),
+      ? createDefenseStage(Date.now() & 0xffffffff, defense.skill, attrs)
+      : createStage(Date.now() & 0xffffffff, shots, freeKick, attrs, keeperQuality),
   )
   const dragRef = useRef<Vec2[] | null>(null)
   const spritesRef = useRef(loadGameSprites())
@@ -137,9 +148,13 @@ export const ShotStage = ({
         ) as GameSprites['striker']
         tintedStrikerRef.current = tinted
       }
-      const drawSprites = tintedStrikerRef.current
-        ? { ...sprites, striker: tintedStrikerRef.current }
-        : sprites
+      // gol do usuário comemora com a pose escolhida no Perfil (rival mantém a genérica)
+      const celebration = sprites.celebrations[celebrationId]
+      const striker = tintedStrikerRef.current ?? sprites.striker
+      const drawSprites: GameSprites =
+        !defense && celebration?.img
+          ? { ...sprites, striker: { ...striker, celebrate: celebration } }
+          : { ...sprites, striker }
       drawStage(ctx, next, drawSprites, dragRef.current, next.totalShots, wallSpritesRef.current)
       rafId = requestAnimationFrame(loop)
     }
@@ -204,7 +219,7 @@ export const ShotStage = ({
       {uiPhase === 'intro' && !autoStart && !defense && (
         <div className="stage-overlay">
           <h2>Treino de finalização</h2>
-          <p>Arraste da bola em direção ao gol e solte. Traço longo = chute forte e alto. Traço curvado = efeito.</p>
+          <p>Arraste da bola em direção ao gol para MIRAR (curve o traço para dar efeito). A régua à esquerda sobe e desce: solte com ela embaixo para o rasteiro forte, em cima para buscar o ângulo.</p>
           <button className="btn" onClick={startRound}>Começar ▸</button>
         </div>
       )}

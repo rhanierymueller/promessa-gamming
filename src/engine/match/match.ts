@@ -106,6 +106,26 @@ export const advance = (state: MatchState): MatchState => {
   return { ...state, score, cursor: state.cursor + 1 }
 }
 
+/** Avança um momento automático, opcionalmente ANULANDO o efeito no placar (tática). */
+export const advanceAuto = (state: MatchState, keepEffect: boolean): MatchState => {
+  if (isFinished(state)) return state
+  const moment = currentMoment(state)
+  if (isPlayerMoment(moment)) {
+    throw new Error(`momento ${moment.kind} exige resultado do mini-game`)
+  }
+  if (!keepEffect) return { ...state, cursor: state.cursor + 1 }
+  return advance(state)
+}
+
+/** Gol emergente de lance corrido (contra-ataque, vacilo) — fora do plano. */
+export const applyExtraGoal = (state: MatchState, side: 'team' | 'opponent'): MatchState => ({
+  ...state,
+  score:
+    side === 'team'
+      ? { ...state.score, team: state.score.team + 1 }
+      : { ...state.score, opponent: state.score.opponent + 1 },
+})
+
 export const applyShotResult = (
   state: MatchState,
   outcome: ShotOutcomeKind,

@@ -88,6 +88,18 @@ export interface ShotConfig {
   readonly highBallReachFactor: number
   readonly tameShotPower: number
   readonly tameShotCenterRange: number
+  /** Bola no meio com goleiro parado perto do centro = defesa de corpo. */
+  readonly keeperStandingZone: number
+  /** Altura máxima que o goleiro EM PÉ agarra (braços esticados, < travessão). */
+  readonly standingCatchHeight: number
+  /** Chance base de o goleiro cravar o canto ERRADO (cai com a habilidade). */
+  readonly wrongSideBase: number
+  /** Quanto da curva o goleiro consegue ler (multiplicado pela habilidade). */
+  readonly curveReadFactor: number
+  /** Barra de chute: régua vertical dita força e altura no instante do toque. */
+  readonly barPowerMin: number
+  readonly barPowerRange: number
+  readonly barMaxHeight: number
   /** Golaço */
   readonly golacoCurve: number
   readonly golacoHeight: number

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { SEASON_TEAMS } from '../engine/season/types'
 import {
   applyTournament,
+  CELEBRATION_COUNT,
   createSave,
   loadSave,
   MAX_PLAYER_NAME,
@@ -9,6 +10,7 @@ import {
   persistSave,
   recordMatch,
   SAVE_VERSION,
+  setCelebration,
   setShirtNumber,
   startNewSeason,
   type MatchRecord,
@@ -91,6 +93,18 @@ describe('mutações imutáveis do save', () => {
     expect(after.season).toBe(save.season)
   })
 
+  test('setCelebration troca a comemoração e ignora índice fora do catálogo', () => {
+    // Arrange
+    const save = createSave('Craque', 'real-vila', 'brasil', fixedRoll())!
+
+    // Act & Assert
+    expect(save.celebrationId).toBe(0)
+    expect(setCelebration(save, 2).celebrationId).toBe(2)
+    expect(setCelebration(save, -1)).toBe(save)
+    expect(setCelebration(save, CELEBRATION_COUNT)).toBe(save)
+    expect(setCelebration(save, 1.5)).toBe(save)
+  })
+
   test('startNewSeason zera o torneio e sorteia liga nova', () => {
     // Arrange
     const base = createSave('Craque', 'real-vila', 'brasil', fixedRoll(0.2))!
@@ -138,6 +152,40 @@ describe('parseSave e migrações', () => {
     expect(parseSave(null)).toBeNull()
     expect(parseSave('não é json')).toBeNull()
     expect(parseSave(JSON.stringify({ version: 99, playerName: 'X', clubId: 'real-vila' }))).toBeNull()
+  })
+
+  test('save v6 migra para v7 com comemoração padrão', () => {
+    // Arrange
+    const v6 = JSON.stringify({
+      version: 6,
+      playerName: 'Craque',
+      clubId: 'real-vila',
+      nationalityId: 'brasil',
+      shirtNumber: 10,
+      careerYear: 2,
+      history: [sampleRecord],
+    })
+
+    // Act
+    const parsed = parseSave(v6)
+
+    // Assert
+    expect(parsed!.version).toBe(SAVE_VERSION)
+    expect(parsed!.celebrationId).toBe(0)
+    expect(parsed!.careerYear).toBe(2)
+  })
+
+  test('celebrationId inválido no save volta para o padrão', () => {
+    // Arrange
+    const raw = JSON.stringify({
+      version: SAVE_VERSION,
+      playerName: 'Craque',
+      clubId: 'real-vila',
+      celebrationId: 99,
+    })
+
+    // Act & Assert
+    expect(parseSave(raw)!.celebrationId).toBe(0)
   })
 
   test('temporada corrompida é regenerada sem perder o resto do save', () => {

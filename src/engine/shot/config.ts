@@ -6,12 +6,12 @@ import type { ShotConfig } from './types'
  * Coordenadas em espaço lógico 180×320 (ver Game Design no vault).
  */
 export const DEFAULT_SHOT_CONFIG: ShotConfig = {
-  goal: { left: 34, right: 146, barHeight: 44, floorY: 134, postWidth: 3 },
+  goal: { left: 22, right: 158, barHeight: 47, floorY: 134, postWidth: 3 },
   ballStartY: 256,
 
   minDragLength: 18,
   minUpwardDrag: 10,
-  powerDragLength: 145,
+  powerDragLength: 115,
   minPower: 0.25,
   aimScale: 1.25,
   curveScale: 0.9,
@@ -40,14 +40,22 @@ export const DEFAULT_SHOT_CONFIG: ShotConfig = {
   reactTNoise: 0.06,
   guessSampleDt: 0.08,
   guessNoise: 22,
-  maxDiveBase: 24,
-  maxDiveSkillFactor: 18,
+  maxDiveBase: 30,
+  maxDiveSkillFactor: 28,
   reachBase: 7,
-  reachSkillFactor: 5,
+  reachSkillFactor: 6,
   highBallHeight: 28,
   highBallReachFactor: 0.5,
   tameShotPower: 0.38,
   tameShotCenterRange: 14,
+  keeperStandingZone: 14,
+  standingCatchHeight: 38,
+  wrongSideBase: 0.28,
+  curveReadFactor: 0.75,
+
+  barPowerMin: 0.72,
+  barPowerRange: 0.2,
+  barMaxHeight: 48,
 
   golacoCurve: 12,
   golacoHeight: 32,
@@ -57,5 +65,15 @@ export const DEFAULT_SHOT_CONFIG: ShotConfig = {
 export const goalCenter = (config: ShotConfig): number =>
   (config.goal.left + config.goal.right) / 2
 
-export const keeperSkillForShot = (config: ShotConfig, shotIndex: number): number =>
-  config.keeperBaseSkill + config.keeperSkillPerShot * shotIndex
+const MAX_KEEPER_SKILL = 0.95
+
+/**
+ * Habilidade do goleiro no chute: qualidade do contexto (treino/liga/copa)
+ * escalando levemente a cada chute da rodada, com teto humano.
+ */
+export const keeperSkillForShot = (
+  config: ShotConfig,
+  shotIndex: number,
+  quality: number = config.keeperBaseSkill,
+): number =>
+  Math.min(MAX_KEEPER_SKILL, quality + config.keeperSkillPerShot * shotIndex)

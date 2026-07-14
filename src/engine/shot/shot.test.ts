@@ -18,7 +18,7 @@ const skill = 0.22
 describe('resolveOutcome', () => {
   test('bola ao lado do gol é pra fora', () => {
     // Arrange
-    const flight = makeFlight({ targetX: 20 })
+    const flight = makeFlight({ targetX: 12 })
 
     // Act & Assert
     expect(resolveOutcome(flight, farKeeper, skill, CFG).kind).toBe('miss')
@@ -75,6 +75,41 @@ describe('resolveOutcome', () => {
     // Act & Assert
     expect(resolveOutcome(lowBall, keeper, strongSkill, CFG).kind).toBe('save')
     expect(resolveOutcome(topCorner, keeper, strongSkill, CFG).kind).toBe('goal')
+  })
+
+  test('goleiro DE PÉ no meio defende com o corpo a bola no meio, mesmo forte', () => {
+    // Arrange: luva não alcançaria (|diveX - finalX| > reach), mas o corpo está na frente
+    const flight = makeFlight({ targetX: 98, power: 0.8, targetHeight: 12 })
+    const standing: KeeperPlan = { reactT: 0.3, diveX: 81 }
+
+    // Act & Assert
+    expect(resolveOutcome(flight, standing, skill, CFG).kind).toBe('save')
+  })
+
+  test('bola na altura do peito/cabeça no meio é AGARRADA pelo goleiro parado', () => {
+    // Arrange: meia altura central — qualquer goleiro em pé agarra
+    const flight = makeFlight({ targetX: 95, power: 0.8, targetHeight: 30 })
+    const standing: KeeperPlan = { reactT: 0.3, diveX: 84 }
+
+    // Act & Assert
+    expect(resolveOutcome(flight, standing, skill, CFG).kind).toBe('save')
+  })
+
+  test('só a cavadinha PERFEITA no ângulo superior do meio encobre o goleiro parado', () => {
+    // Arrange: acima do braço esticado, abaixo do travessão
+    const flight = makeFlight({ targetX: 95, power: 0.8, targetHeight: CFG.standingCatchHeight + 3 })
+    const standing: KeeperPlan = { reactT: 0.3, diveX: 84 }
+
+    // Act & Assert
+    expect(resolveOutcome(flight, standing, skill, CFG).kind).toBe('goal')
+  })
+
+  test('goleiro que mergulhou longe não defende bola no meio com o corpo', () => {
+    // Arrange
+    const flight = makeFlight({ targetX: 92, power: 0.8, targetHeight: 12 })
+
+    // Act & Assert
+    expect(resolveOutcome(flight, farKeeper, skill, CFG).kind).toBe('goal')
   })
 
   test('chute fraco no meio é presa fácil mesmo com goleiro caído no canto', () => {

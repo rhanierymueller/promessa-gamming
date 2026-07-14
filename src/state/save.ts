@@ -1,5 +1,15 @@
 import { clubById } from '../data/clubs'
 import { nationById } from '../data/nations'
+import {
+  ATTRIBUTE_KEYS,
+  DEFAULT_ATTRIBUTES,
+  applyUpgrade,
+  canUpgrade,
+  trainingPointsForRating,
+  upgradeCost,
+  type AttributeKey,
+  type PlayerAttributes,
+} from '../engine/career/attributes'
 import { createSeason } from '../engine/season/season'
 import type { TournamentState } from '../engine/tournament/tournament'
 import { SEASON_TEAMS, type SeasonState } from '../engine/season/types'
@@ -9,11 +19,13 @@ import { SEASON_TEAMS, type SeasonState } from '../engine/season/types'
  * (nacionalidade padrão Brasil + temporada nova).
  */
 
-export const SAVE_VERSION = 5
+export const SAVE_VERSION = 7
 const SAVE_KEY = 'promessa.save'
 export const MAX_PLAYER_NAME = 16
 const DEFAULT_SHIRT_NUMBER = 10
 const DEFAULT_NATIONALITY = 'brasil'
+/** Comemorações desenhadas disponíveis (sprites celeb_0..3). */
+export const CELEBRATION_COUNT = 4
 
 export type Competition = 'liga' | 'amistoso' | 'selecao'
 
@@ -40,6 +52,10 @@ export interface PlayerSave {
   readonly tournament: TournamentState | null
   readonly season: SeasonState
   readonly history: readonly MatchRecord[]
+  readonly attributes: PlayerAttributes
+  readonly trainingPoints: number
+  /** Comemoração escolhida para os gols (índice em celeb_0..3). */
+  readonly celebrationId: number
 }
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
@@ -69,6 +85,9 @@ export const createSave = (
     tournament: null,
     season: createSeason(clubId, seasonSeed(roll)),
     history: [],
+    attributes: DEFAULT_ATTRIBUTES,
+    trainingPoints: 0,
+    celebrationId: 0,
   }
 }
 
@@ -77,10 +96,29 @@ export const setShirtNumber = (save: PlayerSave, shirtNumber: number): PlayerSav
   shirtNumber: Math.min(99, Math.max(1, Math.round(shirtNumber))),
 })
 
+/** Escolhe a comemoração dos gols — ignora índices fora do catálogo. */
+export const setCelebration = (save: PlayerSave, celebrationId: number): PlayerSave => {
+  if (!Number.isInteger(celebrationId) || celebrationId < 0 || celebrationId >= CELEBRATION_COUNT) {
+    return save
+  }
+  return { ...save, celebrationId }
+}
+
 export const recordMatch = (save: PlayerSave, record: MatchRecord): PlayerSave => ({
   ...save,
   history: [...save.history, record],
+  trainingPoints: save.trainingPoints + trainingPointsForRating(record.rating),
 })
+
+/** Gasta pontos de treino para subir um atributo — no-op se não puder pagar. */
+export const trainAttribute = (save: PlayerSave, key: AttributeKey): PlayerSave => {
+  if (!canUpgrade(save.attributes, key, save.trainingPoints)) return save
+  return {
+    ...save,
+    attributes: applyUpgrade(save.attributes, key),
+    trainingPoints: save.trainingPoints - upgradeCost(save.attributes[key]),
+  }
+}
 
 export const applySeason = (save: PlayerSave, season: SeasonState): PlayerSave => ({
   ...save,
@@ -138,6 +176,17 @@ const isValidSeason = (value: unknown, clubId: string): value is SeasonState => 
   )
 }
 
+const normalizeAttributes = (value: unknown): PlayerAttributes => {
+  if (typeof value !== 'object' || value === null) return DEFAULT_ATTRIBUTES
+  const raw = value as Record<string, unknown>
+  const result = { ...DEFAULT_ATTRIBUTES } as Record<AttributeKey, number>
+  for (const key of ATTRIBUTE_KEYS) {
+    const level = raw[key]
+    if (typeof level === 'number' && level >= 1 && level <= 10) result[key] = Math.floor(level)
+  }
+  return result
+}
+
 const isValidTournament = (value: unknown): value is TournamentState => {
   if (typeof value !== 'object' || value === null) return false
   const t = value as Record<string, unknown>
@@ -173,6 +222,18 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
     ? candidate.season
     : createSeason(candidate.clubId, seasonSeed(Math.random))
   const tournament = isValidTournament(candidate.tournament) ? candidate.tournament : null
+  const attributes = normalizeAttributes(candidate.attributes)
+  const trainingPoints =
+    typeof candidate.trainingPoints === 'number' && candidate.trainingPoints >= 0
+      ? Math.floor(candidate.trainingPoints)
+      : 0
+  const celebrationId =
+    typeof candidate.celebrationId === 'number' &&
+    Number.isInteger(candidate.celebrationId) &&
+    candidate.celebrationId >= 0 &&
+    candidate.celebrationId < CELEBRATION_COUNT
+      ? candidate.celebrationId
+      : 0
   const base: PlayerSave = {
     version: SAVE_VERSION,
     playerName: name,
@@ -187,6 +248,9 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
     tournament,
     season,
     history: normalizeHistory(candidate.history),
+    attributes,
+    trainingPoints,
+    celebrationId,
   }
   return setShirtNumber(base, base.shirtNumber)
 }
@@ -198,7 +262,14 @@ export const parseSave = (raw: string | null): PlayerSave | null => {
     if (typeof data !== 'object' || data === null) return null
     const candidate = data as Record<string, unknown>
     if (candidate.version === 1 || candidate.version === 2 || candidate.version === 3) return migrateLegacy(candidate)
-    if (candidate.version === 4 || candidate.version === SAVE_VERSION) return parseCurrent(candidate)
+    if (
+      candidate.version === 4 ||
+      candidate.version === 5 ||
+      candidate.version === 6 ||
+      candidate.version === SAVE_VERSION
+    ) {
+      return parseCurrent(candidate)
+    }
     return null
   } catch {
     return null

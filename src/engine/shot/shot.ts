@@ -1,7 +1,7 @@
 import type { RngResult, RngState } from '../rng'
 import { goalCenter, keeperSkillForShot } from './config'
 import { createFlight, flightX } from './flight'
-import { applyDispersion, readGesture } from './gesture'
+import { applyBar, applyDispersion, readGesture } from './gesture'
 import { planKeeper } from './keeper'
 import type {
   FlightParams,
@@ -41,10 +41,17 @@ export const resolveOutcome = (
 
   let reach = config.reachBase + skill * config.reachSkillFactor
   if (height > config.highBallHeight) reach *= config.highBallReachFactor
+  const center = goalCenter(config)
   const isTame =
     flight.power < config.tameShotPower &&
-    Math.abs(finalX - goalCenter(config)) < config.tameShotCenterRange
-  const saved = isTame || Math.abs(plan.diveX - finalX) <= reach
+    Math.abs(finalX - center) < config.tameShotCenterRange
+  // goleiro que não mergulhou tem o CORPO na frente da bola central (não só a
+  // luva) — em pé ele agarra até a altura dos braços esticados
+  const isBodyBlock =
+    Math.abs(plan.diveX - center) <= config.keeperStandingZone &&
+    Math.abs(finalX - center) <= config.keeperStandingZone &&
+    height <= config.standingCatchHeight
+  const saved = isTame || isBodyBlock || Math.abs(plan.diveX - finalX) <= reach
 
   return saved
     ? { kind: 'save', finalX, isGolaco: false }
@@ -68,13 +75,17 @@ export const simulateShot = (
   shotIndex: number,
   rng: RngState,
   config: ShotConfig,
+  keeperQuality?: number,
+  barT?: number,
 ): RngResult<ShotSimulation | null> => {
-  const intent = readGesture(points, ballX, config)
-  if (!intent) return { value: null, next: rng }
+  const gesture = readGesture(points, ballX, config)
+  if (!gesture) return { value: null, next: rng }
 
+  // com a régua de chute, o traço mira e a barra dita força/altura
+  const intent = barT === undefined ? gesture : applyBar(gesture, barT, config)
   const dispersed = applyDispersion(intent, rng, config)
   const flight = createFlight(dispersed.value, ballX, config)
-  const skill = keeperSkillForShot(config, shotIndex)
+  const skill = keeperSkillForShot(config, shotIndex, keeperQuality)
   const planned = planKeeper(flight, skill, dispersed.next, config)
   const outcome = resolveOutcome(flight, planned.value, skill, config)
 

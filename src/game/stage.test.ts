@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import type { Vec2 } from '../engine/shot/types'
 import {
+  barTAt,
   beginRound,
   createDefenseStage,
   createStage,
@@ -56,6 +57,31 @@ describe('createStage e beginRound', () => {
     expect(round.phase).toBe('ready')
     expect(round.shotIndex).toBe(0)
     expect(round.goals).toBe(0)
+  })
+})
+
+describe('régua de chute', () => {
+  test('barTAt varre topo → base → topo (onda triangular)', () => {
+    // Act & Assert
+    expect(barTAt(0)).toBe(1)
+    expect(barTAt(0.65)).toBeCloseTo(0)
+    expect(barTAt(1.3)).toBeCloseTo(1)
+    expect(barTAt(0.325)).toBeCloseTo(0.5)
+  })
+
+  test('a posição da régua no instante do chute dita força e altura', () => {
+    // Arrange: avança o relógio até a régua estar perto da base (rasteiro)
+    let round = beginRound(createStage(42))
+    while (barTAt(round.time) > 0.1) {
+      round = tick(round, DT)[0]
+    }
+
+    // Act
+    const armed = tryStartShot(round, validDrag)
+
+    // Assert: força mínima da régua e bola rasteira
+    expect(armed.sim!.command.power).toBeCloseTo(0.72, 1)
+    expect(armed.sim!.command.targetHeight).toBeLessThan(8)
   })
 })
 
@@ -139,13 +165,16 @@ describe('palco de chute único (modo partida)', () => {
 
 describe('falta com barreira', () => {
   test('chute rasteiro no meio bate na barreira: evento blocked e NA BARREIRA', () => {
-    // Arrange
-    const round = beginRound(createStage(42, 1, true))
+    // Arrange: régua na base = rasteiro; traço reto mira o meio (a barreira)
+    let round = beginRound(createStage(42, 1, true))
     expect(round.wall).not.toBeNull()
-    const lowDrag: Vec2[] = [{ x: 90, y: 300 }, { x: 90, y: 285 }, { x: 90, y: 270 }]
+    while (barTAt(round.time) > 0.05) {
+      round = tick(round, DT)[0]
+    }
+    const straightDrag: Vec2[] = [{ x: 90, y: 300 }, { x: 90, y: 285 }, { x: 90, y: 270 }]
 
     // Act
-    const armed = tryStartShot(round, lowDrag)
+    const armed = tryStartShot(round, straightDrag)
     const [flying] = tickUntilPhaseChanges(armed)
     const [resolved, events] = tickUntilPhaseChanges(flying)
 

@@ -1,4 +1,11 @@
 import {
+  DEFAULT_ATTRIBUTES,
+  defenseTuning,
+  shotTuning,
+  wallTuning,
+  type PlayerAttributes,
+} from '../engine/career/attributes'
+import {
   DEFAULT_DEFENSE_CONFIG,
   generateOpponentShot,
   resolveDive,
@@ -68,6 +75,10 @@ export interface StageState {
   readonly readyTimer: number
   /** De onde a bola é cobrada (falta = mais longe do gol). */
   readonly ballStartY: number
+  /** Atributos do craque — afinam chute, cobrança e defesa. */
+  readonly attrs: PlayerAttributes
+  /** Qualidade do goleiro rival (treino < liga < copa). */
+  readonly keeperQuality: number
   readonly time: number
   readonly shotIndex: number
   readonly goals: number
@@ -90,11 +101,18 @@ export interface StageState {
 const ballXForShot = (shotIndex: number): number =>
   goalCenter(CFG) + START_OFFSETS[shotIndex % START_OFFSETS.length]
 
+/** Goleiro do treino: bom, mas abaixo dos jogos oficiais. */
+export const TRAINING_KEEPER_QUALITY = 0.4
+
 export const createStage = (
   seed: number,
   totalShots: number = TOTAL_SHOTS,
   hasWall = false,
+  attrs: PlayerAttributes = DEFAULT_ATTRIBUTES,
+  keeperQuality: number = TRAINING_KEEPER_QUALITY,
 ): StageState => ({
+  attrs,
+  keeperQuality,
   phase: 'intro',
   mode: 'shoot',
   defenseSkill: 0,
@@ -171,8 +189,12 @@ const freshShot = (state: StageState, shotIndex: number): StageState => {
   return state.mode === 'defend' ? armDefense(base) : base
 }
 
-export const createDefenseStage = (seed: number, skill: number): StageState => ({
-  ...createStage(seed, 1, false),
+export const createDefenseStage = (
+  seed: number,
+  skill: number,
+  attrs: PlayerAttributes = DEFAULT_ATTRIBUTES,
+): StageState => ({
+  ...createStage(seed, 1, false, attrs),
   mode: 'defend',
   defenseSkill: skill,
 })
@@ -203,15 +225,32 @@ export const tryStartShot = (state: StageState, points: readonly Vec2[]): StageS
   return armPlayerShot(state, points)
 }
 
+/** Meio ciclo da régua de chute (topo→base) em segundos. */
+const BAR_SWEEP_SECONDS = 0.65
+
+/** Posição da régua no tempo: onda triangular 1 (topo) ⇄ 0 (base). */
+export const barTAt = (time: number): number => {
+  const cycle = (time / BAR_SWEEP_SECONDS) % 2
+  return cycle < 1 ? 1 - cycle : cycle - 1
+}
+
 const armPlayerShot = (state: StageState, points: readonly Vec2[]): StageState => {
-  const shotConfig = { ...CFG, ballStartY: state.ballStartY }
-  const { value, next } = simulateShot(points, state.ballX, state.shotIndex, state.rng, shotConfig)
+  const shotConfig = shotTuning({ ...CFG, ballStartY: state.ballStartY }, state.attrs.finalizacao)
+  const { value, next } = simulateShot(
+    points,
+    state.ballX,
+    state.shotIndex,
+    state.rng,
+    shotConfig,
+    state.keeperQuality,
+    barTAt(state.time),
+  )
   if (!value) return state
 
   if (state.wall) {
     const jumpRoll = nextFloat(next)
     const jumped = jumpRoll.value < WALL_JUMP_CHANCE
-    const blocked = resolveWall(value.flight, state.wall, jumped) === 'blocked'
+    const blocked = resolveWall(value.flight, wallTuning(state.wall, state.attrs.cobranca), jumped) === 'blocked'
     const sim: ShotSimulation = blocked
       ? {
           ...value,
@@ -256,7 +295,13 @@ const resolveDefense = (state: StageState): [StageState, StageEvent[]] => {
   const sim = state.sim!
   const center = goalCenter(CFG)
   const saved =
-    resolveDive(sim.flight, state.diveX, state.diveStartT, center, DEFAULT_DEFENSE_CONFIG) === 'saved'
+    resolveDive(
+      sim.flight,
+      state.diveX,
+      state.diveStartT,
+      center,
+      defenseTuning(DEFAULT_DEFENSE_CONFIG, state.attrs.defesa),
+    ) === 'saved'
   const finalX = flightX(sim.flight, 1)
   const finalY = CFG.goal.floorY - sim.flight.targetHeight
 

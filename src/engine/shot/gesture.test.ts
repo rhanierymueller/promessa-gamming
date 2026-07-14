@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { createRng } from '../rng'
 import { DEFAULT_SHOT_CONFIG as CFG } from './config'
-import { applyDispersion, readGesture } from './gesture'
+import { applyBar, applyDispersion, readGesture } from './gesture'
 import type { Vec2 } from './types'
 
 const straightDrag = (fromY: number, toY: number, x = 90): Vec2[] => [
@@ -128,5 +128,44 @@ describe('applyDispersion', () => {
 
     // Assert
     expect(first).toEqual(second)
+  })
+})
+
+describe('applyBar', () => {
+  const aim = { power: 0.5, targetX: 60, targetHeight: 20, curve: 8 }
+
+  test('régua embaixo = forte e RASTEIRO', () => {
+    // Act
+    const shot = applyBar(aim, 0, CFG)
+
+    // Assert
+    expect(shot.power).toBeCloseTo(CFG.barPowerMin)
+    expect(shot.targetHeight).toBe(1)
+    expect(shot.targetX).toBe(60)
+    expect(shot.curve).toBe(8)
+  })
+
+  test('régua no topo = muito forte e ALTO, na zona do travessão', () => {
+    // Act
+    const shot = applyBar(aim, 1, CFG)
+
+    // Assert
+    expect(shot.power).toBeCloseTo(CFG.barPowerMin + CFG.barPowerRange)
+    expect(shot.targetHeight).toBe(CFG.barMaxHeight)
+    expect(shot.targetHeight).toBeGreaterThanOrEqual(CFG.goal.barHeight - 2)
+  })
+
+  test('meio da régua = meia altura', () => {
+    // Act
+    const shot = applyBar(aim, 0.5, CFG)
+
+    // Assert
+    expect(shot.targetHeight).toBeCloseTo(CFG.barMaxHeight / 2)
+  })
+
+  test('valores fora da régua são grampeados', () => {
+    // Act & Assert
+    expect(applyBar(aim, -1, CFG).targetHeight).toBe(1)
+    expect(applyBar(aim, 2, CFG).power).toBeCloseTo(CFG.barPowerMin + CFG.barPowerRange)
   })
 })

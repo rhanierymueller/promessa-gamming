@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { boostedPassChance } from '../engine/career/attributes'
 import type { RngState } from '../engine/rng'
 import {
   generatePassOptions,
@@ -19,13 +20,24 @@ const RISK_TAGS: Record<PassOption['risk'], string> = {
 interface PassChallengeProps {
   readonly intro: string
   readonly rng: RngState
+  /** Nível do atributo Passe — aumenta a chance das opções. */
+  readonly passeLevel?: number
   readonly onResolved: (resolution: PassResolution, next: RngState, timedOut: boolean) => void
 }
 
 const TICK_MS = 50
 
-export const PassChallenge = ({ intro, rng, onResolved }: PassChallengeProps) => {
-  const generated = useMemo(() => generatePassOptions(rng), [rng])
+export const PassChallenge = ({ intro, rng, passeLevel = 1, onResolved }: PassChallengeProps) => {
+  const generated = useMemo(() => {
+    const base = generatePassOptions(rng)
+    return {
+      ...base,
+      value: base.value.map((option) => ({
+        ...option,
+        successChance: boostedPassChance(option.successChance, passeLevel),
+      })),
+    }
+  }, [rng, passeLevel])
   const [timeLeft, setTimeLeft] = useState(PASS_DECISION_SECONDS)
   const resolvedRef = useRef(false)
   const onResolvedRef = useRef(onResolved)

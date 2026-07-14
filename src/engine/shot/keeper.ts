@@ -28,14 +28,24 @@ export const planKeeper = (
     config.reactTBase - skill * config.reactTSkillFactor + (reactRoll.value - 0.5) * config.reactTNoise,
   )
 
+  // extrapolação linear é enganada pela curva; goleiro habilidoso LÊ parte dela
+  const linear = keeperGuess(flight, reactT, config)
+  const actual = flightX(flight, 1)
+  const curveRead = Math.min(1, skill * config.curveReadFactor)
   const noiseRoll = nextFloat(reactRoll.next)
-  const guess = keeperGuess(flight, reactT, config)
+  const guess = linear + (actual - linear) * curveRead
     + (noiseRoll.value * 2 - 1) * (1 - skill) * config.guessNoise
 
   const center = goalCenter(config)
+
+  // goleiro de verdade às vezes CRAVA o canto errado — a chance cai com a habilidade
+  const sideRoll = nextFloat(noiseRoll.next)
+  const wrongSideChance = config.wrongSideBase * (1 - skill * 0.5)
+  const committed = sideRoll.value < wrongSideChance ? center - (guess - center) : guess
+
   const maxDive = config.maxDiveBase + skill * config.maxDiveSkillFactor
   return {
-    value: { reactT, diveX: clamp(guess, center - maxDive, center + maxDive) },
-    next: noiseRoll.next,
+    value: { reactT, diveX: clamp(committed, center - maxDive, center + maxDive) },
+    next: sideRoll.next,
   }
 }

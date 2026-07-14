@@ -5,17 +5,46 @@ import kDiveRUrl from '../assets/sprites/k_diver.png'
 import kIdleUrl from '../assets/sprites/k_idle.png'
 import kJumpUrl from '../assets/sprites/k_jump.png'
 import kSadUrl from '../assets/sprites/k_sad.png'
+import kStepUrl from '../assets/sprites/k_step.png'
+import kTakeoffUrl from '../assets/sprites/k_takeoff.png'
+import kSavedUrl from '../assets/sprites/k_saved.png'
+import kGetupUrl from '../assets/sprites/k_getup.png'
+import kFlyUrl from '../assets/sprites/k_fly.png'
+import kTipUrl from '../assets/sprites/k_tip.png'
+import kPunchUrl from '../assets/sprites/k_punch.png'
 import sBackUrl from '../assets/sprites/s_back.png'
 import sCelebrateUrl from '../assets/sprites/s_celebrate.png'
 import sKickUrl from '../assets/sprites/s_kick.png'
+import sKick2Url from '../assets/sprites/s_kick2.png'
 import sLamentUrl from '../assets/sprites/s_lament.png'
 import sRunUrl from '../assets/sprites/s_run.png'
+import sRun2Url from '../assets/sprites/s_run2.png'
+import celeb0Url from '../assets/sprites/celeb_0.png'
+import celeb1Url from '../assets/sprites/celeb_1.png'
+import celeb2Url from '../assets/sprites/celeb_2.png'
+import celeb3Url from '../assets/sprites/celeb_3.png'
 import wallJumpUrl from '../assets/sprites/wall_jump.png'
 import wallStandUrl from '../assets/sprites/wall_stand.png'
 import varzeaUrl from '../assets/backgrounds/varzea.jpg'
 
-export type KeeperPose = 'idle' | 'crouch' | 'diveL' | 'diveR' | 'jump' | 'sad'
-export type StrikerPose = 'back' | 'run' | 'kick' | 'celebrate' | 'lament'
+export type KeeperPose =
+  | 'idle'
+  | 'crouch'
+  | 'diveL'
+  | 'diveR'
+  | 'jump'
+  | 'sad'
+  | 'step'
+  | 'takeoff'
+  | 'saved'
+  | 'getup'
+  | 'fly'
+  | 'tip'
+  | 'punch'
+export type StrikerPose = 'back' | 'run' | 'run2' | 'kick' | 'kick2' | 'celebrate' | 'lament'
+
+export const CELEBRATION_URLS = [celeb0Url, celeb1Url, celeb2Url, celeb3Url] as const
+export const CELEBRATION_NAMES = ['Avião', 'De joelhos', 'Soco no ar', 'Silêncio'] as const
 
 export interface SpriteHolder {
   img: HTMLImageElement | HTMLCanvasElement | null
@@ -26,6 +55,7 @@ export interface SpriteHolder {
 export interface GameSprites {
   readonly keeper: Record<KeeperPose, SpriteHolder>
   readonly striker: Record<StrikerPose, SpriteHolder>
+  readonly celebrations: readonly SpriteHolder[]
   readonly ball: SpriteHolder
   readonly wallStand: SpriteHolder
   readonly wallJump: SpriteHolder
@@ -51,14 +81,24 @@ export const loadGameSprites = (): GameSprites => ({
     diveR: loadSprite(kDiveRUrl),
     jump: loadSprite(kJumpUrl),
     sad: loadSprite(kSadUrl),
+    step: loadSprite(kStepUrl),
+    takeoff: loadSprite(kTakeoffUrl),
+    saved: loadSprite(kSavedUrl),
+    getup: loadSprite(kGetupUrl),
+    fly: loadSprite(kFlyUrl),
+    tip: loadSprite(kTipUrl),
+    punch: loadSprite(kPunchUrl),
   },
   striker: {
     back: loadSprite(sBackUrl),
     run: loadSprite(sRunUrl),
+    run2: loadSprite(sRun2Url),
     kick: loadSprite(sKickUrl),
+    kick2: loadSprite(sKick2Url),
     celebrate: loadSprite(sCelebrateUrl),
     lament: loadSprite(sLamentUrl),
   },
+  celebrations: CELEBRATION_URLS.map(loadSprite),
   ball: loadSprite(ballUrl),
   wallStand: loadSprite(wallStandUrl),
   wallJump: loadSprite(wallJumpUrl),

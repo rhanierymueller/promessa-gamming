@@ -53,6 +53,18 @@ export const OPPONENT_FREEKICK_INTROS: readonly string[] = [
   'Eles têm uma falta na entrada da área. A torcida prende a respiração.',
 ]
 
+export const TACTIC_LINES = {
+  theirGoalCancelled: 'A MURALHA SEGUROU! A postura recuada travou o ataque deles.',
+  ourGoalCancelled: 'A chance veio, mas com o time fechado faltou gente na área. Desperdiçada.',
+  extraTeamGoal: 'CONTRA-ATAQUE FULMINANTE! Três toques e GOL NOSSO na transição!',
+  extraOpponentGoal: 'Vacilo na saída… eles roubam e marcam no contra-golpe.',
+  changed: {
+    equilibrado: 'O técnico equilibra as linhas. Jogo normal.',
+    recuar: 'Ordem da beira do campo: TODO MUNDO ATRÁS DA LINHA DA BOLA!',
+    'contra-ataque': 'O técnico manda baixar o bloco e sair em velocidade. Armadilha montada.',
+  },
+} as const
+
 export const DEFENSE_RESULT_LINES = {
   saved: ['DEFESAÇA! O goleiro voa no ângulo e salva o time! O alambrado explode!'],
   conceded: ['Gol deles… a cobrança morreu no canto e não deu nem pra ver.'],

@@ -35,6 +35,24 @@ export const readGesture = (
 }
 
 /**
+ * Barra de chute: o traço MIRA (direção + curva); força e altura vêm da régua
+ * vertical no instante do toque — embaixo (0) sai forte e rasteiro, em cima
+ * (1) sai muito forte e alto, flertando com o travessão.
+ */
+export const applyBar = (
+  command: ShotCommand,
+  barT: number,
+  config: ShotConfig,
+): ShotCommand => {
+  const t = clamp(barT, 0, 1)
+  return {
+    ...command,
+    power: config.barPowerMin + t * config.barPowerRange,
+    targetHeight: Math.max(1, t * config.barMaxHeight),
+  }
+}
+
+/**
  * Aplica o custo da força: acima do limiar, o chute dispersa (trade-off
  * potência × colocação); chute fraco sai rasteiro.
  */

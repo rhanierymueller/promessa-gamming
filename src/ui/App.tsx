@@ -1,4 +1,4 @@
-import { CalendarDays, House, Shield, User, type LucideIcon } from 'lucide-react'
+import { CalendarDays, House, Shield, User, Volume2, VolumeX, type LucideIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { clubById, type Club } from '../data/clubs'
 import { nationAsClub, nationById } from '../data/nations'
@@ -11,7 +11,7 @@ import {
   playerTournamentOpponentId,
   type TournamentKind,
 } from '../engine/tournament/tournament'
-import { initAudio } from '../game/audio'
+import { initAudio, setMuted } from '../game/audio'
 import { MatchScreen } from '../game/MatchScreen'
 import { ShotStage } from '../game/ShotStage'
 import {
@@ -40,6 +40,26 @@ interface MatchSetup {
   readonly opponent: Club
 }
 
+const MUTE_KEY = 'promessa.muted'
+
+const loadMuted = (): boolean => localStorage.getItem(MUTE_KEY) === '1'
+
+interface MuteButtonProps {
+  readonly muted: boolean
+  readonly onToggle: () => void
+}
+
+const MuteButton = ({ muted, onToggle }: MuteButtonProps) => (
+  <button
+    className="mute-btn"
+    onClick={onToggle}
+    aria-label={muted ? 'Ativar som' : 'Silenciar som'}
+    title={muted ? 'Ativar som' : 'Silenciar som'}
+  >
+    {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+  </button>
+)
+
 const TAB_ITEMS: readonly { id: Tab; icon: LucideIcon; label: string }[] = [
   { id: 'home', icon: House, label: 'Início' },
   { id: 'matches', icon: CalendarDays, label: 'Liga' },
@@ -52,6 +72,18 @@ export const App = () => {
   const [screen, setScreen] = useState<Screen>('tabs')
   const [tab, setTab] = useState<Tab>('home')
   const [matchSetup, setMatchSetup] = useState<MatchSetup | null>(null)
+  const [muted, setMutedState] = useState<boolean>(() => {
+    const stored = loadMuted()
+    setMuted(stored)
+    return stored
+  })
+
+  const toggleMute = (): void => {
+    const next = !muted
+    setMutedState(next)
+    setMuted(next)
+    localStorage.setItem(MUTE_KEY, next ? '1' : '0')
+  }
 
   const club = useMemo(() => (save ? clubById(save.clubId) : null), [save])
   const nextOpponent = useMemo(() => {
@@ -148,6 +180,7 @@ export const App = () => {
   if (!save || !club) {
     return (
       <main className="shell">
+        <MuteButton muted={muted} onToggle={toggleMute} />
         <header className="header">
           <p className="eyebrow">Promessa</p>
           <h1>Promessa</h1>
@@ -161,6 +194,7 @@ export const App = () => {
   if (screen === 'match' && matchSetup) {
     return (
       <main className="shell">
+        <MuteButton muted={muted} onToggle={toggleMute} />
         <header className="header">
           <p className="eyebrow">
             {matchSetup.kind === 'torneio'
@@ -176,6 +210,8 @@ export const App = () => {
           club={matchSetup.club}
           opponent={matchSetup.opponent}
           competition={matchSetup.kind === 'torneio' ? 'selecao' : 'liga'}
+          attributes={save.attributes}
+          celebrationId={save.celebrationId}
           onExit={onMatchFinished}
         />
         <footer className="footer">PROMESSA · em desenvolvimento</footer>
@@ -186,11 +222,12 @@ export const App = () => {
   if (screen === 'training') {
     return (
       <main className="shell">
+        <MuteButton muted={muted} onToggle={toggleMute} />
         <header className="header">
           <p className="eyebrow">Promessa · Treino</p>
           <h1>O Chute</h1>
         </header>
-        <ShotStage />
+        <ShotStage celebrationId={save.celebrationId} />
         <button className="btn btn-secondary" onClick={() => setScreen('tabs')}>← Voltar</button>
         <footer className="footer">PROMESSA · em desenvolvimento</footer>
       </main>
@@ -199,6 +236,7 @@ export const App = () => {
 
   return (
     <main className="shell shell-tabs">
+        <MuteButton muted={muted} onToggle={toggleMute} />
       <header className="header">
         <p className="eyebrow">Promessa</p>
         <h1>{TAB_ITEMS.find((item) => item.id === tab)!.label}</h1>
