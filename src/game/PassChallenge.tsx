@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { boostedPassChance } from '../engine/career/attributes'
 import type { RngState } from '../engine/rng'
 import {
+  decisionSecondsFor,
   generatePassOptions,
-  PASS_DECISION_SECONDS,
   resolvePass,
   timeoutPass,
   type PassOption,
@@ -38,7 +38,8 @@ export const PassChallenge = ({ intro, rng, passeLevel = 1, onResolved }: PassCh
       })),
     }
   }, [rng, passeLevel])
-  const [timeLeft, setTimeLeft] = useState(PASS_DECISION_SECONDS)
+  const decisionSeconds = decisionSecondsFor(passeLevel)
+  const [timeLeft, setTimeLeft] = useState(decisionSeconds)
   const resolvedRef = useRef(false)
   const onResolvedRef = useRef(onResolved)
   onResolvedRef.current = onResolved
@@ -70,7 +71,7 @@ export const PassChallenge = ({ intro, rng, passeLevel = 1, onResolved }: PassCh
       <div className="pass-timebar" aria-hidden="true">
         <div
           className="pass-timebar-fill"
-          style={{ width: `${(timeLeft / PASS_DECISION_SECONDS) * 100}%` }}
+          style={{ width: `${(timeLeft / decisionSeconds) * 100}%` }}
         />
       </div>
       <div className="pass-options">

@@ -35,6 +35,13 @@ const RISK_PROFILES: Record<PassRisk, RiskProfile> = {
 export const PASS_TEMPLATE_COUNT = 4
 export const PASS_DECISION_SECONDS = 6
 
+/** Visão de jogo: passador raso decide com pressa, camisa 10 tem tempo. */
+const DECISION_MIN_SECONDS = 4
+const DECISION_PER_LEVEL = 0.35
+
+export const decisionSecondsFor = (passeLevel: number): number =>
+  DECISION_MIN_SECONDS + (Math.min(10, Math.max(1, passeLevel)) - 1) * DECISION_PER_LEVEL
+
 /** Sempre uma opção de cada risco, com variação só no texto. */
 export const generatePassOptions = (rng: RngState): RngResult<readonly PassOption[]> => {
   const risks: PassRisk[] = ['safe', 'bold', 'audacious']

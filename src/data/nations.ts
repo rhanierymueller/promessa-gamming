@@ -47,4 +47,5 @@ export const nationAsClub = (nation: Nation): Club => ({
   nickname: `Seleção de ${nation.name}`,
   colors: nation.colors,
   strength: nation.strength,
+  division: 0,
 })

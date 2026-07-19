@@ -1,4 +1,4 @@
-import { clubById } from '../data/clubs'
+import { clubById, type Club } from '../data/clubs'
 import { nationById } from '../data/nations'
 import {
   ATTRIBUTE_KEYS,
@@ -10,7 +10,16 @@ import {
   type AttributeKey,
   type PlayerAttributes,
 } from '../engine/career/attributes'
-import { createSeason } from '../engine/season/season'
+import {
+  applyPromotionRelegation,
+  divisionOf,
+  initialDivisions,
+  type Divisions,
+} from '../engine/pyramid/pyramid'
+import { FORMATION_IDS, userSlotIndex, type FormationId, type PlayerFieldPosition } from '../engine/squad/formation'
+import { USER_PLAYER_ID, USER_SQUAD_INDEX } from '../engine/squad/players'
+import { computeTable, createSeason } from '../engine/season/season'
+import { createRng } from '../engine/rng'
 import type { TournamentState } from '../engine/tournament/tournament'
 import { SEASON_TEAMS, type SeasonState } from '../engine/season/types'
 
@@ -19,13 +28,77 @@ import { SEASON_TEAMS, type SeasonState } from '../engine/season/types'
  * (nacionalidade padrão Brasil + temporada nova).
  */
 
-export const SAVE_VERSION = 7
+export const SAVE_VERSION = 15
 const SAVE_KEY = 'promessa.save'
 export const MAX_PLAYER_NAME = 16
 const DEFAULT_SHIRT_NUMBER = 10
 const DEFAULT_NATIONALITY = 'brasil'
 /** Comemorações desenhadas disponíveis (sprites celeb_0..3). */
 export const CELEBRATION_COUNT = 4
+/** Catálogo de aparência (paletas visuais em game/appearance.ts). */
+export const SKIN_TONE_COUNT = 5
+export const HAIR_COLOR_COUNT = 4
+export const KIT_COLOR_COUNT = 6
+
+export const MAX_CLUB_NAME = 24
+
+/** Só as últimas partidas ficam gravadas — o resto vira total da carreira. */
+export const HISTORY_LIMIT = 10
+
+export interface CareerTotals {
+  readonly games: number
+  readonly wins: number
+  readonly draws: number
+  readonly losses: number
+  readonly goals: number
+  readonly ratingSum: number
+}
+
+const EMPTY_CAREER: CareerTotals = { games: 0, wins: 0, draws: 0, losses: 0, goals: 0, ratingSum: 0 }
+
+const addToCareer = (career: CareerTotals, record: MatchRecord): CareerTotals => ({
+  games: career.games + 1,
+  wins: career.wins + (record.teamGoals > record.opponentGoals ? 1 : 0),
+  draws: career.draws + (record.teamGoals === record.opponentGoals ? 1 : 0),
+  losses: career.losses + (record.teamGoals < record.opponentGoals ? 1 : 0),
+  goals: career.goals + record.playerGoals,
+  ratingSum: career.ratingSum + record.rating,
+})
+
+export const PLAYER_MIN_AGE = 16
+export const PLAYER_MAX_AGE = 37
+const DEFAULT_PLAYER_AGE = 18
+const DEFAULT_POSITION: PlayerFieldPosition = 'ATA'
+const DEFAULT_FORMATION: FormationId = '4-3-3'
+/** Pontos extras distribuíveis na criação, além da base 3 em cada atributo. */
+export const CREATE_EXTRA_POINTS = 10
+const BASE_ATTR_TOTAL = 12
+
+const FIELD_POSITIONS: readonly PlayerFieldPosition[] = ['LD', 'ZAG', 'LE', 'VOL', 'MEI', 'PON', 'ATA']
+
+export interface SaveAccount {
+  readonly email: string
+  readonly username: string
+}
+
+export type PlayerGender = 'masculino' | 'feminino'
+
+export interface PlayerAppearance {
+  /** Índice do tom de pele (0 = original da arte). */
+  readonly skin: number
+  /** Índice da cor de cabelo (0 = original da arte). */
+  readonly hair: number
+  /** Índice da cor do uniforme (0 = amarelo original). */
+  readonly kit: number
+  readonly gender: PlayerGender
+}
+
+export const DEFAULT_APPEARANCE: PlayerAppearance = {
+  skin: 0,
+  hair: 0,
+  kit: 0,
+  gender: 'masculino',
+}
 
 export type Competition = 'liga' | 'amistoso' | 'selecao'
 
@@ -56,6 +129,37 @@ export interface PlayerSave {
   readonly trainingPoints: number
   /** Comemoração escolhida para os gols (índice em celeb_0..3). */
   readonly celebrationId: number
+  /** Aparência do craque (pele, cabelo, gênero). */
+  readonly appearance: PlayerAppearance
+  /** Renomeações LOCAIS de clubes feitas pelo jogador (clubId → nome). */
+  readonly customClubNames: Readonly<Record<string, string>>
+  /** Escudos LOCAIS enviados pelo jogador (clubId → data URL 64px). */
+  readonly customClubCrests: Readonly<Record<string, string>>
+  /** Pirâmide atual: 4 divisões × 14 clubes (muda com acesso/queda). */
+  readonly divisions: Divisions
+  /** Resultado da última virada de temporada (banner na Home). */
+  readonly divisionMovement: 'up' | 'down' | 'stay' | null
+  /** Idade do craque na criação (16-40). */
+  readonly playerAge: number
+  /** Posição de linha escolhida (goleiro não). */
+  readonly playerPosition: PlayerFieldPosition
+  /** Conta online (sem senha — a senha vive só no Supabase). */
+  readonly account: SaveAccount | null
+  /** Formação tática do SEU time — você é o técnico. */
+  readonly formation: FormationId
+  /** Escalação: índice do elenco (0-17) em cada um dos 11 slots da formação. */
+  readonly lineup: readonly number[]
+  /** Totais da carreira — o histórico detalhado guarda só as últimas 10. */
+  readonly career: CareerTotals
+  /** Nomes LOCAIS dos SEUS jogadores (playerId → nome) — cada um editável UMA vez. */
+  readonly customPlayerNames: Readonly<Record<string, string>>
+  /** Cores LOCAIS dos clubes (clubId → {primary, secondary}). */
+  readonly customClubColors: Readonly<Record<string, ClubColors>>
+}
+
+export interface ClubColors {
+  readonly primary: string
+  readonly secondary: string
 }
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>
@@ -66,14 +170,71 @@ const seasonSeed = (roll: RandomRoll): number => Math.floor(roll() * 0xffffffff)
 export const sanitizePlayerName = (raw: string): string =>
   raw.trim().slice(0, MAX_PLAYER_NAME)
 
+/** Escalação padrão: titulares 0-10 com o SEU craque no slot da posição dele. */
+const defaultLineup = (formation: FormationId, position: PlayerFieldPosition): readonly number[] => {
+  const lineup = Array.from({ length: 11 }, (_, index) => index)
+  const slot = userSlotIndex(formation, position)
+  lineup[USER_SQUAD_INDEX] = lineup[slot]
+  lineup[slot] = USER_SQUAD_INDEX
+  return lineup
+}
+
+const isValidCreateAttributes = (attributes: PlayerAttributes): boolean => {
+  const values = ATTRIBUTE_KEYS.map((key) => attributes[key])
+  const total = values.reduce((sum, value) => sum + value, 0)
+  return (
+    values.every((value) => Number.isInteger(value) && value >= 1 && value <= 10) &&
+    total <= BASE_ATTR_TOTAL + CREATE_EXTRA_POINTS
+  )
+}
+
+export interface CreateSaveInput {
+  readonly playerName: string
+  /** Clube existente OU deixe vazio e informe teamName para criar o seu. */
+  readonly clubId?: string
+  /** Nome do SEU time — entra na Série D no lugar de um clube (14 mantidos). */
+  readonly teamName?: string
+  readonly nationalityId?: string
+  readonly playerAge?: number
+  readonly playerPosition?: PlayerFieldPosition
+  /** Atributos após distribuir os pontos extras da criação. */
+  readonly attributes?: PlayerAttributes
+  readonly account?: SaveAccount | null
+}
+
 export const createSave = (
-  playerName: string,
-  clubId: string,
-  nationalityId: string = DEFAULT_NATIONALITY,
+  input: CreateSaveInput,
   roll: RandomRoll = Math.random,
 ): PlayerSave | null => {
-  const name = sanitizePlayerName(playerName)
-  if (name.length === 0 || !clubById(clubId) || !nationById(nationalityId)) return null
+  const name = sanitizePlayerName(input.playerName)
+  const nationalityId = input.nationalityId ?? DEFAULT_NATIONALITY
+  const age = input.playerAge ?? DEFAULT_PLAYER_AGE
+  const position = input.playerPosition ?? DEFAULT_POSITION
+  const attributes = input.attributes ?? DEFAULT_ATTRIBUTES
+  if (name.length === 0 || !nationById(nationalityId)) return null
+  if (!Number.isInteger(age) || age < PLAYER_MIN_AGE || age > PLAYER_MAX_AGE) return null
+  if (!FIELD_POSITIONS.includes(position)) return null
+  if (!isValidCreateAttributes(attributes)) return null
+
+  const divisions = initialDivisions()
+  const teamName = input.teamName?.trim().slice(0, MAX_CLUB_NAME) ?? ''
+  let clubId = input.clubId ?? ''
+  let customClubNames: Readonly<Record<string, string>> = {}
+  if (!clubById(clubId)) {
+    if (teamName.length === 0) return null
+    // o SEU time: um clube host da Série D veste o nome que você digitou
+    const serieD = divisions[3]
+    clubId = serieD[Math.floor(roll() * serieD.length) % serieD.length]
+    customClubNames = { [clubId]: teamName }
+  } else if (teamName.length > 0) {
+    customClubNames = { [clubId]: teamName }
+  }
+
+  const account =
+    input.account && input.account.email.trim() && input.account.username.trim()
+      ? { email: input.account.email.trim(), username: input.account.username.trim() }
+      : null
+
   return {
     version: SAVE_VERSION,
     playerName: name,
@@ -83,12 +244,58 @@ export const createSave = (
     careerYear: 1,
     tournamentPlayed: false,
     tournament: null,
-    season: createSeason(clubId, seasonSeed(roll)),
+    season: createSeason(clubId, seasonSeed(roll), divisions[divisionOf(divisions, clubId)]),
     history: [],
-    attributes: DEFAULT_ATTRIBUTES,
+    attributes,
     trainingPoints: 0,
     celebrationId: 0,
+    appearance: DEFAULT_APPEARANCE,
+    customClubNames,
+    customClubCrests: {},
+    divisions,
+    divisionMovement: null,
+    playerAge: age,
+    playerPosition: position,
+    account,
+    formation: DEFAULT_FORMATION,
+    lineup: defaultLineup(DEFAULT_FORMATION, position),
+    career: EMPTY_CAREER,
+    customPlayerNames: {},
+    customClubColors: {},
   }
+}
+
+/** Você é o técnico: muda o desenho tático mantendo o seu craque em campo. */
+export const setFormation = (save: PlayerSave, formation: FormationId): PlayerSave => {
+  if (!FORMATION_IDS.includes(formation)) return save
+  const lineup = [...save.lineup]
+  const currentSlot = lineup.indexOf(USER_SQUAD_INDEX)
+  const wantedSlot = userSlotIndex(formation, save.playerPosition)
+  if (currentSlot !== wantedSlot && currentSlot >= 0) {
+    const displaced = lineup[wantedSlot]
+    lineup[wantedSlot] = USER_SQUAD_INDEX
+    lineup[currentSlot] = displaced
+  }
+  return { ...save, formation, lineup }
+}
+
+/**
+ * Troca de escalação: coloca `squadIndex` (0-17) no slot `slotIndex`.
+ * O seu craque não sai de campo; jogador já titular troca de slot.
+ */
+export const swapLineup = (save: PlayerSave, slotIndex: number, squadIndex: number): PlayerSave => {
+  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= save.lineup.length) return save
+  if (!Number.isInteger(squadIndex) || squadIndex < 0 || squadIndex > 17) return save
+  if (save.lineup[slotIndex] === USER_SQUAD_INDEX) return save
+  if (squadIndex === USER_SQUAD_INDEX) return save
+  const lineup = [...save.lineup]
+  const alreadyAt = lineup.indexOf(squadIndex)
+  if (alreadyAt === slotIndex) return save
+  if (alreadyAt >= 0) {
+    lineup[alreadyAt] = lineup[slotIndex]
+  }
+  lineup[slotIndex] = squadIndex
+  return { ...save, lineup }
 }
 
 export const setShirtNumber = (save: PlayerSave, shirtNumber: number): PlayerSave => ({
@@ -104,9 +311,237 @@ export const setCelebration = (save: PlayerSave, celebrationId: number): PlayerS
   return { ...save, celebrationId }
 }
 
+const isValidIndex = (value: number, count: number): boolean =>
+  Number.isInteger(value) && value >= 0 && value < count
+
+/** Atualiza a aparência — ignora índices fora dos catálogos. */
+export const setAppearance = (save: PlayerSave, appearance: PlayerAppearance): PlayerSave => {
+  if (
+    !isValidIndex(appearance.skin, SKIN_TONE_COUNT) ||
+    !isValidIndex(appearance.hair, HAIR_COLOR_COUNT) ||
+    !isValidIndex(appearance.kit, KIT_COLOR_COUNT) ||
+    (appearance.gender !== 'masculino' && appearance.gender !== 'feminino')
+  ) {
+    return save
+  }
+  return { ...save, appearance }
+}
+
+/**
+ * Renomeia um clube SÓ neste save (edição local do jogador). Nome vazio ou
+ * igual ao original remove a personalização.
+ */
+export const renameClub = (save: PlayerSave, clubId: string, rawName: string): PlayerSave => {
+  const club = clubById(clubId)
+  if (!club) return save
+  const name = rawName.trim().slice(0, MAX_CLUB_NAME)
+  const next: Record<string, string> = { ...save.customClubNames }
+  if (name.length === 0 || name === club.name) {
+    delete next[clubId]
+  } else {
+    next[clubId] = name
+  }
+  return { ...save, customClubNames: next }
+}
+
+export const MAX_SQUAD_PLAYER_NAME = 20
+
+/**
+ * Batiza um jogador do SEU time — vale só neste save e cada jogador pode ser
+ * renomeado UMA única vez (escolha bem). O seu craque usa o nome da carreira.
+ */
+export const setPlayerName = (save: PlayerSave, playerId: string, rawName: string): PlayerSave => {
+  if (playerId === USER_PLAYER_ID) return save
+  if (!playerId.startsWith(`${save.clubId}-`)) return save
+  if (save.customPlayerNames[playerId] !== undefined) return save
+  const name = rawName.trim().slice(0, MAX_SQUAD_PLAYER_NAME)
+  if (name.length === 0) return save
+  return { ...save, customPlayerNames: { ...save.customPlayerNames, [playerId]: name } }
+}
+
+/** Nome de exibição de um jogador do elenco, com o batismo local aplicado. */
+export const squadPlayerDisplayName = (save: PlayerSave, playerId: string, original: string): string =>
+  save.customPlayerNames[playerId] ?? original
+
+const normalizePlayerNames = (value: unknown): Readonly<Record<string, string>> => {
+  if (typeof value !== 'object' || value === null) return {}
+  const result: Record<string, string> = {}
+  for (const [playerId, name] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof name === 'string' && name.trim().length > 0) {
+      result[playerId] = name.trim().slice(0, MAX_SQUAD_PLAYER_NAME)
+    }
+  }
+  return result
+}
+
+/** Nome de exibição do clube, com a renomeação local aplicada. */
+export const clubDisplayName = (save: PlayerSave, clubId: string): string =>
+  save.customClubNames[clubId] ?? clubById(clubId)?.name ?? '???'
+
+const abbrFor = (name: string): string => {
+  const letters = name.normalize('NFD').replace(/[^a-zA-Z]/g, '').toUpperCase()
+  return (letters + 'XXX').slice(0, 3)
+}
+
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
+
+/** Pinta um clube com as SUAS cores (local ao save); null volta ao original. */
+export const setClubColors = (
+  save: PlayerSave,
+  clubId: string,
+  primary: string | null,
+  secondary?: string,
+): PlayerSave => {
+  if (!clubById(clubId)) return save
+  if (primary === null) {
+    const next = { ...save.customClubColors }
+    delete next[clubId]
+    return { ...save, customClubColors: next }
+  }
+  if (!HEX_COLOR.test(primary) || !secondary || !HEX_COLOR.test(secondary)) return save
+  return {
+    ...save,
+    customClubColors: { ...save.customClubColors, [clubId]: { primary, secondary } },
+  }
+}
+
+const normalizeClubColors = (value: unknown): Readonly<Record<string, ClubColors>> => {
+  if (typeof value !== 'object' || value === null) return {}
+  const result: Record<string, ClubColors> = {}
+  for (const [clubId, colors] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof colors !== 'object' || colors === null || !clubById(clubId)) continue
+    const candidate = colors as Record<string, unknown>
+    if (
+      typeof candidate.primary === 'string' &&
+      typeof candidate.secondary === 'string' &&
+      HEX_COLOR.test(candidate.primary) &&
+      HEX_COLOR.test(candidate.secondary)
+    ) {
+      result[clubId] = { primary: candidate.primary, secondary: candidate.secondary }
+    }
+  }
+  return result
+}
+
+/** Clube com nome/abreviação/cores de exibição personalizados aplicados. */
+export const displayClub = (save: PlayerSave, club: Club): Club => {
+  const customName = save.customClubNames[club.id]
+  const customColors = save.customClubColors[club.id]
+  if (!customName && !customColors) return club
+  return {
+    ...club,
+    ...(customName ? { name: customName, abbr: abbrFor(customName) } : {}),
+    ...(customColors ? { colors: customColors } : {}),
+  }
+}
+
+const normalizePosition = (value: unknown): PlayerFieldPosition =>
+  FIELD_POSITIONS.includes(value as PlayerFieldPosition) ? (value as PlayerFieldPosition) : DEFAULT_POSITION
+
+const normalizeFormation = (value: unknown): FormationId =>
+  FORMATION_IDS.includes(value as FormationId) ? (value as FormationId) : DEFAULT_FORMATION
+
+const normalizeAccount = (value: unknown): SaveAccount | null => {
+  if (typeof value !== 'object' || value === null) return null
+  const candidate = value as Record<string, unknown>
+  if (typeof candidate.email !== 'string' || typeof candidate.username !== 'string') return null
+  const email = candidate.email.trim()
+  const username = candidate.username.trim()
+  return email.length > 0 && username.length > 0 ? { email, username } : null
+}
+
+const normalizeLineup = (
+  value: unknown,
+  formation: FormationId,
+  position: PlayerFieldPosition,
+): readonly number[] => {
+  const fallback = defaultLineup(formation, position)
+  if (!Array.isArray(value) || value.length !== 11) return fallback
+  const numbers = value as unknown[]
+  const valid = numbers.every(
+    (entry) => typeof entry === 'number' && Number.isInteger(entry) && entry >= 0 && entry <= 17,
+  )
+  if (!valid) return fallback
+  const lineup = numbers as number[]
+  if (new Set(lineup).size !== 11 || !lineup.includes(USER_SQUAD_INDEX)) return fallback
+  return [...lineup]
+}
+
+const isValidCareer = (value: unknown): value is CareerTotals => {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Record<string, unknown>
+  return ['games', 'wins', 'draws', 'losses', 'goals', 'ratingSum'].every(
+    (key) => typeof candidate[key] === 'number' && Number.isFinite(candidate[key]),
+  )
+}
+
+/** Sem totais salvos (saves antigos), reconstrói a carreira do histórico. */
+const normalizeCareer = (value: unknown, fullHistory: readonly MatchRecord[]): CareerTotals => {
+  if (isValidCareer(value)) return value
+  return fullHistory.reduce(addToCareer, EMPTY_CAREER)
+}
+
+const normalizeClubNames = (value: unknown): Readonly<Record<string, string>> => {
+  if (typeof value !== 'object' || value === null) return {}
+  const result: Record<string, string> = {}
+  for (const [clubId, name] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof name === 'string' && name.trim().length > 0 && clubById(clubId)) {
+      result[clubId] = name.trim().slice(0, MAX_CLUB_NAME)
+    }
+  }
+  return result
+}
+
+const normalizeCrests = (value: unknown): Readonly<Record<string, string>> => {
+  if (typeof value !== 'object' || value === null) return {}
+  const result: Record<string, string> = {}
+  for (const [clubId, dataUrl] of Object.entries(value as Record<string, unknown>)) {
+    if (
+      typeof dataUrl === 'string' &&
+      dataUrl.startsWith('data:image/') &&
+      dataUrl.length <= 120_000 &&
+      clubById(clubId)
+    ) {
+      result[clubId] = dataUrl
+    }
+  }
+  return result
+}
+
+const normalizeDivisions = (value: unknown, clubId: string): Divisions => {
+  const fallback = initialDivisions()
+  if (!Array.isArray(value) || value.length !== fallback.length) return fallback
+  const divisions = value as unknown[]
+  const flat: string[] = []
+  for (const division of divisions) {
+    if (!Array.isArray(division) || division.length !== fallback[0].length) return fallback
+    for (const id of division) {
+      if (typeof id !== 'string' || !clubById(id)) return fallback
+      flat.push(id)
+    }
+  }
+  if (new Set(flat).size !== flat.length || !flat.includes(clubId)) return fallback
+  return divisions as Divisions
+}
+
+const normalizeAppearance = (value: unknown): PlayerAppearance => {
+  if (typeof value !== 'object' || value === null) return DEFAULT_APPEARANCE
+  const raw = value as Record<string, unknown>
+  return {
+    skin:
+      typeof raw.skin === 'number' && isValidIndex(raw.skin, SKIN_TONE_COUNT) ? raw.skin : 0,
+    hair:
+      typeof raw.hair === 'number' && isValidIndex(raw.hair, HAIR_COLOR_COUNT) ? raw.hair : 0,
+    kit:
+      typeof raw.kit === 'number' && isValidIndex(raw.kit, KIT_COLOR_COUNT) ? raw.kit : 0,
+    gender: raw.gender === 'feminino' ? 'feminino' : 'masculino',
+  }
+}
+
 export const recordMatch = (save: PlayerSave, record: MatchRecord): PlayerSave => ({
   ...save,
-  history: [...save.history, record],
+  history: [...save.history, record].slice(-HISTORY_LIMIT),
+  career: addToCareer(save.career, record),
   trainingPoints: save.trainingPoints + trainingPointsForRating(record.rating),
 })
 
@@ -131,13 +566,45 @@ export const applyTournament = (save: PlayerSave, tournament: TournamentState | 
   tournamentPlayed: save.tournamentPlayed || tournament !== null,
 })
 
-export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random): PlayerSave => ({
-  ...save,
-  careerYear: save.careerYear + 1,
-  tournamentPlayed: false,
-  tournament: null,
-  season: createSeason(save.clubId, seasonSeed(roll)),
-})
+/**
+ * Vira o ano: aplica ACESSO/QUEDA na pirâmide (tabela real da sua divisão,
+ * demais simuladas) e monta a temporada da nova divisão do clube.
+ */
+export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random): PlayerSave => {
+  const playerDivision = divisionOf(save.divisions, save.clubId)
+  const finalOrder = computeTable(save.season).map((row) => row.clubId)
+  const shiftSeed = seasonSeed(roll)
+  const shift = applyPromotionRelegation(
+    save.divisions,
+    playerDivision,
+    finalOrder,
+    save.clubId,
+    createRng(shiftSeed),
+  )
+  const nextDivision = divisionOf(shift.value.divisions, save.clubId)
+  return {
+    ...save,
+    careerYear: save.careerYear + 1,
+    playerAge: save.playerAge + 1,
+    tournamentPlayed: false,
+    tournament: null,
+    divisions: shift.value.divisions,
+    divisionMovement: shift.value.movement,
+    season: createSeason(save.clubId, seasonSeed(roll), shift.value.divisions[nextDivision]),
+  }
+}
+
+/** Envia (ou remove, com null) o escudo local de um clube. */
+export const setClubCrest = (save: PlayerSave, clubId: string, dataUrl: string | null): PlayerSave => {
+  if (!clubById(clubId)) return save
+  const next: Record<string, string> = { ...save.customClubCrests }
+  if (dataUrl === null || !dataUrl.startsWith('data:image/') || dataUrl.length > 120_000) {
+    delete next[clubId]
+  } else {
+    next[clubId] = dataUrl
+  }
+  return { ...save, customClubCrests: next }
+}
 
 const isMatchRecord = (value: unknown): value is Omit<MatchRecord, 'competition'> & { competition?: unknown } => {
   if (typeof value !== 'object' || value === null) return false
@@ -203,11 +670,16 @@ const isValidTournament = (value: unknown): value is TournamentState => {
 /** v1/v2/v3 → v4: preserva nome, clube, camisa e histórico; o resto ganha default. */
 const migrateLegacy = (candidate: Record<string, unknown>): PlayerSave | null => {
   if (typeof candidate.playerName !== 'string' || typeof candidate.clubId !== 'string') return null
-  const base = createSave(candidate.playerName, candidate.clubId)
+  const base = createSave({ playerName: candidate.playerName, clubId: candidate.clubId })
   if (!base) return null
   const withShirt =
     typeof candidate.shirtNumber === 'number' ? setShirtNumber(base, candidate.shirtNumber) : base
-  return { ...withShirt, history: normalizeHistory(candidate.history) }
+  const fullHistory = normalizeHistory(candidate.history)
+  return {
+    ...withShirt,
+    history: fullHistory.slice(-HISTORY_LIMIT),
+    career: fullHistory.reduce(addToCareer, EMPTY_CAREER),
+  }
 }
 
 const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => {
@@ -218,9 +690,14 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
     typeof candidate.nationalityId === 'string' && nationById(candidate.nationalityId)
       ? candidate.nationalityId
       : DEFAULT_NATIONALITY
+  const divisions = normalizeDivisions(candidate.divisions, candidate.clubId)
   const season = isValidSeason(candidate.season, candidate.clubId)
     ? candidate.season
-    : createSeason(candidate.clubId, seasonSeed(Math.random))
+    : createSeason(
+        candidate.clubId,
+        seasonSeed(Math.random),
+        divisions[divisionOf(divisions, candidate.clubId)],
+      )
   const tournament = isValidTournament(candidate.tournament) ? candidate.tournament : null
   const attributes = normalizeAttributes(candidate.attributes)
   const trainingPoints =
@@ -247,10 +724,34 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
     tournamentPlayed: candidate.tournamentPlayed === true,
     tournament,
     season,
-    history: normalizeHistory(candidate.history),
+    history: normalizeHistory(candidate.history).slice(-HISTORY_LIMIT),
     attributes,
     trainingPoints,
     celebrationId,
+    appearance: normalizeAppearance(candidate.appearance),
+    customClubNames: normalizeClubNames(candidate.customClubNames),
+    customClubCrests: normalizeCrests(candidate.customClubCrests),
+    divisions,
+    divisionMovement:
+      candidate.divisionMovement === 'up' ||
+      candidate.divisionMovement === 'down' ||
+      candidate.divisionMovement === 'stay'
+        ? candidate.divisionMovement
+        : null,
+    playerAge:
+      typeof candidate.playerAge === 'number' &&
+      Number.isInteger(candidate.playerAge) &&
+      candidate.playerAge >= PLAYER_MIN_AGE &&
+      candidate.playerAge <= PLAYER_MAX_AGE
+        ? candidate.playerAge
+        : DEFAULT_PLAYER_AGE,
+    playerPosition: normalizePosition(candidate.playerPosition),
+    account: normalizeAccount(candidate.account),
+    formation: normalizeFormation(candidate.formation),
+    lineup: normalizeLineup(candidate.lineup, normalizeFormation(candidate.formation), normalizePosition(candidate.playerPosition)),
+    career: normalizeCareer(candidate.career, normalizeHistory(candidate.history)),
+    customPlayerNames: normalizePlayerNames(candidate.customPlayerNames),
+    customClubColors: normalizeClubColors(candidate.customClubColors),
   }
   return setShirtNumber(base, base.shirtNumber)
 }
@@ -266,6 +767,14 @@ export const parseSave = (raw: string | null): PlayerSave | null => {
       candidate.version === 4 ||
       candidate.version === 5 ||
       candidate.version === 6 ||
+      candidate.version === 7 ||
+      candidate.version === 8 ||
+      candidate.version === 9 ||
+      candidate.version === 10 ||
+      candidate.version === 11 ||
+      candidate.version === 12 ||
+      candidate.version === 13 ||
+      candidate.version === 14 ||
       candidate.version === SAVE_VERSION
     ) {
       return parseCurrent(candidate)

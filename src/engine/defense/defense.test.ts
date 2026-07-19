@@ -99,4 +99,22 @@ describe('resolveDive', () => {
     expect(resolveDive(low, 73, 0.3, CENTER, CFG)).toBe('saved')
     expect(resolveDive(high, 73, 0.3, CENTER, CFG)).toBe('conceded')
   })
+
+  test('mergulho ALTO alcança a bola no ângulo que o rasteiro não pega', () => {
+    // Arrange: bola alta a 10 da luva
+    const high = shotTo(60, CFG.highBallHeight + 4)
+
+    // Act & Assert
+    expect(resolveDive(high, 70, 0.3, CENTER, CFG, true)).toBe('saved')
+    expect(resolveDive(high, 70, 0.3, CENTER, CFG, false)).toBe('conceded')
+  })
+
+  test('mergulho alto em bola rasteira passa por cima dela', () => {
+    // Arrange: bola rasteira a 10 da luva
+    const low = shotTo(60, 6)
+
+    // Act & Assert
+    expect(resolveDive(low, 70, 0.3, CENTER, CFG, false)).toBe('saved')
+    expect(resolveDive(low, 70, 0.3, CENTER, CFG, true)).toBe('conceded')
+  })
 })

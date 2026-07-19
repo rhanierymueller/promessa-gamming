@@ -3,16 +3,24 @@ import { clubById, CLUBS, randomOpponent } from './clubs'
 
 const REAL_CLUB_MARKS = [
   'corinthians', 'cruzeiro', 'flamengo', 'palmeiras', 'santos', 'grêmio', 'gremio',
-  'vasco', 'botafogo', 'fluminense', 'atlético', 'atletico', 'internacional',
-  'bahia', 'fortaleza', 'galo', 'mengão', 'mengao', 'timão', 'timao', 'colorado',
+  'vasco', 'botafogo', 'fluminense', 'atlético mineiro', 'atletico mineiro',
+  'athletico', 'internacional', 'bahia', 'fortaleza', 'galo', 'mengão', 'mengao',
+  'timão', 'timao', 'colorado', 'verdão', 'verdao', 'tricolor paulista',
 ]
 
 describe('CLUBS (database da liga fictícia)', () => {
-  test('tem pelo menos 16 clubes com ids e abreviações únicos', () => {
+  test('tem 56 clubes com ids e abreviações únicos', () => {
     // Assert
-    expect(CLUBS.length).toBeGreaterThanOrEqual(16)
+    expect(CLUBS.length).toBe(56)
     expect(new Set(CLUBS.map((c) => c.id)).size).toBe(CLUBS.length)
     expect(new Set(CLUBS.map((c) => c.abbr)).size).toBe(CLUBS.length)
+  })
+
+  test('a pirâmide tem 4 divisões com 14 clubes cada', () => {
+    // Assert
+    for (const division of [0, 1, 2, 3]) {
+      expect(CLUBS.filter((c) => c.division === division)).toHaveLength(14)
+    }
   })
 
   test('nenhum nome contém marca de clube real (regra jurídica do projeto)', () => {

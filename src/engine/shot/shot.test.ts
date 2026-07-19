@@ -40,12 +40,36 @@ describe('resolveOutcome', () => {
     expect(resolveOutcome(flight, farKeeper, skill, CFG).kind).toBe('post')
   })
 
+  test('às vezes a bola bate na trave e ENTRA', () => {
+    // Arrange
+    const flight = makeFlight({ targetX: CFG.goal.left })
+
+    // Act
+    const luckyRoll = resolveOutcome(flight, farKeeper, skill, CFG, 0)
+    const normalRoll = resolveOutcome(flight, farKeeper, skill, CFG, 0.99)
+
+    // Assert
+    expect(luckyRoll.kind).toBe('goal')
+    expect(luckyRoll.offPost).toBe(true)
+    expect(normalRoll.kind).toBe('post')
+  })
+
   test('bola rente ao poste é trave', () => {
     // Arrange
     const flight = makeFlight({ targetX: CFG.goal.left })
 
     // Act & Assert
     expect(resolveOutcome(flight, farKeeper, skill, CFG).kind).toBe('post')
+  })
+
+  test('JUSTIÇA: canto perfeito é indefensável até para o goleiro de teto', () => {
+    // Arrange: bola colada no poste, rasteira; goleiro no mergulho máximo FÍSICO
+    const flight = makeFlight({ targetX: CFG.goal.right - CFG.goal.postWidth - 3, power: 0.75, targetHeight: 8 })
+    const maxPhysicalDive = 90 + CFG.maxDiveBase + CFG.maxDiveSkillFactor
+    const elite: KeeperPlan = { reactT: 0.14, diveX: maxPhysicalDive }
+
+    // Act & Assert: execução perfeita SEMPRE vence — 10/10 é possível por mérito
+    expect(resolveOutcome(flight, elite, 0.95, CFG).kind).toBe('goal')
   })
 
   test('bola no canto com goleiro no outro lado é gol', () => {
@@ -56,13 +80,43 @@ describe('resolveOutcome', () => {
     expect(resolveOutcome(flight, farKeeper, skill, CFG).kind).toBe('goal')
   })
 
-  test('goleiro em cima da bola defende', () => {
+  test('goleiro em cima da bola AGARRA (defesa limpa, sem rebote)', () => {
     // Arrange
-    const flight = makeFlight({ targetX: 60 })
+    const flight = makeFlight({ targetX: 60, power: 0.75 })
     const onTheSpot: KeeperPlan = { reactT: 0.3, diveX: 60 }
 
-    // Act & Assert
-    expect(resolveOutcome(flight, onTheSpot, skill, CFG).kind).toBe('save')
+    // Act
+    const outcome = resolveOutcome(flight, onTheSpot, skill, CFG)
+
+    // Assert
+    expect(outcome.kind).toBe('save')
+    expect(outcome.deflected).toBeFalsy()
+  })
+
+  test('bola na PONTA da luva é espalmada — rebote, não agarrada', () => {
+    // Arrange: alcance ~8.7 (skill 0.22); bola a ~7 do mergulho = pontinha
+    const flight = makeFlight({ targetX: 60, power: 0.75 })
+    const stretching: KeeperPlan = { reactT: 0.3, diveX: 67 }
+
+    // Act
+    const outcome = resolveOutcome(flight, stretching, skill, CFG)
+
+    // Assert
+    expect(outcome.kind).toBe('save')
+    expect(outcome.deflected).toBe(true)
+  })
+
+  test('bombas muito fortes são espalmadas mesmo no corpo', () => {
+    // Arrange
+    const flight = makeFlight({ targetX: 60, power: 0.92 })
+    const onTheSpot: KeeperPlan = { reactT: 0.3, diveX: 60 }
+
+    // Act
+    const outcome = resolveOutcome(flight, onTheSpot, skill, CFG)
+
+    // Assert
+    expect(outcome.kind).toBe('save')
+    expect(outcome.deflected).toBe(true)
   })
 
   test('bola no ângulo passa onde a baixa seria defendida', () => {
@@ -191,3 +245,4 @@ describe('simulateShot', () => {
     expect(late.value!.keeper.reactT).toBeLessThan(early.value!.keeper.reactT)
   })
 })
+

@@ -12,11 +12,13 @@ import {
   type TournamentKind,
 } from '../engine/tournament/tournament'
 import { initAudio, setMuted } from '../game/audio'
+import { submitLeagueMatch } from '../online/leagues'
 import { MatchScreen } from '../game/MatchScreen'
 import { ShotStage } from '../game/ShotStage'
 import {
   applySeason,
   applyTournament,
+  displayClub,
   loadSave,
   persistSave,
   recordMatch,
@@ -24,20 +26,69 @@ import {
   type MatchRecord,
   type PlayerSave,
 } from '../state/save'
+import {
+  clearPendingMatch,
+  forfeitRecord,
+  markPendingMatch,
+  readPendingMatch,
+} from '../state/pendingMatch'
+import { getClient } from '../online/leagues'
+import { AuthGate } from './AuthGate'
 import { CharacterCreate } from './CharacterCreate'
+import { Landing } from './Landing'
 import { HomeTab } from './tabs/HomeTab'
 import { MatchesTab } from './tabs/MatchesTab'
 import { ProfileTab } from './tabs/ProfileTab'
 import { TeamTab } from './tabs/TeamTab'
 
 type Tab = 'home' | 'matches' | 'team' | 'profile'
-type Screen = 'tabs' | 'match' | 'training'
+type Screen = 'tabs' | 'match' | 'training' | 'gk-training'
 
 interface MatchSetup {
   readonly seed: number
   readonly kind: 'liga' | 'torneio'
   readonly club: Club
   readonly opponent: Club
+}
+
+/** Aplica um resultado no save: histórico + liga (ou torneio) avançam juntos. */
+const applyMatchOutcome = (
+  save: PlayerSave,
+  record: MatchRecord,
+  kind: 'liga' | 'torneio',
+  seed: number,
+): PlayerSave => {
+  let updated = recordMatch(save, record)
+  if (kind === 'liga') {
+    const simulated = advanceSeason(
+      updated.season,
+      record.teamGoals,
+      record.opponentGoals,
+      createRng((seed ^ 0x9e3779b9) >>> 0),
+    )
+    updated = applySeason(updated, simulated.value)
+  } else if (updated.tournament) {
+    const advanced = advanceTournament(
+      updated.tournament,
+      record.teamGoals,
+      record.opponentGoals,
+      createRng((seed ^ 0x51ed2701) >>> 0),
+    )
+    updated = { ...updated, tournament: advanced.value.state }
+  }
+  return updated
+}
+
+/** Carrega o save e cobra o W.O. de quem saiu no meio de uma partida. */
+const loadSaveChargingForfeit = (): PlayerSave | null => {
+  const loaded = loadSave(localStorage)
+  const pending = readPendingMatch(localStorage)
+  if (!pending) return loaded
+  clearPendingMatch(localStorage)
+  if (!loaded) return loaded
+  const updated = applyMatchOutcome(loaded, forfeitRecord(pending, Date.now()), pending.kind, pending.seed)
+  persistSave(localStorage, updated)
+  return updated
 }
 
 const MUTE_KEY = 'promessa.muted'
@@ -68,7 +119,9 @@ const TAB_ITEMS: readonly { id: Tab; icon: LucideIcon; label: string }[] = [
 ]
 
 export const App = () => {
-  const [save, setSave] = useState<PlayerSave | null>(() => loadSave(localStorage))
+  const [save, setSave] = useState<PlayerSave | null>(loadSaveChargingForfeit)
+  // a landing é a home; Jogar passa pelo portão de login/cadastro
+  const [gate, setGate] = useState<'landing' | 'auth' | 'signup' | 'game'>('landing')
   const [screen, setScreen] = useState<Screen>('tabs')
   const [tab, setTab] = useState<Tab>('home')
   const [matchSetup, setMatchSetup] = useState<MatchSetup | null>(null)
@@ -85,10 +138,15 @@ export const App = () => {
     localStorage.setItem(MUTE_KEY, next ? '1' : '0')
   }
 
-  const club = useMemo(() => (save ? clubById(save.clubId) : null), [save])
+  const club = useMemo(() => {
+    if (!save) return null
+    const base = clubById(save.clubId)
+    return base ? displayClub(save, base) : null
+  }, [save])
   const nextOpponent = useMemo(() => {
     if (!save || isSeasonOver(save.season)) return null
-    return clubById(playerOpponentId(save.season))
+    const base = clubById(playerOpponentId(save.season))
+    return base ? displayClub(save, base) : null
   }, [save])
 
   const updateSave = (updated: PlayerSave): void => {
@@ -99,7 +157,9 @@ export const App = () => {
   const startLeagueMatch = (): void => {
     if (!save || !club || !nextOpponent) return
     initAudio()
-    setMatchSetup({ seed: Date.now() & 0xffffffff, kind: 'liga', club, opponent: nextOpponent })
+    const seed = Date.now() & 0xffffffff
+    markPendingMatch(localStorage, { opponentId: nextOpponent.id, kind: 'liga', seed })
+    setMatchSetup({ seed, kind: 'liga', club, opponent: nextOpponent })
     setScreen('match')
   }
 
@@ -116,36 +176,25 @@ export const App = () => {
     const opponentNation = opponentId ? nationById(opponentId) : null
     if (!nation || !opponentNation) return
     initAudio()
+    const seed = Date.now() & 0xffffffff
+    const opponentClub = nationAsClub(opponentNation)
+    markPendingMatch(localStorage, { opponentId: opponentClub.id, kind: 'torneio', seed })
     setMatchSetup({
-      seed: Date.now() & 0xffffffff,
+      seed,
       kind: 'torneio',
       club: nationAsClub(nation),
-      opponent: nationAsClub(opponentNation),
+      opponent: opponentClub,
     })
     setScreen('match')
   }
 
   const onMatchFinished = (record: MatchRecord): void => {
+    clearPendingMatch(localStorage)
     if (save && matchSetup) {
-      let updated = recordMatch(save, record)
-      if (matchSetup.kind === 'liga') {
-        const simulated = advanceSeason(
-          updated.season,
-          record.teamGoals,
-          record.opponentGoals,
-          createRng((matchSetup.seed ^ 0x9e3779b9) >>> 0),
-        )
-        updated = applySeason(updated, simulated.value)
-      } else if (updated.tournament) {
-        const advanced = advanceTournament(
-          updated.tournament,
-          record.teamGoals,
-          record.opponentGoals,
-          createRng((matchSetup.seed ^ 0x51ed2701) >>> 0),
-        )
-        updated = { ...updated, tournament: advanced.value.state }
-      }
+      const updated = applyMatchOutcome(save, record, matchSetup.kind, matchSetup.seed)
       updateSave(updated)
+      // ranking entre amigos: envio silencioso, nunca trava o fluxo local
+      void submitLeagueMatch(updated, record).catch(() => undefined)
     }
     setMatchSetup(null)
     setScreen('tabs')
@@ -157,8 +206,18 @@ export const App = () => {
     setTab('home')
   }
 
+  const leaveToLanding = (): void => {
+    // sessão do Supabase encerra em silêncio; o save local fica intacto
+    void getClient()?.auth.signOut().catch(() => undefined)
+    setScreen('tabs')
+    setTab('home')
+    setGate('landing')
+    window.scrollTo({ top: 0 })
+  }
+
   const resetCareer = (): void => {
     localStorage.removeItem('promessa.save')
+    clearPendingMatch(localStorage)
     setSave(null)
     setScreen('tabs')
     setTab('home')
@@ -177,7 +236,22 @@ export const App = () => {
       ),
   )
 
-  if (!save || !club) {
+  if (gate === 'landing') {
+    return <Landing hasSave={Boolean(save && club)} onPlay={() => setGate('auth')} />
+  }
+
+  if (gate === 'auth') {
+    return (
+      <AuthGate
+        hasSave={Boolean(save && club)}
+        onEnter={() => setGate('game')}
+        onSignup={() => setGate('signup')}
+        onBack={() => setGate('landing')}
+      />
+    )
+  }
+
+  if (gate === 'signup' || !save || !club) {
     return (
       <main className="shell">
         <MuteButton muted={muted} onToggle={toggleMute} />
@@ -185,7 +259,12 @@ export const App = () => {
           <p className="eyebrow">Promessa</p>
           <h1>Promessa</h1>
         </header>
-        <CharacterCreate onCreated={updateSave} />
+        <CharacterCreate
+          onCreated={(created) => {
+            updateSave(created)
+            setGate('game')
+          }}
+        />
         <footer className="footer">PROMESSA · em desenvolvimento</footer>
       </main>
     )
@@ -212,6 +291,13 @@ export const App = () => {
           competition={matchSetup.kind === 'torneio' ? 'selecao' : 'liga'}
           attributes={save.attributes}
           celebrationId={save.celebrationId}
+          appearance={save.appearance}
+          crestUrls={save.customClubCrests}
+          formation={save.formation}
+          playerPosition={save.playerPosition}
+          careerYear={save.careerYear}
+          playerNames={save.customPlayerNames}
+          lineup={matchSetup.kind === 'liga' ? save.lineup : undefined}
           onExit={onMatchFinished}
         />
         <footer className="footer">PROMESSA · em desenvolvimento</footer>
@@ -227,8 +313,27 @@ export const App = () => {
           <p className="eyebrow">Promessa · Treino</p>
           <h1>O Chute</h1>
         </header>
-        <ShotStage celebrationId={save.celebrationId} />
-        <button className="btn btn-secondary" onClick={() => setScreen('tabs')}>← Voltar</button>
+        <button className="btn btn-secondary btn-back" onClick={() => setScreen('tabs')}>← Voltar</button>
+        <ShotStage attrs={save.attributes} celebrationId={save.celebrationId} appearance={save.appearance} />
+        <footer className="footer">PROMESSA · em desenvolvimento</footer>
+      </main>
+    )
+  }
+
+  if (screen === 'gk-training') {
+    return (
+      <main className="shell">
+        <MuteButton muted={muted} onToggle={toggleMute} />
+        <header className="header">
+          <p className="eyebrow">Promessa · Treino</p>
+          <h1>O Paredão</h1>
+        </header>
+        <button className="btn btn-secondary btn-back" onClick={() => setScreen('tabs')}>← Voltar</button>
+        <ShotStage
+          shots={10}
+          defense={{ skill: 0.3, kitColor: '#8A8F98' }}
+          attrs={save.attributes}
+        />
         <footer className="footer">PROMESSA · em desenvolvimento</footer>
       </main>
     )
@@ -252,14 +357,22 @@ export const App = () => {
           onStartTournament={startTournament}
           onPlayTournamentMatch={startTournamentMatch}
           onDismissTournament={() => save && updateSave(applyTournament(save, null))}
+          onDismissMovement={() => save && updateSave({ ...save, divisionMovement: null })}
           onNewSeason={onNewSeason}
           onTraining={() => setScreen('training')}
+          onGkTraining={() => setScreen('gk-training')}
         />
       )}
       {tab === 'matches' && <MatchesTab save={save} />}
-      {tab === 'team' && <TeamTab save={save} club={club} />}
+      {tab === 'team' && <TeamTab save={save} club={club} onSaveChange={updateSave} />}
       {tab === 'profile' && (
-        <ProfileTab save={save} club={club} onSaveChange={updateSave} onResetCareer={resetCareer} />
+        <ProfileTab
+          save={save}
+          club={club}
+          onSaveChange={updateSave}
+          onResetCareer={resetCareer}
+          onLogout={leaveToLanding}
+        />
       )}
 
       <nav className="tabbar" aria-label="Navegação principal">

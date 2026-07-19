@@ -2,6 +2,8 @@ import { Hand } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../engine/career/attributes'
 import type { ShotOutcomeKind, Vec2 } from '../engine/shot/types'
+import { DEFAULT_APPEARANCE, type PlayerAppearance } from '../state/save'
+import { applyAppearance } from './appearance'
 import { BACKGROUND_URL, loadGameSprites, tintSprite, type GameSprites } from './assets'
 import { initAudio, playStageEvent } from './audio'
 import { drawStage, type WallSprites, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './render'
@@ -46,6 +48,8 @@ interface ShotStageProps {
   readonly celebrationId?: number
   /** Qualidade do goleiro rival (treino < liga < copa). */
   readonly keeperQuality?: number
+  /** Aparência do craque (pele/cabelo) — só se aplica ao SEU atacante. */
+  readonly appearance?: PlayerAppearance
   readonly onRoundEnd?: (summary: RoundSummary) => void
 }
 
@@ -57,8 +61,16 @@ const MANCHETES: readonly [number, string][] = [
   [0, 'Volta pra várzea, menino.'],
 ]
 
-const mancheteFor = (goals: number): string =>
-  MANCHETES.find(([min]) => goals >= min)![1]
+const MANCHETES_GOLEIRO: readonly [number, string][] = [
+  [9, 'PAREDÃO! Fecharam o gol com você dentro.'],
+  [7, 'Seguríssimo! A defesa dorme em paz.'],
+  [5, 'Boas defesas, mas ainda sai frango no meio.'],
+  [3, 'A zaga já olha torto pro gol.'],
+  [0, 'Peneira. A bola passou o dia inteiro.'],
+]
+
+const mancheteFor = (score: number, isKeeper: boolean): string =>
+  (isKeeper ? MANCHETES_GOLEIRO : MANCHETES).find(([min]) => score >= min)![1]
 
 export const ShotStage = ({
   shots = TOTAL_SHOTS,
@@ -70,18 +82,24 @@ export const ShotStage = ({
   attrs = DEFAULT_ATTRIBUTES,
   celebrationId = 0,
   keeperQuality = TRAINING_KEEPER_QUALITY,
+  appearance = DEFAULT_APPEARANCE,
   onRoundEnd,
 }: ShotStageProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stateRef = useRef<StageState>(
     defense
-      ? createDefenseStage(Date.now() & 0xffffffff, defense.skill, attrs)
+      ? createDefenseStage(Date.now() & 0xffffffff, defense.skill, attrs, shots)
       : createStage(Date.now() & 0xffffffff, shots, freeKick, attrs, keeperQuality),
   )
   const dragRef = useRef<Vec2[] | null>(null)
-  const spritesRef = useRef(loadGameSprites())
+  // na defesa o atacante é o RIVAL — o gênero do usuário não se aplica a ele
+  const spritesRef = useRef(loadGameSprites(defense ? 'masculino' : appearance.gender))
   const wallSpritesRef = useRef<WallSprites | null>(null)
   const tintedStrikerRef = useRef<GameSprites['striker'] | null>(null)
+  const appearanceRef = useRef<{
+    striker: GameSprites['striker']
+    celebrations: readonly GameSprites['celebrations'][number][]
+  } | null>(null)
   const onRoundEndRef = useRef(onRoundEnd)
   onRoundEndRef.current = onRoundEnd
   const [uiPhase, setUiPhase] = useState<Phase>(autoStart && !defense ? 'ready' : 'intro')
@@ -118,7 +136,10 @@ export const ShotStage = ({
       if (phaseChanged) {
         setUiPhase(next.phase)
         if (next.phase === 'end') {
-          setFinalGoals(next.goals)
+          // treino de goleiro: o placar da rodada são as DEFESAS
+          setFinalGoals(
+            defense ? next.results.filter((r) => r === 'save').length : next.goals,
+          )
           const sim = next.sim
           if (sim) {
             onRoundEndRef.current?.({
@@ -148,9 +169,32 @@ export const ShotStage = ({
         ) as GameSprites['striker']
         tintedStrikerRef.current = tinted
       }
+      // aparência do craque: recolore UMA vez, quando tudo carregar — o kit é
+      // SEMPRE aplicado (a arte nova é cinza neutra; amarelo é o tint padrão)
+      if (!defense && !appearanceRef.current) {
+        const strikerLoaded = Object.values(sprites.striker).every((h) => h.img)
+        const celebsLoaded = sprites.celebrations.every((h) => h.img)
+        if (strikerLoaded && celebsLoaded) {
+          appearanceRef.current = {
+            striker: Object.fromEntries(
+              Object.entries(sprites.striker).map(([pose, holder]) => [
+                pose,
+                applyAppearance(holder, appearance) ?? holder,
+              ]),
+            ) as GameSprites['striker'],
+            celebrations: sprites.celebrations.map(
+              (holder) => applyAppearance(holder, appearance) ?? holder,
+            ),
+          }
+        }
+      }
+
       // gol do usuário comemora com a pose escolhida no Perfil (rival mantém a genérica)
-      const celebration = sprites.celebrations[celebrationId]
-      const striker = tintedStrikerRef.current ?? sprites.striker
+      const celebrations = appearanceRef.current?.celebrations ?? sprites.celebrations
+      const celebration = celebrations[celebrationId]
+      const striker = defense
+        ? tintedStrikerRef.current ?? sprites.striker
+        : appearanceRef.current?.striker ?? sprites.striker
       const drawSprites: GameSprites =
         !defense && celebration?.img
           ? { ...sprites, striker: { ...striker, celebrate: celebration } }
@@ -185,6 +229,15 @@ export const ShotStage = ({
     const last = drag[drag.length - 1]
     if (Math.hypot(point.x - last.x, point.y - last.y) > 1.5) drag.push(point)
     if (drag.length > 40) drag.shift()
+    // defesa: o mergulho dispara NO GESTO, sem esperar soltar o dedo
+    if (defense && drag.length >= 2) {
+      const dx = drag[drag.length - 1].x - drag[0].x
+      const dy = drag[drag.length - 1].y - drag[0].y
+      if (Math.abs(dx) > 14 || dy < -18) {
+        stateRef.current = tryDive(stateRef.current, dx, dy)
+        dragRef.current = null
+      }
+    }
   }
 
   const onPointerUp = (): void => {
@@ -193,7 +246,8 @@ export const ShotStage = ({
     if (!drag || drag.length < 2) return
     if (defense) {
       const dx = drag[drag.length - 1].x - drag[0].x
-      stateRef.current = tryDive(stateRef.current, dx)
+      const dy = drag[drag.length - 1].y - drag[0].y
+      stateRef.current = tryDive(stateRef.current, dx, dy)
     } else if (drag.length >= 3) {
       stateRef.current = tryStartShot(stateRef.current, drag)
     }
@@ -228,9 +282,9 @@ export const ShotStage = ({
           <Hand size={34} className="defense-icon" aria-hidden="true" />
           <h2>Agora você defende!</h2>
           <div className="defense-steps">
-            <p><strong>1.</strong> O rival vai correr e cobrar a falta sozinho.</p>
-            <p><strong>2.</strong> Quando a bola sair, <strong>ARRASTE PRO LADO</strong> — o goleiro mergulha na direção do seu arrasto.</p>
-            <p><strong>3.</strong> Direção e timing decidem: espere demais e a luva não chega.</p>
+            <p><strong>1.</strong> O rival vai correr e cobrar sozinho.</p>
+            <p><strong>2.</strong> Quando a bola sair, <strong>ARRASTE PRO LADO</strong> — o mergulho sai na hora do gesto.</p>
+            <p><strong>3.</strong> Bola no ângulo? Arraste em <strong>DIAGONAL PRA CIMA</strong> para voar alto. Rasteira pede mergulho rasteiro.</p>
           </div>
           <button className="btn" onClick={startRound}>Defender ▸</button>
         </div>
@@ -239,7 +293,8 @@ export const ShotStage = ({
         <div className="stage-overlay">
           <h2>Fim do treino</h2>
           <div className="stage-score">{finalGoals}/{shots}</div>
-          <p className="stage-headline">“{mancheteFor(finalGoals)}”</p>
+          <p className="stage-score-label">{defense ? 'defesas' : 'gols'}</p>
+          <p className="stage-headline">“{mancheteFor(finalGoals, Boolean(defense))}”</p>
           <button className="btn" onClick={startRound}>Jogar de novo</button>
         </div>
       )}

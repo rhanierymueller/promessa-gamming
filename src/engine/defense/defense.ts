@@ -18,6 +18,8 @@ export interface DefenseConfig {
   /** Bola alta no ângulo reduz o alcance. */
   readonly highBallHeight: number
   readonly highBallFactor: number
+  /** Mergulhou no plano errado (rasteiro numa bola alta, ou vice-versa). */
+  readonly wrongHeightFactor: number
   readonly maxDive: number
 }
 
@@ -28,6 +30,7 @@ export const DEFAULT_DEFENSE_CONFIG: DefenseConfig = {
   lateFactor: 0.45,
   highBallHeight: 30,
   highBallFactor: 0.75,
+  wrongHeightFactor: 0.4,
   maxDive: 44,
 }
 
@@ -72,6 +75,7 @@ export const resolveDive = (
   diveStartT: number,
   center: number,
   config: DefenseConfig,
+  diveHigh = false,
 ): DefenseOutcome => {
   const finalX = flightX(flight, 1)
 
@@ -81,7 +85,10 @@ export const resolveDive = (
 
   let reach = config.reach
   if (diveStartT > config.lateDiveT) reach *= config.lateFactor
-  if (flight.targetHeight > config.highBallHeight) reach *= config.highBallFactor
+  // plano do mergulho: errar alto×rasteiro pune mais que a bola difícil em si
+  const ballIsHigh = flight.targetHeight > config.highBallHeight
+  if (ballIsHigh !== diveHigh) reach *= config.wrongHeightFactor
+  else if (ballIsHigh) reach *= config.highBallFactor
 
   return Math.abs(diveX - finalX) <= reach ? 'saved' : 'conceded'
 }

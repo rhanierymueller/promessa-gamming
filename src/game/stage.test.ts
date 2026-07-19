@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import type { Vec2 } from '../engine/shot/types'
 import {
+  barSweepFor,
   barTAt,
   beginRound,
   createDefenseStage,
@@ -72,7 +73,7 @@ describe('régua de chute', () => {
   test('a posição da régua no instante do chute dita força e altura', () => {
     // Arrange: avança o relógio até a régua estar perto da base (rasteiro)
     let round = beginRound(createStage(42))
-    while (barTAt(round.time) > 0.1) {
+    while (barTAt(round.time, round.barSweep) > 0.1) {
       round = tick(round, DT)[0]
     }
 
@@ -168,7 +169,7 @@ describe('falta com barreira', () => {
     // Arrange: régua na base = rasteiro; traço reto mira o meio (a barreira)
     let round = beginRound(createStage(42, 1, true))
     expect(round.wall).not.toBeNull()
-    while (barTAt(round.time) > 0.05) {
+    while (barTAt(round.time, round.barSweep) > 0.05) {
       round = tick(round, DT)[0]
     }
     const straightDrag: Vec2[] = [{ x: 90, y: 300 }, { x: 90, y: 285 }, { x: 90, y: 270 }]
@@ -232,6 +233,41 @@ describe('modo defesa', () => {
     expect(resolved.msg?.text).toBe('DEFESAÇA!')
   })
 
+  test('arrasto para cima marca o mergulho como ALTO', () => {
+    // Arrange: avança ready → runup → flying
+    const round = beginRound(createDefenseStage(42, 0.5))
+    const [runup] = tickUntilPhaseChanges(round)
+    const [flying] = tickUntilPhaseChanges(runup)
+    expect(flying.phase).toBe('flying')
+
+    // Act
+    const low = tryDive(flying, -30, 0)
+    const high = tryDive(flying, -30, -40)
+
+    // Assert
+    expect(low.diveHigh).toBe(false)
+    expect(high.diveHigh).toBe(true)
+  })
+
+  test('treino de goleiro: rodada com vários chutes re-arma a cobrança', () => {
+    // Arrange
+    const round = beginRound(createDefenseStage(42, 0.3, undefined, 3))
+    expect(round.totalShots).toBe(3)
+    expect(round.sim).not.toBeNull()
+
+    // Act: resolve o primeiro lance sem mergulhar
+    const [runup] = tickUntilPhaseChanges(round)
+    const [flying] = tickUntilPhaseChanges(runup)
+    const [resolved] = tickUntilPhaseChanges(flying)
+    const [nextReady] = tickUntilPhaseChanges(resolved)
+
+    // Assert: próximo lance já armado com nova cobrança
+    expect(resolved.phase).toBe('result')
+    expect(nextReady.shotIndex).toBe(1)
+    expect(nextReady.sim).not.toBeNull()
+    expect(nextReady.diveX).toBeNull()
+  })
+
   test('não aceita chute do usuário em modo defesa', () => {
     // Arrange
     const round = beginRound(createDefenseStage(42, 1))
@@ -269,5 +305,35 @@ describe('rodada completa', () => {
 
     // Act & Assert
     expect(run(99)).toBe(run(99))
+  })
+})
+
+describe('régua sensível à habilidade', () => {
+  test('pé educado varre mais devagar: mais controle para cravar o ponto', () => {
+    // Act & Assert: nível 1 é nervoso, nível 10 é manso
+    expect(barSweepFor(1)).toBeLessThan(barSweepFor(5))
+    expect(barSweepFor(5)).toBeLessThan(barSweepFor(10))
+    expect(barSweepFor(1)).toBeGreaterThanOrEqual(0.4)
+    expect(barSweepFor(10)).toBeLessThanOrEqual(0.9)
+  })
+
+  test('barTAt respeita a varredura custom', () => {
+    // Act & Assert: com sweep de 0.5s, meio ciclo em 0.5
+    expect(barTAt(0, 0.5)).toBe(1)
+    expect(barTAt(0.5, 0.5)).toBeCloseTo(0)
+    expect(barTAt(1, 0.5)).toBeCloseTo(1)
+  })
+
+  test('o palco do chute usa a régua da finalização; falta usa a da cobrança', () => {
+    // Arrange
+    const attrs = { finalizacao: 9, passe: 3, cobranca: 2, defesa: 3 }
+
+    // Act
+    const shot = createStage(7, 1, false, attrs)
+    const freeKick = createStage(7, 1, true, attrs)
+
+    // Assert
+    expect(shot.barSweep).toBeCloseTo(barSweepFor(9))
+    expect(freeKick.barSweep).toBeCloseTo(barSweepFor(2))
   })
 })

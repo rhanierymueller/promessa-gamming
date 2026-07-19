@@ -22,6 +22,8 @@ export const TOTAL_SHOTS = 10
 const START_OFFSETS = [0, -18, 20, -30, 32, -8, 26, -38, 40, 12]
 const RUNUP_DURATION = 0.45
 const RESULT_DURATION = 1.2
+/** Trave: mais tempo p/ ver a bola quicar e sair rolando. */
+const POST_RESULT_DURATION = 2.0
 const KEEPER_DIVE_SPEED = 4.2 // mais frames no ar: mergulho legível, não teleporte
 const CONFETTI_LIFE = 1.4
 
@@ -35,6 +37,7 @@ const DEFENSE_READY_DELAY = 0.9
 const FREE_KICK_BALL_Y = 284
 const MAX_DIVE_REACH = 44
 const DIVE_DRAG_SCALE = 1.6
+
 
 export interface Confetto {
   readonly x: number
@@ -71,12 +74,16 @@ export interface StageState {
   /** Defesa: habilidade do cobrador rival e o mergulho do jogador. */
   readonly defenseSkill: number
   readonly diveX: number | null
+  /** Plano do mergulho: arrasto para cima = voa alto (bola no ângulo). */
+  readonly diveHigh: boolean
   readonly diveStartT: number
   readonly readyTimer: number
   /** De onde a bola é cobrada (falta = mais longe do gol). */
   readonly ballStartY: number
   /** Atributos do craque — afinam chute, cobrança e defesa. */
   readonly attrs: PlayerAttributes
+  /** Meio ciclo da régua deste palco (depende da habilidade). */
+  readonly barSweep: number
   /** Qualidade do goleiro rival (treino < liga < copa). */
   readonly keeperQuality: number
   readonly time: number
@@ -112,11 +119,13 @@ export const createStage = (
   keeperQuality: number = TRAINING_KEEPER_QUALITY,
 ): StageState => ({
   attrs,
+  barSweep: barSweepFor(hasWall ? attrs.cobranca : attrs.finalizacao),
   keeperQuality,
   phase: 'intro',
   mode: 'shoot',
   defenseSkill: 0,
   diveX: null,
+  diveHigh: false,
   diveStartT: 0,
   readyTimer: 0,
   ballStartY: hasWall ? FREE_KICK_BALL_Y : CFG.ballStartY,
@@ -148,7 +157,9 @@ export const createStage = (
 const DEFENSE_FLIGHT_SLOWDOWN = 2.2 // voo mais longo: janela humana de reação
 
 const armDefense = (state: StageState): StageState => {
-  const generated = generateOpponentShot(state.rng, state.defenseSkill, state.ballX, CFG)
+  // treino: o cobrador endurece a cada chute da rodada
+  const skill = Math.min(1, state.defenseSkill + state.shotIndex * 0.06)
+  const generated = generateOpponentShot(state.rng, skill, state.ballX, CFG)
   const flight = { ...generated.value, duration: generated.value.duration * DEFENSE_FLIGHT_SLOWDOWN }
   const sim: ShotSimulation = {
     command: {
@@ -174,6 +185,7 @@ const freshShot = (state: StageState, shotIndex: number): StageState => {
     wallJumped: false,
     blockedByWall: false,
     diveX: null,
+    diveHigh: false,
     diveStartT: 0,
     readyTimer: 0,
     sim: null,
@@ -193,8 +205,9 @@ export const createDefenseStage = (
   seed: number,
   skill: number,
   attrs: PlayerAttributes = DEFAULT_ATTRIBUTES,
+  totalShots = 1,
 ): StageState => ({
-  ...createStage(seed, 1, false, attrs),
+  ...createStage(seed, totalShots, false, attrs),
   mode: 'defend',
   defenseSkill: skill,
 })
@@ -202,8 +215,14 @@ export const createDefenseStage = (
 export const beginRound = (state: StageState): StageState =>
   freshShot({ ...state, goals: 0, results: [], msg: null }, 0)
 
-/** Defesa: o arrasto lateral define o mergulho — só vale durante o voo, uma vez. */
-export const tryDive = (state: StageState, dragDx: number): StageState => {
+/** Arrasto para cima além deste tanto = mergulho alto (bola no ângulo). */
+const DIVE_HIGH_DRAG = 16
+
+/**
+ * Defesa: o arrasto define o mergulho — lateral escolhe o canto, para CIMA
+ * voa alto. Só vale durante o voo, uma vez.
+ */
+export const tryDive = (state: StageState, dragDx: number, dragDy = 0): StageState => {
   if (state.mode !== 'defend' || state.phase !== 'flying' || state.diveX !== null || !state.sim) {
     return state
   }
@@ -215,6 +234,7 @@ export const tryDive = (state: StageState, dragDx: number): StageState => {
   return {
     ...state,
     diveX,
+    diveHigh: dragDy < -DIVE_HIGH_DRAG,
     diveStartT: state.flightT,
     sim: { ...state.sim, keeper: { ...state.sim.keeper, diveX } },
   }
@@ -228,9 +248,16 @@ export const tryStartShot = (state: StageState, points: readonly Vec2[]): StageS
 /** Meio ciclo da régua de chute (topo→base) em segundos. */
 const BAR_SWEEP_SECONDS = 0.65
 
+/** Régua por habilidade: pé nervoso varre rápido, pé educado dá controle. */
+const BAR_SWEEP_MIN = 0.42
+const BAR_SWEEP_PER_LEVEL = 0.04
+
+export const barSweepFor = (level: number): number =>
+  BAR_SWEEP_MIN + (Math.min(10, Math.max(1, level)) - 1) * BAR_SWEEP_PER_LEVEL
+
 /** Posição da régua no tempo: onda triangular 1 (topo) ⇄ 0 (base). */
-export const barTAt = (time: number): number => {
-  const cycle = (time / BAR_SWEEP_SECONDS) % 2
+export const barTAt = (time: number, sweepSeconds: number = BAR_SWEEP_SECONDS): number => {
+  const cycle = (time / sweepSeconds) % 2
   return cycle < 1 ? 1 - cycle : cycle - 1
 }
 
@@ -243,7 +270,7 @@ const armPlayerShot = (state: StageState, points: readonly Vec2[]): StageState =
     state.rng,
     shotConfig,
     state.keeperQuality,
-    barTAt(state.time),
+    barTAt(state.time, state.barSweep),
   )
   if (!value) return state
 
@@ -301,18 +328,23 @@ const resolveDefense = (state: StageState): [StageState, StageEvent[]] => {
       state.diveStartT,
       center,
       defenseTuning(DEFAULT_DEFENSE_CONFIG, state.attrs.defesa),
+      state.diveHigh,
     ) === 'saved'
   const finalX = flightX(sim.flight, 1)
   const finalY = CFG.goal.floorY - sim.flight.targetHeight
+  // na ponta da luva = espalmada: a bola rebate em jogo
+  const deflected = saved && state.diveX !== null && Math.abs(state.diveX - finalX) > 8
 
   const next: StageState = {
     ...state,
     phase: 'result',
     resultTimer: 0,
     results: [...state.results, saved ? 'save' : 'goal'],
-    sim: { ...sim, outcome: { kind: saved ? 'save' : 'goal', finalX, isGolaco: false } },
+    sim: { ...sim, outcome: { kind: saved ? 'save' : 'goal', finalX, isGolaco: false, deflected } },
     msg: saved
-      ? { text: 'DEFESAÇA!', color: '#FFD23F', t: 0 }
+      ? deflected
+        ? { text: 'ESPALMOU!', color: '#FF8C42', t: 0 }
+        : { text: 'DEFESAÇA!', color: '#FFD23F', t: 0 }
       : { text: 'GOL DELES…', color: '#E85D75', t: 0 },
     netBulge: saved ? null : { x: finalX, y: finalY, t: 0 },
     shake: saved ? 0 : 2,
@@ -320,8 +352,8 @@ const resolveDefense = (state: StageState): [StageState, StageEvent[]] => {
       kind: 'save',
       x: finalX,
       y: finalY,
-      vx: saved ? (finalX < center ? -24 : 24) : 0,
-      vy: saved ? 26 : 12,
+      vx: saved ? (finalX < center ? -1 : 1) * (deflected ? 40 : 24) : 0,
+      vy: saved ? (deflected ? 18 : 26) : 12,
       t: 0,
     },
   }
@@ -357,8 +389,10 @@ const resolveFlight = (state: StageState): [StageState, StageEvent[]] => {
     kind,
     x: finalX,
     y: finalY,
-    vx: kind === 'save' ? (finalX < goalCenter(CFG) ? -26 : 26) : kind === 'post' ? (goalCenter(CFG) - finalX) * 0.6 : kind === 'miss' ? (sim.flight.targetX - sim.flight.startX) * 0.06 : 0,
-    vy: kind === 'goal' ? 14 : kind === 'miss' ? -8 : kind === 'post' ? 46 : 30,
+    vx: kind === 'save'
+      ? (finalX < goalCenter(CFG) ? -1 : 1) * (sim.outcome.deflected ? 34 + sim.flight.power * 28 : 26)
+      : kind === 'post' ? (goalCenter(CFG) - finalX) * 1.5 + 8 : kind === 'miss' ? (sim.flight.targetX - sim.flight.startX) * 0.06 : 0,
+    vy: kind === 'goal' ? 14 : kind === 'miss' ? -8 : kind === 'post' ? 55 : 30,
     t: 0,
   }
 
@@ -368,7 +402,13 @@ const resolveFlight = (state: StageState): [StageState, StageEvent[]] => {
     resultTimer: 0,
     goals: state.goals + (isGoal ? 1 : 0),
     results: [...state.results, kind],
-    msg: isGoal && isGolaco ? { text: 'GOLAÇO!!', color: '#FFD23F', t: 0 } : MESSAGES[kind],
+    msg: isGoal && sim.outcome.offPost
+      ? { text: 'DE TRAVE... GOL!', color: '#FFD23F', t: 0 }
+      : isGoal && isGolaco
+        ? { text: 'GOLAÇO!!', color: '#FFD23F', t: 0 }
+        : kind === 'save' && sim.outcome.deflected
+          ? { text: 'ESPALMOU!', color: '#FF8C42', t: 0 }
+          : MESSAGES[kind],
     shake: isGoal ? 3 : kind === 'post' ? 2 : 0,
     netBulge: isGoal ? { x: finalX, y: finalY, t: 0 } : null,
     missMark: kind === 'miss' ? { x: finalX, y: finalY } : null,
@@ -380,7 +420,11 @@ const resolveFlight = (state: StageState): [StageState, StageEvent[]] => {
 
 const tickResult = (state: StageState, dt: number): StageState => {
   const resultTimer = state.resultTimer + dt
-  if (resultTimer > RESULT_DURATION) {
+  const isDeflectedSave =
+    state.results[state.results.length - 1] === 'save' && state.sim?.outcome.deflected === true
+  const duration =
+    state.post?.kind === 'post' || isDeflectedSave ? POST_RESULT_DURATION : RESULT_DURATION
+  if (resultTimer > duration) {
     const nextShot = state.shotIndex + 1
     return nextShot >= state.totalShots
       ? { ...state, phase: 'end', resultTimer }
@@ -405,13 +449,24 @@ const tickResult = (state: StageState, dt: number): StageState => {
 
 const tickPost = (post: BallPost, dt: number): BallPost => {
   const y = post.y + post.vy * dt
-  const grounded = post.kind !== 'goal' && y > CFG.goal.floorY + 4
+  const floor = CFG.goal.floorY + 4
+  const grounded = post.kind !== 'goal' && y >= floor
+  const bouncing = grounded && post.vy > 30
+  // no chão sem quicar: a bola ROLA desacelerando (atrito)
+  const rolling = grounded && !bouncing
   return {
     ...post,
     t: post.t + dt,
     x: post.x + post.vx * dt,
-    y: grounded ? CFG.goal.floorY + 4 : y,
-    vy: grounded ? post.vy * -0.4 : post.kind !== 'miss' ? post.vy + 120 * dt : post.vy,
+    y: grounded ? floor : y,
+    vx: rolling ? post.vx * Math.max(0, 1 - 1.6 * dt) : post.vx,
+    vy: bouncing
+      ? post.vy * -0.45
+      : rolling
+        ? 0
+        : post.kind !== 'miss'
+          ? post.vy + 120 * dt
+          : post.vy,
   }
 }
 

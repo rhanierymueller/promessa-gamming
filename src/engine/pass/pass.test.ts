@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { createRng, type RngState } from '../rng'
 import {
+  decisionSecondsFor,
   generatePassOptions,
   PASS_TEMPLATE_COUNT,
   resolvePass,
@@ -105,5 +106,15 @@ describe('timeoutPass', () => {
     // Assert
     expect(result.completed).toBe(false)
     expect(result.ratingDelta).toBeLessThan(0)
+  })
+})
+
+describe('decisionSecondsFor', () => {
+  test('camisa 10 tem mais tempo para decidir o passe', () => {
+    // Act & Assert
+    expect(decisionSecondsFor(1)).toBeLessThan(decisionSecondsFor(6))
+    expect(decisionSecondsFor(6)).toBeLessThan(decisionSecondsFor(10))
+    expect(decisionSecondsFor(1)).toBeGreaterThanOrEqual(3)
+    expect(decisionSecondsFor(10)).toBeLessThanOrEqual(8)
   })
 })

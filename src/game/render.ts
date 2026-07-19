@@ -30,40 +30,132 @@ const drawScene = (ctx: CanvasRenderingContext2D, state: StageState): void => {
   ctx.ellipse(markX, state.ballStartY + 2, 7, 2.2, 0, 0, 7)
   ctx.fill()
 
+  drawGoal(ctx, state)
+}
+
+/** Amplitude do estufo da rede no gol (decai vibrando como corda). */
+const NET_BULGE_RADIUS = 30
+const NET_BULGE_TIME = 0.9
+
+const drawGoal = (ctx: CanvasRenderingContext2D, state: StageState): void => {
   const { goal } = CFG
   const top = goal.floorY - goal.barHeight
+  const time = state.time
+  // caixa 3D: o plano de trás é menor e mais baixo que a boca do gol
+  const inset = 9
+  const drop = 7
+  const backTop = top + drop
+  const backL = goal.left + inset
+  const backR = goal.right - inset
 
-  // boca do gol escurecida: a rede se destaca do cenário (alambrado/torcida)
-  // mesmo com o gol maior que a boca desenhada na arte de fundo
+  // boca escurecida: separa o interior do gol do cenário atrás
   const mouth = ctx.createLinearGradient(0, top, 0, goal.floorY)
-  mouth.addColorStop(0, 'rgba(8,10,18,0.82)')
+  mouth.addColorStop(0, 'rgba(8,10,18,0.85)')
   mouth.addColorStop(1, 'rgba(8,10,18,0.55)')
   ctx.fillStyle = mouth
   ctx.fillRect(goal.left + 1, top, goal.right - goal.left - 2, goal.barHeight)
 
-  ctx.strokeStyle = 'rgba(240,240,255,0.32)'
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  for (let x = goal.left + 3; x < goal.right; x += 6) {
-    ctx.moveTo(x, top + 3)
-    ctx.lineTo(x, goal.floorY)
+  // deslocamento de cada nó da rede: brisa constante + estufo do gol
+  const bulge = state.netBulge && state.netBulge.t < NET_BULGE_TIME ? state.netBulge : null
+  const springy = bulge
+    ? Math.max(0, 1 - bulge.t / NET_BULGE_TIME) * Math.cos(bulge.t * 14) * 9
+    : 0
+  const offset = (x: number, y: number): [number, number] => {
+    // brisa SUTIL — rede de gol se percebe, não se impõe
+    const hang = 0.2 + ((y - top) / goal.barHeight) * 0.6
+    let dx = Math.sin(time * 1.6 + x * 0.07 + y * 0.09) * hang
+    let dy = Math.sin(time * 1.2 + x * 0.05) * 0.2
+    if (bulge) {
+      const bx = x - bulge.x
+      const by = y - bulge.y
+      const d = Math.hypot(bx, by)
+      if (d < NET_BULGE_RADIUS && d > 0.01) {
+        const force = (1 - d / NET_BULGE_RADIUS) * springy
+        dx += (bx / d) * force
+        dy += (by / d) * force
+      }
+    }
+    return [dx, dy]
   }
-  for (let y = top + 5; y < goal.floorY; y += 6) {
-    ctx.moveTo(goal.left + 2, y)
-    ctx.lineTo(goal.right - 2, y)
+
+  // TETO e LATERAIS: só um sugestão discreta de profundidade (quase invisível)
+  ctx.strokeStyle = 'rgba(235,235,250,0.1)'
+  ctx.lineWidth = 0.6
+  ctx.beginPath()
+  for (let i = 0; i <= 4; i++) {
+    const fx = goal.left + ((goal.right - goal.left) * i) / 4
+    const bx = backL + ((backR - backL) * i) / 4
+    ctx.moveTo(fx, top)
+    ctx.lineTo(bx, backTop)
+  }
+  ctx.moveTo(backL, backTop)
+  ctx.lineTo(backR, backTop)
+  for (const [fx, bx] of [[goal.left + 1, backL], [goal.right - 1, backR]] as const) {
+    for (let i = 1; i <= 2; i++) {
+      const y = top + (goal.barHeight * i) / 3
+      ctx.moveTo(fx, y)
+      ctx.lineTo(bx, Math.max(backTop, y))
+    }
   }
   ctx.stroke()
 
-  if (state.netBulge && state.netBulge.t < 0.5) {
-    ctx.strokeStyle = `rgba(255,255,255,${0.6 - state.netBulge.t})`
-    ctx.beginPath()
-    ctx.arc(state.netBulge.x, state.netBulge.y, 5 + state.netBulge.t * 6, 0, 7)
-    ctx.stroke()
+  // rede de FUNDO: malha fina e delicada balançando
+  ctx.strokeStyle = 'rgba(240,240,255,0.2)'
+  ctx.lineWidth = 0.5
+  ctx.beginPath()
+  for (let x = backL + 2; x <= backR - 1; x += 4) {
+    let first = true
+    for (let y = backTop; y <= goal.floorY; y += 6) {
+      const [dx, dy] = offset(x, y)
+      if (first) {
+        ctx.moveTo(x + dx, y + dy)
+        first = false
+      } else {
+        ctx.lineTo(x + dx, y + dy)
+      }
+    }
   }
+  for (let y = backTop + 3; y < goal.floorY; y += 4) {
+    let first = true
+    for (let x = backL; x <= backR; x += 8) {
+      const [dx, dy] = offset(x, y)
+      // barriga leve da rede pendurada
+      const sag = Math.sin(((x - backL) / (backR - backL)) * Math.PI) * 0.6
+      if (first) {
+        ctx.moveTo(x + dx, y + dy + sag)
+        first = false
+      } else {
+        ctx.lineTo(x + dx, y + dy + sag)
+      }
+    }
+  }
+  ctx.stroke()
 
-  px(ctx, goal.left - 1, top - 1, 3, goal.barHeight + 1, '#F8F6EE')
-  px(ctx, goal.right - 2, top - 1, 3, goal.barHeight + 1, '#F8F6EE')
-  px(ctx, goal.left - 1, top - 3, goal.right - goal.left + 3, 3, '#F8F6EE')
+  // ==== TRAVES com volume ====
+  // sombra das bases no gramado
+  ctx.fillStyle = 'rgba(0,0,0,0.3)'
+  for (const px0 of [goal.left, goal.right]) {
+    ctx.beginPath()
+    ctx.ellipse(px0, goal.floorY + 1.5, 5, 1.6, 0, 0, 7)
+    ctx.fill()
+  }
+  const postShade = (x: number, y: number, w: number, h: number, vertical: boolean): void => {
+    const grad = vertical
+      ? ctx.createLinearGradient(x, 0, x + w, 0)
+      : ctx.createLinearGradient(0, y, 0, y + h)
+    grad.addColorStop(0, '#FFFFFF')
+    grad.addColorStop(0.45, '#F2EFE4')
+    grad.addColorStop(1, '#B8B2A0')
+    ctx.fillStyle = grad
+    ctx.fillRect(x, y, w, h)
+  }
+  postShade(goal.left - 2, top - 2, 4, goal.barHeight + 2, true)
+  postShade(goal.right - 2, top - 2, 4, goal.barHeight + 2, true)
+  postShade(goal.left - 2, top - 4, goal.right - goal.left + 4, 4, false)
+  // quinas arredondadas (tampas dos encontros trave × travessão)
+  ctx.fillStyle = '#FFFFFF'
+  ctx.fillRect(goal.left - 2, top - 4, 4, 4)
+  ctx.fillRect(goal.right - 2, top - 4, 4, 4)
 }
 
 const smoothstep = (t: number): number => t * t * (3 - 2 * t)
@@ -94,11 +186,27 @@ const keeperPoseFor = (
     }
     // sequência da defesa: espalmada no ângulo / soco no voo longo / abraçado
     // na bola — congela a grande defesa, depois levanta comemorando
+    if (state.phase === 'result' && lastResult === 'save' && state.sim.outcome.deflected) {
+      const landed = state.resultTimer >= KEEPER_SAVED_HOLD
+      const divePose: KeeperPose =
+        Math.abs(dist) > KEEPER_LONG_DIVE ? 'fly' : dist < 0 ? 'diveL' : 'diveR'
+      return {
+        pose: landed ? 'getup' : divePose,
+        x: center + dist,
+        lift: landed ? 0 : Math.max(0, 1 - state.resultTimer / KEEPER_SAVED_HOLD) * 4,
+        flip: Math.abs(dist) > KEEPER_LONG_DIVE && dist < 0,
+      }
+    }
     if (state.phase === 'result' && lastResult === 'save') {
       const landed = state.resultTimer >= KEEPER_SAVED_HOLD
-      const isHighSave = state.sim.flight.targetHeight > CFG.highBallHeight
-      const isLongDive = Math.abs(dist) > KEEPER_LONG_DIVE
-      const holdPose: KeeperPose = isHighSave ? 'tip' : isLongDive ? 'punch' : 'saved'
+      // poses com bola embutida só quando a geometria bate: espalmada pede
+      // bola REALMENTE no alto + mergulho; soco pede voo longo com bola na
+      // altura do braço; o resto cai abraçado na bola (vale p/ rasteira e centro)
+      const ballHeight = state.sim.flight.targetHeight
+      const isDiveSave = Math.abs(dist) > 14
+      const isHighSave = isDiveSave && ballHeight > 34
+      const isPunchSave = Math.abs(dist) > KEEPER_LONG_DIVE && ballHeight > 16
+      const holdPose: KeeperPose = isHighSave ? 'tip' : isPunchSave ? 'punch' : 'saved'
       // espalmada/soco aterrissam suavemente durante o congelamento
       const airborne = holdPose === 'saved' ? 0 : Math.max(0, 1 - state.resultTimer / KEEPER_SAVED_HOLD) * 8
       return {
@@ -125,8 +233,12 @@ const keeperPoseFor = (
                 ? dist < 0 ? 'diveL' : 'diveR'
                 : 'jump'
     // voo acompanha a BOLA: rasteira = mergulho raso no chão; alta = voo alto.
+    // Na defesa, quem manda é o GESTO do jogador (mergulho alto ou rasteiro).
     // Mergulho longe ganha um empurrão extra de altura (espetáculo).
-    const ballHigh = Math.min(1, state.sim.flight.targetHeight / 30)
+    const ballHigh =
+      state.mode === 'defend' && state.diveX !== null
+        ? state.diveHigh ? 1 : 0.12
+        : Math.min(1, state.sim.flight.targetHeight / 30)
     const flightBoost = Math.min(1, Math.abs(dist) / 40)
     const lift =
       pose === 'diveL' || pose === 'diveR' || pose === 'takeoff' || pose === 'fly'
@@ -223,12 +335,12 @@ const strikerPoseFor = (state: StageState): { pose: StrikerPose; footX: number; 
       return { pose: 'back', footX: startX - 30, footY: startY + 20 }
     case 'runup': {
       const p = state.runP
-      // passada alternada: dois frames de corrida intercalados
-      const stride = Math.floor(p * 6) % 2 === 0 ? 'run' : 'run2'
+      // ciclo de corrida REAL: 4 fases do mesmo ângulo, pernas alternando
+      const cycle = ['run', 'run2', 'run3', 'run4'] as const
       return {
-        pose: stride,
+        pose: cycle[Math.floor(p * 12) % 4],
         footX: startX - 30 + 23 * p,
-        footY: startY + 20 - 17 * p - Math.abs(Math.sin(p * Math.PI * 3)) * 1.5,
+        footY: startY + 20 - 17 * p - Math.abs(Math.sin(p * Math.PI * 6)) * 1.2,
       }
     }
     case 'flying':
@@ -292,8 +404,9 @@ const drawStriker = (ctx: CanvasRenderingContext2D, state: StageState, sprites: 
   const h = sp.h * scale
 
   // corpo inclinado na corrida, follow-through girando no chute
+  const isRunning = placement.pose.startsWith('run')
   let angle = 0
-  if (placement.pose === 'run' || placement.pose === 'run2') angle = -0.09
+  if (isRunning) angle = -0.09
   if (placement.pose === 'kick') angle = -0.16 + Math.min(1, state.flightT / 0.3) * 0.3
   if (placement.pose === 'kick2') angle = 0.08
   drawSpriteAnchored(ctx, sp, placement.footX, placement.footY, w, h, angle)
@@ -379,9 +492,14 @@ const drawHud = (ctx: CanvasRenderingContext2D, state: StageState, totalShots: n
     ctx.font = 'bold 8px monospace'
     ctx.textAlign = 'center'
     ctx.fillStyle = '#1A1428'
-    ctx.fillText('ARRASTE PRO LADO PRA DEFENDER!', 91, 301)
+    ctx.fillText('ARRASTE PRO CANTO DA BOLA!', 91, 295)
     ctx.fillStyle = '#FFD23F'
-    ctx.fillText('ARRASTE PRO LADO PRA DEFENDER!', 90, 300)
+    ctx.fillText('ARRASTE PRO CANTO DA BOLA!', 90, 294)
+    ctx.font = 'bold 7px monospace'
+    ctx.fillStyle = '#1A1428'
+    ctx.fillText('DIAGONAL PRA CIMA = BOLA ALTA', 91, 305)
+    ctx.fillStyle = 'rgba(245,240,230,0.9)'
+    ctx.fillText('DIAGONAL PRA CIMA = BOLA ALTA', 90, 304)
 
     // setas pulsando nas laterais do gol enquanto a bola voa
     if (state.phase === 'flying') {
@@ -448,7 +566,7 @@ export const drawStage = (
     if (state.mode === 'shoot') {
       // pronto: régua varrendo; corrida: congelada onde o chute travou
       const barT = state.phase === 'ready'
-        ? barTAt(state.time)
+        ? barTAt(state.time, state.barSweep)
         : state.sim
           ? state.sim.command.targetHeight / CFG.barMaxHeight
           : 0
@@ -460,9 +578,11 @@ export const drawStage = (
   } else if (state.phase === 'result' && state.post) {
     // defesa: a bola está NA LUVA do goleiro (embutida no sprite) — nada de
     // segunda bola rebatendo pelo gramado
-    const ballHeld = state.results[state.results.length - 1] === 'save'
+    const ballHeld =
+      state.results[state.results.length - 1] === 'save' && !state.sim?.outcome.deflected
     if (!ballHeld) {
-      const alpha = state.post.t > 0.7 ? Math.max(0, 1 - (state.post.t - 0.7) / 0.4) : 1
+      const fadeStart = state.post.kind === 'post' ? 1.6 : 0.7
+      const alpha = state.post.t > fadeStart ? Math.max(0, 1 - (state.post.t - fadeStart) / 0.4) : 1
       ctx.globalAlpha = alpha
       drawBall(ctx, sprites.ball, state.post.x, state.post.y, 2.2, Math.max(state.post.y, CFG.goal.floorY + 4), state.post.t * 8)
       ctx.globalAlpha = 1

@@ -1,4 +1,7 @@
+import { LogOut } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import portraitUrl from '../../assets/sprites/s_portrait.png'
+import portraitFUrl from '../../assets/sprites/f_portrait.png'
 import type { Club } from '../../data/clubs'
 import {
   ATTRIBUTE_KEYS,
@@ -7,14 +10,57 @@ import {
   MAX_ATTRIBUTE,
   upgradeCost,
 } from '../../engine/career/attributes'
-import { CELEBRATION_NAMES, CELEBRATION_URLS } from '../../game/assets'
-import { setCelebration, setShirtNumber, trainAttribute, type PlayerSave } from '../../state/save'
+import { applyAppearance, HAIR_COLORS, KIT_COLORS, SKIN_TONES } from '../../game/appearance'
+import { celebrationUrlsFor } from '../../game/assets'
+import { CELEBRATION_NAMES } from '../../game/assets'
+import {
+  setAppearance,
+  setCelebration,
+  setShirtNumber,
+  trainAttribute,
+  type PlayerAppearance,
+  type PlayerSave,
+} from '../../state/save'
+
+/** Cores dos swatches quando o índice 0 mantém a arte original. */
+const ORIGINAL_SKIN_SWATCH = '#C08850'
+const ORIGINAL_HAIR_SWATCH = '#2A1E14'
+const ORIGINAL_KIT_SWATCH = '#E0C000'
+
+const swatchColor = (rgb: readonly [number, number, number] | null, fallback: string): string =>
+  rgb ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : fallback
+
+/** Retrato do craque com a aparência aplicada em tempo real. */
+const AppearancePortrait = ({ appearance }: { appearance: PlayerAppearance }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      const holder = { img, w: img.naturalWidth, h: img.naturalHeight }
+      const recolored = applyAppearance(holder, appearance)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(recolored?.img ?? img, 0, 0)
+    }
+    img.src = appearance.gender === 'feminino' ? portraitFUrl : portraitUrl
+  }, [appearance])
+
+  return <canvas ref={canvasRef} className="profile-portrait" aria-label="Retrato do craque" />
+}
 
 interface ProfileTabProps {
   readonly save: PlayerSave
   readonly club: Club
   readonly onSaveChange: (save: PlayerSave) => void
   readonly onResetCareer: () => void
+  /** Sai para a landing (home) — o save continua guardado. */
+  readonly onLogout: () => void
 }
 
 const ATTRIBUTE_HINTS: Record<string, string> = {
@@ -24,7 +70,7 @@ const ATTRIBUTE_HINTS: Record<string, string> = {
   defesa: 'luva mais comprida',
 }
 
-export const ProfileTab = ({ save, club, onSaveChange, onResetCareer }: ProfileTabProps) => {
+export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout }: ProfileTabProps) => {
   const confirmReset = (): void => {
     if (window.confirm('Recomeçar a carreira apaga seu histórico. Tem certeza?')) {
       onResetCareer()
@@ -34,10 +80,10 @@ export const ProfileTab = ({ save, club, onSaveChange, onResetCareer }: ProfileT
   return (
     <div className="tab-panel">
       <div className="card profile-card">
-        <img className="profile-portrait" src={portraitUrl} alt={`Retrato de ${save.playerName}`} />
+        <AppearancePortrait appearance={save.appearance} />
         <div className="profile-info">
           <h2 className="profile-name">{save.playerName}</h2>
-          <p className="muted">Atacante · {club.name}</p>
+          <p className="muted">{save.playerPosition} · {save.playerAge} anos · {club.name}</p>
           <label className="profile-shirt">
             <span className="create-label">Camisa</span>
             <input
@@ -89,10 +135,83 @@ export const ProfileTab = ({ save, club, onSaveChange, onResetCareer }: ProfileT
       </div>
 
       <div className="card">
+        <span className="card-label">Aparência</span>
+        <div className="appearance-row">
+          <span className="appearance-label">Pele</span>
+          <div className="swatch-row" role="radiogroup" aria-label="Tom de pele">
+            {SKIN_TONES.map((tone, index) => (
+              <button
+                key={tone.name}
+                type="button"
+                role="radio"
+                aria-checked={save.appearance.skin === index}
+                aria-label={tone.name}
+                title={tone.name}
+                className={`swatch${save.appearance.skin === index ? ' swatch-active' : ''}`}
+                style={{ background: swatchColor(tone.rgb, ORIGINAL_SKIN_SWATCH) }}
+                onClick={() => onSaveChange(setAppearance(save, { ...save.appearance, skin: index }))}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="appearance-row">
+          <span className="appearance-label">Cabelo</span>
+          <div className="swatch-row" role="radiogroup" aria-label="Cor de cabelo">
+            {HAIR_COLORS.map((color, index) => (
+              <button
+                key={color.name}
+                type="button"
+                role="radio"
+                aria-checked={save.appearance.hair === index}
+                aria-label={color.name}
+                title={color.name}
+                className={`swatch${save.appearance.hair === index ? ' swatch-active' : ''}`}
+                style={{ background: swatchColor(color.rgb, ORIGINAL_HAIR_SWATCH) }}
+                onClick={() => onSaveChange(setAppearance(save, { ...save.appearance, hair: index }))}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="appearance-row">
+          <span className="appearance-label">Uniforme</span>
+          <div className="swatch-row" role="radiogroup" aria-label="Cor do uniforme">
+            {KIT_COLORS.map((color, index) => (
+              <button
+                key={color.name}
+                type="button"
+                role="radio"
+                aria-checked={save.appearance.kit === index}
+                aria-label={color.name}
+                title={color.name}
+                className={`swatch${save.appearance.kit === index ? ' swatch-active' : ''}`}
+                style={{ background: swatchColor(color.rgb, ORIGINAL_KIT_SWATCH) }}
+                onClick={() => onSaveChange(setAppearance(save, { ...save.appearance, kit: index }))}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="appearance-row">
+          <span className="appearance-label">Gênero</span>
+          <div className="swatch-row">
+            {(['masculino', 'feminino'] as const).map((gender) => (
+              <button
+                key={gender}
+                type="button"
+                className={`btn appearance-gender${save.appearance.gender === gender ? ' appearance-gender-active' : ''}`}
+                onClick={() => onSaveChange(setAppearance(save, { ...save.appearance, gender }))}
+              >
+                {gender === 'masculino' ? 'Masculino' : 'Feminino'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
         <span className="card-label">Comemoração</span>
         <p className="muted table-note">Como você celebra os seus gols.</p>
         <div className="celebration-grid" role="radiogroup" aria-label="Escolha de comemoração">
-          {CELEBRATION_URLS.map((url, index) => {
+          {celebrationUrlsFor(save.appearance.gender).map((url, index) => {
             const isActive = save.celebrationId === index
             return (
               <button
@@ -111,6 +230,9 @@ export const ProfileTab = ({ save, club, onSaveChange, onResetCareer }: ProfileT
         </div>
       </div>
 
+      <button className="btn btn-secondary btn-icon" onClick={onLogout}>
+        <LogOut size={15} aria-hidden="true" /> Sair
+      </button>
       <button className="btn btn-danger" onClick={confirmReset}>Recomeçar carreira</button>
     </div>
   )

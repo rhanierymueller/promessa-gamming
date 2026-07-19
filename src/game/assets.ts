@@ -19,10 +19,25 @@ import sKick2Url from '../assets/sprites/s_kick2.png'
 import sLamentUrl from '../assets/sprites/s_lament.png'
 import sRunUrl from '../assets/sprites/s_run.png'
 import sRun2Url from '../assets/sprites/s_run2.png'
+import sRun3Url from '../assets/sprites/s_run3.png'
+import sRun4Url from '../assets/sprites/s_run4.png'
 import celeb0Url from '../assets/sprites/celeb_0.png'
 import celeb1Url from '../assets/sprites/celeb_1.png'
 import celeb2Url from '../assets/sprites/celeb_2.png'
 import celeb3Url from '../assets/sprites/celeb_3.png'
+import fBackUrl from '../assets/sprites/f_back.png'
+import fRunUrl from '../assets/sprites/f_run.png'
+import fRun2Url from '../assets/sprites/f_run2.png'
+import fRun3Url from '../assets/sprites/f_run3.png'
+import fRun4Url from '../assets/sprites/f_run4.png'
+import fKickUrl from '../assets/sprites/f_kick.png'
+import fKick2Url from '../assets/sprites/f_kick2.png'
+import fCelebrateUrl from '../assets/sprites/f_celebrate.png'
+import fLamentUrl from '../assets/sprites/f_lament.png'
+import fceleb0Url from '../assets/sprites/fceleb_0.png'
+import fceleb1Url from '../assets/sprites/fceleb_1.png'
+import fceleb2Url from '../assets/sprites/fceleb_2.png'
+import fceleb3Url from '../assets/sprites/fceleb_3.png'
 import wallJumpUrl from '../assets/sprites/wall_jump.png'
 import wallStandUrl from '../assets/sprites/wall_stand.png'
 import varzeaUrl from '../assets/backgrounds/varzea.jpg'
@@ -41,10 +56,15 @@ export type KeeperPose =
   | 'fly'
   | 'tip'
   | 'punch'
-export type StrikerPose = 'back' | 'run' | 'run2' | 'kick' | 'kick2' | 'celebrate' | 'lament'
+export type StrikerPose = 'back' | 'run' | 'run2' | 'run3' | 'run4' | 'kick' | 'kick2' | 'celebrate' | 'lament'
 
 export const CELEBRATION_URLS = [celeb0Url, celeb1Url, celeb2Url, celeb3Url] as const
+export const CELEBRATION_URLS_F = [fceleb0Url, fceleb1Url, fceleb2Url, fceleb3Url] as const
 export const CELEBRATION_NAMES = ['Avião', 'De joelhos', 'Soco no ar', 'Silêncio'] as const
+
+export const celebrationUrlsFor = (
+  gender: 'masculino' | 'feminino',
+): readonly string[] => (gender === 'feminino' ? CELEBRATION_URLS_F : CELEBRATION_URLS)
 
 export interface SpriteHolder {
   img: HTMLImageElement | HTMLCanvasElement | null
@@ -73,7 +93,35 @@ const loadSprite = (src: string): SpriteHolder => {
   return holder
 }
 
-export const loadGameSprites = (): GameSprites => ({
+/** Conjunto do atacante por gênero (sets completos). */
+const strikerSetFor = (gender: 'masculino' | 'feminino'): Record<StrikerPose, SpriteHolder> => {
+  if (gender === 'feminino') {
+    return {
+      back: loadSprite(fBackUrl),
+      run: loadSprite(fRunUrl),
+      run2: loadSprite(fRun2Url),
+      run3: loadSprite(fRun3Url),
+      run4: loadSprite(fRun4Url),
+      kick: loadSprite(fKickUrl),
+      kick2: loadSprite(fKick2Url),
+      celebrate: loadSprite(fCelebrateUrl),
+      lament: loadSprite(fLamentUrl),
+    }
+  }
+  return {
+    back: loadSprite(sBackUrl),
+    run: loadSprite(sRunUrl),
+    run2: loadSprite(sRun2Url),
+    run3: loadSprite(sRun3Url),
+    run4: loadSprite(sRun4Url),
+    kick: loadSprite(sKickUrl),
+    kick2: loadSprite(sKick2Url),
+    celebrate: loadSprite(sCelebrateUrl),
+    lament: loadSprite(sLamentUrl),
+  }
+}
+
+export const loadGameSprites = (gender: 'masculino' | 'feminino' = 'masculino'): GameSprites => ({
   keeper: {
     idle: loadSprite(kIdleUrl),
     crouch: loadSprite(kCrouchUrl),
@@ -89,16 +137,8 @@ export const loadGameSprites = (): GameSprites => ({
     tip: loadSprite(kTipUrl),
     punch: loadSprite(kPunchUrl),
   },
-  striker: {
-    back: loadSprite(sBackUrl),
-    run: loadSprite(sRunUrl),
-    run2: loadSprite(sRun2Url),
-    kick: loadSprite(sKickUrl),
-    kick2: loadSprite(sKick2Url),
-    celebrate: loadSprite(sCelebrateUrl),
-    lament: loadSprite(sLamentUrl),
-  },
-  celebrations: CELEBRATION_URLS.map(loadSprite),
+  striker: strikerSetFor(gender),
+  celebrations: celebrationUrlsFor(gender).map(loadSprite),
   ball: loadSprite(ballUrl),
   wallStand: loadSprite(wallStandUrl),
   wallJump: loadSprite(wallJumpUrl),

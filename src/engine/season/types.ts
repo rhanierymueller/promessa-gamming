@@ -1,4 +1,4 @@
-export const SEASON_TEAMS = 10
+export const SEASON_TEAMS = 14
 export const SEASON_ROUNDS = SEASON_TEAMS - 1 // um jogo contra cada adversário
 
 export interface SeasonFixture {

@@ -1,4 +1,4 @@
-import type { RngResult, RngState } from '../rng'
+import { nextFloat, type RngResult, type RngState } from '../rng'
 import { goalCenter, keeperSkillForShot } from './config'
 import { createFlight, flightX } from './flight'
 import { applyBar, applyDispersion, readGesture } from './gesture'
@@ -23,6 +23,7 @@ export const resolveOutcome = (
   plan: KeeperPlan,
   skill: number,
   config: ShotConfig,
+  postRoll = 1,
 ): ShotOutcome => {
   const { goal } = config
   const finalX = flightX(flight, 1)
@@ -36,7 +37,12 @@ export const resolveOutcome = (
     (Math.abs(finalX - goal.right) <= goal.postWidth && underBar) ||
     (insideX && height >= goal.barHeight - 2 && height <= goal.barHeight + 4)
 
-  if (hitPost) return { kind: 'post', finalX, isGolaco: false }
+  if (hitPost) {
+    // trave não é sempre azar: às vezes a bola quica pra DENTRO
+    return postRoll < config.postInChance
+      ? { kind: 'goal', finalX, isGolaco: golaco, offPost: true }
+      : { kind: 'post', finalX, isGolaco: false }
+  }
   if (!insideX || height > goal.barHeight + 4) return { kind: 'miss', finalX, isGolaco: false }
 
   let reach = config.reachBase + skill * config.reachSkillFactor
@@ -53,9 +59,18 @@ export const resolveOutcome = (
     height <= config.standingCatchHeight
   const saved = isTame || isBodyBlock || Math.abs(plan.diveX - finalX) <= reach
 
-  return saved
-    ? { kind: 'save', finalX, isGolaco: false }
-    : { kind: 'goal', finalX, isGolaco: golaco }
+  if (saved) {
+    // agarra ou espalma? Ponta da luva, bola no ângulo ou bomba = rebote
+    const distFrac = reach > 0 ? Math.abs(plan.diveX - finalX) / reach : 0
+    const deflected =
+      !isTame &&
+      !isBodyBlock &&
+      (distFrac > config.deflectEdgeFrac ||
+        height > config.deflectHighBall ||
+        flight.power > config.deflectPower)
+    return { kind: 'save', finalX, isGolaco: false, deflected }
+  }
+  return { kind: 'goal', finalX, isGolaco: golaco }
 }
 
 export interface ShotSimulation {
@@ -87,10 +102,12 @@ export const simulateShot = (
   const flight = createFlight(dispersed.value, ballX, config)
   const skill = keeperSkillForShot(config, shotIndex, keeperQuality)
   const planned = planKeeper(flight, skill, dispersed.next, config)
-  const outcome = resolveOutcome(flight, planned.value, skill, config)
+  const postRoll = nextFloat(planned.next)
+  const outcome = resolveOutcome(flight, planned.value, skill, config, postRoll.value)
 
   return {
     value: { command: dispersed.value, flight, keeper: planned.value, outcome },
-    next: planned.next,
+    next: postRoll.next,
   }
 }
+

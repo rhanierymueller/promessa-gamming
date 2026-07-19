@@ -43,6 +43,10 @@ export interface ShotOutcome {
   readonly kind: ShotOutcomeKind
   readonly finalX: number
   readonly isGolaco: boolean
+  /** Gol que entrou batendo na trave. */
+  readonly offPost?: boolean
+  /** Defesa espalmada — a bola rebate em jogo em vez de morrer na luva. */
+  readonly deflected?: boolean
 }
 
 export interface ShotConfig {
@@ -96,6 +100,14 @@ export interface ShotConfig {
   readonly wrongSideBase: number
   /** Quanto da curva o goleiro consegue ler (multiplicado pela habilidade). */
   readonly curveReadFactor: number
+  /** Chance de a bola que bate na trave ENTRAR. */
+  readonly postInChance: number
+  /** Espalmada: fração do alcance a partir da qual a defesa vira rebote. */
+  readonly deflectEdgeFrac: number
+  /** Espalmada: acima desta força, nem bola no corpo é agarrada. */
+  readonly deflectPower: number
+  /** Espalmada: bola acima desta altura é sempre espalmada. */
+  readonly deflectHighBall: number
   /** Barra de chute: régua vertical dita força e altura no instante do toque. */
   readonly barPowerMin: number
   readonly barPowerRange: number

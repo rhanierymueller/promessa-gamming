@@ -144,3 +144,16 @@ export const narrationForMoment = (moment: MatchMoment): string => {
 
 export const passOptionLabel = (risk: PassRisk, templateId: number): string =>
   pick(PASS_OPTION_LABELS[risk], templateId)
+
+/** Linhas da simulação automática ("Simular até o final"). */
+export const SIM_LINES = {
+  start: 'Técnico manda tocar o jogo — simulando até o apito final.',
+  shotGoal: 'GOL DE {name} na simulação! A torcida nem viu direito e já festeja.',
+  shotMiss: '{name} finaliza, mas o goleiro fica com ela.',
+  passOk: 'Passe de {name} encontra o companheiro livre.',
+  passFail: 'Passe de {name} interceptado no meio do caminho.',
+  defenseSave: 'DEFENDEU! {name} espalma a falta perigosa.',
+  defenseConcede: 'Gol deles… a falta morreu no canto e {name} não alcançou.',
+  planTeamGoal: 'GOL DO TIME! A jogada trabalhada termina na rede.',
+  planOpponentGoal: 'Gol do adversário no lance armado. Jogo duro.',
+} as const

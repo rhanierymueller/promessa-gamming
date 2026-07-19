@@ -1,3 +1,4 @@
+import { FastForward, Star, TriangleAlert } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Club } from '../data/clubs'
 import {
@@ -11,13 +12,17 @@ import {
   narrationForMoment,
   PASS_RESULT_LINES,
   SHOT_RESULT_LINES,
+  SIM_LINES,
   TACTIC_LINES,
   WALL_BLOCK_LINE,
   withName,
 } from '../data/narration'
+import { simulateToEnd, type AutoPlayEvent, type AutoPlayProbs } from '../engine/match/autoplay'
+import { FORMATIONS, type FormationId, type PlayerFieldPosition } from '../engine/squad/formation'
+import { lineupRating, squadPlayersFor, userAsSquadPlayer, USER_SQUAD_INDEX } from '../engine/squad/players'
 import { createRng, type RngState } from '../engine/rng'
 import { DEFAULT_MATCH_CONFIG } from '../engine/match/config'
-import { matchConfigFor } from '../engine/match/difficulty'
+import { matchConfigForRatings, ratingEdgeFor } from '../engine/match/difficulty'
 import {
   advance,
   advanceAuto,
@@ -30,14 +35,14 @@ import {
   isPlayerMoment,
   startMatch,
 } from '../engine/match/match'
-import { buildMatchFacts } from '../engine/match/facts'
+import { pickBestPlayer } from '../engine/match/facts'
 import { displayRating } from '../engine/match/rating'
-import { rollAutoGoal, rollMicroGoal, TACTIC_LABELS, type Tactic } from '../engine/match/tactics'
+import { momentumFor, rollAutoGoal, rollMicroGoal, TACTIC_LABELS, type Tactic } from '../engine/match/tactics'
 import type { MatchState } from '../engine/match/types'
 import type { PassResolution } from '../engine/pass/pass'
-import { squadFor } from '../data/squadNames'
-import type { Competition, MatchRecord } from '../state/save'
-import { LivePitch, USER_FORMATION_INDEX, type PitchDirective } from './LivePitch'
+import { DEFAULT_APPEARANCE, type Competition, type MatchRecord, type PlayerAppearance } from '../state/save'
+import { ClubCrest } from '../ui/ClubCrest'
+import { createLiveStats, LivePitch, type PitchDirective } from './LivePitch'
 import { PassChallenge } from './PassChallenge'
 import { ShotStage, type RoundSummary } from './ShotStage'
 
@@ -46,6 +51,21 @@ const MINUTES_PER_SECOND = 0.9
 const TICK_MS = 100
 const MICRO_EVERY_MINUTES = 2.4
 const SPEEDS = [1, 2, 4] as const
+const FULLTIME_MINUTE = 90
+
+/** Simulação automática: quem treinou converte mais (atributos 1-10). */
+const AUTO_SHOT_BASE = 0.25
+const AUTO_SHOT_PER_LEVEL = 0.03
+const AUTO_PASS_BASE = 0.5
+const AUTO_PASS_PER_LEVEL = 0.04
+const AUTO_SAVE_BASE = 0.3
+const AUTO_SAVE_PER_LEVEL = 0.04
+
+const autoProbsFor = (attrs: PlayerAttributes): AutoPlayProbs => ({
+  shotGoal: AUTO_SHOT_BASE + attrs.finalizacao * AUTO_SHOT_PER_LEVEL,
+  passComplete: AUTO_PASS_BASE + attrs.passe * AUTO_PASS_PER_LEVEL,
+  defenseSave: AUTO_SAVE_BASE + attrs.defesa * AUTO_SAVE_PER_LEVEL,
+})
 
 type MatchMode = 'live' | 'handoff' | 'shot' | 'pass' | 'defense' | 'summary'
 
@@ -64,6 +84,20 @@ interface MatchScreenProps {
   readonly attributes?: PlayerAttributes
   /** Comemoração escolhida no Perfil (índice em celeb_0..3). */
   readonly celebrationId?: number
+  /** Aparência do craque (pele/cabelo). */
+  readonly appearance?: PlayerAppearance
+  /** Escudos enviados pelo jogador (clubId → data URL). */
+  readonly crestUrls?: Readonly<Record<string, string>>
+  /** Formação escolhida por você, o técnico (rival joga no padrão). */
+  readonly formation?: FormationId
+  /** Posição do craque — pesa no overall efetivo da escalação. */
+  readonly playerPosition?: PlayerFieldPosition
+  /** Escalação: índice do elenco em cada slot da formação (liga apenas). */
+  readonly lineup?: readonly number[]
+  /** Temporada atual — elencos envelhecem a cada ano. */
+  readonly careerYear?: number
+  /** Batismos locais dos SEUS jogadores (playerId → nome). */
+  readonly playerNames?: Readonly<Record<string, string>>
   readonly onExit: (record: MatchRecord) => void
 }
 
@@ -91,11 +125,48 @@ export const MatchScreen = ({
   competition = 'liga',
   attributes = DEFAULT_ATTRIBUTES,
   celebrationId = 0,
+  appearance = DEFAULT_APPEARANCE,
+  crestUrls = {},
+  formation = '4-3-3',
+  playerPosition = 'ATA',
+  lineup,
+  careerYear = 1,
+  playerNames = {},
   onExit,
 }: MatchScreenProps) => {
+  // elenco com o SEU craque dentro — a força do time muda com a escalação
+  const teamPlayers = useMemo(() => {
+    const squad = squadPlayersFor(club, careerYear)
+    return squad.map((player, index) =>
+      index === USER_SQUAD_INDEX
+        ? userAsSquadPlayer(player, playerName, attributes, playerPosition)
+        : playerNames[player.id]
+          ? { ...player, name: playerNames[player.id] }
+          : player,
+    )
+  }, [club, careerYear, playerName, attributes, playerPosition, playerNames])
+
+  const effectiveLineup = useMemo(
+    () => lineup ?? Array.from({ length: 11 }, (_, index) => index),
+    [lineup],
+  )
+
+  const teamRating = useMemo(
+    () =>
+      lineupRating(
+        effectiveLineup.map((squadIndex) => teamPlayers[squadIndex]),
+        FORMATIONS[formation].slots,
+      ),
+    [effectiveLineup, teamPlayers, formation],
+  )
+  const opponentRating = useMemo(() => {
+    const squad = squadPlayersFor(opponent, careerYear)
+    return lineupRating(squad.slice(0, 11), FORMATIONS['4-3-3'].slots)
+  }, [opponent, careerYear])
+
   const config = useMemo(
-    () => matchConfigFor(DEFAULT_MATCH_CONFIG, club.strength, opponent.strength),
-    [club, opponent],
+    () => matchConfigForRatings(DEFAULT_MATCH_CONFIG, teamRating, opponentRating),
+    [teamRating, opponentRating],
   )
   const [match, setMatch] = useState<MatchState>(() => startMatch(seed, config))
   const [mode, setMode] = useState<MatchMode>('live')
@@ -104,18 +175,31 @@ export const MatchScreen = ({
   const [tactic, setTactic] = useState<Tactic>('equilibrado')
   const [log, setLog] = useState<readonly LogLine[]>([])
   const [directive, setDirective] = useState<PitchDirective | null>(null)
+  // modal "simular até o fim" — enquanto aberta, o relógio pausa
+  const [isSimConfirmOpen, setSimConfirmOpen] = useState(false)
 
-  const teamSquad = useMemo(() => {
-    const names = [...squadFor(`${club.id}-${seed}`, 11)]
-    names[USER_FORMATION_INDEX] = playerName
-    return names
-  }, [club.id, seed, playerName])
-  const opponentSquad = useMemo(() => squadFor(`${opponent.id}-${seed}`, 11), [opponent.id, seed])
+  // nomes no campo seguem a escalação
+  const teamSquad = useMemo(
+    () => effectiveLineup.map((squadIndex) => teamPlayers[squadIndex]?.name ?? `#${squadIndex}`),
+    [effectiveLineup, teamPlayers],
+  )
+  const userIndex = Math.max(0, effectiveLineup.indexOf(USER_SQUAD_INDEX))
+  const opponentSquad = useMemo(
+    () => squadPlayersFor(opponent, careerYear).slice(0, 11).map((player) => player.name),
+    [opponent, careerYear],
+  )
 
-  // estatísticas "de transmissão" do resumo — determinísticas por partida
-  const facts = useMemo(
+  // contadores VIVOS: tudo que aparece no resumo aconteceu no campo
+  const liveStatsRef = useRef(createLiveStats())
+
+  const possessionPct = Math.round(
+    (liveStatsRef.current.possessionTeam /
+      (liveStatsRef.current.possessionTeam + liveStatsRef.current.possessionOpp)) * 100,
+  )
+
+  const bestPlayer = useMemo(
     () =>
-      buildMatchFacts({
+      pickBestPlayer({
         seed,
         teamGoals: match.score.team,
         opponentGoals: match.score.opponent,
@@ -131,7 +215,6 @@ export const MatchScreen = ({
   const tacticRngRef = useRef<RngState>(createRng((seed ^ 0x2545f491) >>> 0))
   const directiveIdRef = useRef(1)
   const nextMicroRef = useRef(MICRO_EVERY_MINUTES)
-  const logEndRef = useRef<HTMLDivElement>(null)
 
   const pushLine = (line: LogLine): void => setLog((current) => [...current, line])
 
@@ -154,20 +237,16 @@ export const MatchScreen = ({
   }
 
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [log])
-
-  useEffect(() => {
-    if (mode !== 'live') return
+    if (mode !== 'live' || isSimConfirmOpen) return
     const interval = setInterval(() => {
       setClock((current) => current + (TICK_MS / 1000) * MINUTES_PER_SECOND * speed)
     }, TICK_MS)
     return () => clearInterval(interval)
-  }, [mode, speed])
+  }, [mode, speed, isSimConfirmOpen])
 
   useEffect(() => {
     if (mode !== 'handoff') return
-    const failSafe = setTimeout(openPendingMoment, 5000)
+    const failSafe = setTimeout(openPendingMoment, 2500)
     return () => clearTimeout(failSafe)
     // openPendingMoment é estável o suficiente para o fail-safe
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -195,7 +274,7 @@ export const MatchScreen = ({
         return
       }
       if (moment.kind === 'teamGoal' || moment.kind === 'opponentGoal') {
-        const roll = rollAutoGoal(moment.kind, tactic, tacticRngRef.current)
+        const roll = rollAutoGoal(moment.kind, tactic, tacticRngRef.current, momentumFor(displayRating(match.rating)))
         tacticRngRef.current = roll.next
         const isOurs = moment.kind === 'teamGoal'
         if (roll.value) {
@@ -219,7 +298,12 @@ export const MatchScreen = ({
     // lance corrido entre os momentos
     if (clock >= nextMicroRef.current) {
       nextMicroRef.current = clock + MICRO_EVERY_MINUTES
-      const goalRoll = rollMicroGoal(tactic, tacticRngRef.current)
+      const goalRoll = rollMicroGoal(
+        tactic,
+        tacticRngRef.current,
+        momentumFor(displayRating(match.rating)),
+        ratingEdgeFor(teamRating, opponentRating),
+      )
       tacticRngRef.current = goalRoll.next
       if (goalRoll.value) {
         const side = goalRoll.value
@@ -240,7 +324,66 @@ export const MatchScreen = ({
     pushLine({ minute: Math.floor(clock), text: TACTIC_LINES.changed[next], tone: 'normal' })
   }
 
+  const simLineFor = (event: AutoPlayEvent): LogLine => {
+    switch (event.kind) {
+      case 'playerShot':
+      case 'playerFreeKick':
+        return {
+          minute: event.minute,
+          text: withName(event.success ? SIM_LINES.shotGoal : SIM_LINES.shotMiss, playerName),
+          tone: event.success ? 'good' : 'bad',
+        }
+      case 'playerPass':
+        return {
+          minute: event.minute,
+          text: withName(event.success ? SIM_LINES.passOk : SIM_LINES.passFail, playerName),
+          tone: event.success ? 'good' : 'bad',
+        }
+      case 'opponentFreeKick':
+        return {
+          minute: event.minute,
+          text: withName(event.success ? SIM_LINES.defenseSave : SIM_LINES.defenseConcede, playerName),
+          tone: event.success ? 'good' : 'bad',
+        }
+      case 'teamGoal':
+        return { minute: event.minute, text: SIM_LINES.planTeamGoal, tone: 'good' }
+      default:
+        return { minute: event.minute, text: SIM_LINES.planOpponentGoal, tone: 'bad' }
+    }
+  }
+
+  /** Simula o resto da partida: lances do jogador viram rolagens pelos atributos. */
+  const simulateRest = (): void => {
+    setSimConfirmOpen(false)
+    if (mode !== 'live') return
+    const result = simulateToEnd(match, config, autoProbsFor(attributes), tacticRngRef.current)
+    tacticRngRef.current = result.next
+    const stats = liveStatsRef.current
+    for (const event of result.value.events) {
+      if (event.kind === 'playerShot' || event.kind === 'playerFreeKick' || event.kind === 'teamGoal') {
+        stats.teamShots += 1
+        stats.teamOnTarget += 1
+      } else if (event.kind === 'opponentFreeKick' || event.kind === 'opponentGoal') {
+        stats.oppShots += 1
+        stats.oppOnTarget += 1
+      }
+    }
+    setLog((current) => [
+      ...current,
+      { minute: Math.floor(clock), text: SIM_LINES.start, tone: 'normal' },
+      ...result.value.events.map(simLineFor),
+    ])
+    setDirective(null)
+    setMatch(result.value.state)
+    setClock(FULLTIME_MINUTE + 1)
+  }
+
   const onShotResolved = (summary: RoundSummary): void => {
+    // seu chute É uma finalização do time (no gol quando não saiu/trave)
+    liveStatsRef.current.teamShots += 1
+    if (summary.lastOutcome === 'goal' || summary.lastOutcome === 'save') {
+      liveStatsRef.current.teamOnTarget += 1
+    }
     const moment = currentMoment(match)
     const isGoal = summary.lastOutcome === 'goal'
     pushLine({
@@ -276,6 +419,9 @@ export const MatchScreen = ({
   }
 
   const onDefenseResolved = (summary: RoundSummary): void => {
+    // a falta deles é uma finalização do adversário, sempre na direção do gol
+    liveStatsRef.current.oppShots += 1
+    liveStatsRef.current.oppOnTarget += 1
     const moment = currentMoment(match)
     const saved = summary.lastOutcome === 'save'
     pushLine({
@@ -300,24 +446,27 @@ export const MatchScreen = ({
   }
 
   const displayMinute = Math.min(90, Math.floor(clock))
-  const lastLines = log.slice(-4)
+  // No desktop, campo/lance à esquerda e comando (placar, stats, narração) à direita.
+  const isLance = mode === 'shot' || mode === 'defense'
 
   return (
-    <div className="match">
+    <div className={`match match-live-layout${isLance ? ' match-in-lance' : ''}`}>
       <div className="match-header">
         <span className="match-team">
-          <span className="club-dot" style={{ background: club.colors.primary }} aria-hidden="true" />
+          <ClubCrest club={club} customUrl={crestUrls[club.id]} size={20} />
           {club.abbr}
+          <em className="match-ovr">{teamRating}</em>
         </span>
         <span className="match-score">{match.score.team} × {match.score.opponent}</span>
         <span className="match-team">
+          <em className="match-ovr">{opponentRating}</em>
           {opponent.abbr}
-          <span className="club-dot" style={{ background: opponent.colors.primary }} aria-hidden="true" />
+          <ClubCrest club={opponent} customUrl={crestUrls[opponent.id]} size={20} />
         </span>
         <span className="match-minute">{displayMinute}&prime;</span>
       </div>
 
-      {mode === 'shot' || mode === 'defense' ? (
+      {isLance ? (
         <ShotStage
           key={`lance-${match.cursor}`}
           shots={1}
@@ -328,12 +477,17 @@ export const MatchScreen = ({
           defense={mode === 'defense' ? { skill: opponent.strength / 5, kitColor: opponent.colors.primary } : undefined}
           attrs={attributes}
           celebrationId={celebrationId}
+          appearance={appearance}
           keeperQuality={keeperQualityFor(competition, opponent.strength)}
           onRoundEnd={mode === 'defense' ? onDefenseResolved : onShotResolved}
         />
       ) : (
         <>
           <LivePitch
+            tactic={tactic}
+            stats={liveStatsRef.current}
+            teamLayout={FORMATIONS[formation].layout}
+            userIndex={userIndex}
             speed={speed}
             teamColor={club.colors.primary}
             opponentColor={opponent.colors.primary}
@@ -367,17 +521,68 @@ export const MatchScreen = ({
                 </button>
               ))}
             </div>
+            <div className="live-group">
+              <button
+                className="live-btn live-btn-sim"
+                onClick={() => setSimConfirmOpen(true)}
+                disabled={mode !== 'live'}
+              >
+                <FastForward size={13} aria-hidden="true" />
+                Simular até o fim
+              </button>
+            </div>
+            <span className="wo-note">
+              <TriangleAlert size={12} aria-hidden="true" />
+              Sair no meio da partida conta derrota por W.O.: 3×0 para o adversário.
+            </span>
           </div>
 
-          <div className="match-log match-log-live" role="log">
-            {lastLines.map((line, index) => (
-              <p key={`${line.minute}-${index}`} className={`log-line log-${line.tone}`}>
-                <span className="log-minute">{line.minute}&prime;</span> {line.text}
-              </p>
-            ))}
-            <div ref={logEndRef} />
-          </div>
         </>
+      )}
+
+      <div className="live-stats" aria-label="Estatísticas ao vivo">
+        <span className="live-stats-team">{club.abbr}</span>
+        <span className="live-stats-cell">
+          <strong>{possessionPct}%</strong> posse <strong>{100 - possessionPct}%</strong>
+        </span>
+        <span className="live-stats-cell">
+          <strong>{liveStatsRef.current.teamShots}</strong>
+          <em>({liveStatsRef.current.teamOnTarget})</em> chutes{' '}
+          <strong>{liveStatsRef.current.oppShots}</strong>
+          <em>({liveStatsRef.current.oppOnTarget})</em>
+        </span>
+        <span className="live-stats-team">{opponent.abbr}</span>
+      </div>
+
+      <div className="match-log match-log-live" role="log">
+        {log
+          .map((line, index) => (
+            <p key={`${line.minute}-${index}`} className={`log-line log-${line.tone}`}>
+              <span className="log-minute">{line.minute}&prime;</span> {line.text}
+            </p>
+          ))
+          .reverse()}
+      </div>
+
+      {isSimConfirmOpen && (
+        <div className="sim-confirm" role="dialog" aria-modal="true" aria-labelledby="sim-confirm-title">
+          <div className="sim-confirm-box">
+            <h3 id="sim-confirm-title">Simular até o fim?</h3>
+            <p>
+              O relógio corre sozinho e os seus lances restantes são resolvidos
+              automaticamente pelos seus atributos.
+            </p>
+            <div className="sim-confirm-actions">
+              <button className="btn btn-secondary" onClick={() => setSimConfirmOpen(false)}>
+                Voltar ao jogo
+              </button>
+              <button className="btn" onClick={simulateRest}>
+                <FastForward size={14} aria-hidden="true" />
+                Simular
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {mode === 'pass' && (
@@ -406,30 +611,25 @@ export const MatchScreen = ({
               <span>{opponent.abbr}</span>
             </div>
             <div className="facts-row">
-              <span>{facts.possessionTeam}%</span>
+              <span>{possessionPct}%</span>
               <span>Posse de bola</span>
-              <span>{100 - facts.possessionTeam}%</span>
+              <span>{100 - possessionPct}%</span>
             </div>
             <div className="facts-row">
-              <span>{facts.shotsTeam}</span>
+              <span>{liveStatsRef.current.teamShots}</span>
               <span>Finalizações</span>
-              <span>{facts.shotsOpponent}</span>
+              <span>{liveStatsRef.current.oppShots}</span>
             </div>
             <div className="facts-row">
-              <span>{facts.onTargetTeam}</span>
+              <span>{liveStatsRef.current.teamOnTarget}</span>
               <span>No gol</span>
-              <span>{facts.onTargetOpponent}</span>
-            </div>
-            <div className="facts-row">
-              <span>{facts.cornersTeam}</span>
-              <span>Escanteios</span>
-              <span>{facts.cornersOpponent}</span>
+              <span>{liveStatsRef.current.oppOnTarget}</span>
             </div>
           </div>
 
-          <div className={`facts-motm${facts.bestPlayerIsUser ? ' facts-motm-user' : ''}`}>
-            ⭐ Craque do jogo: <strong>{facts.bestPlayerName}</strong>
-            {facts.bestPlayerIsUser ? ' — você!' : ''}
+          <div className={`facts-motm${bestPlayer.isUser ? ' facts-motm-user' : ''}`}>
+            <Star size={14} aria-hidden="true" /> Craque do jogo: <strong>{bestPlayer.name}</strong>
+            {bestPlayer.isUser ? ' — você!' : ''}
           </div>
 
           <p className="match-stats">

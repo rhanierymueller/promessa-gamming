@@ -10,9 +10,18 @@ import {
   type TableRow,
 } from './types'
 
-/** Sorteia os 9 adversários da temporada, determinístico pela seed. */
-export const createSeason = (playerClubId: string, seed: number): SeasonState => {
-  const pool = CLUBS.filter((club) => club.id !== playerClubId).map((club) => club.id)
+/**
+ * Monta a temporada da DIVISÃO: os 13 adversários vêm dos clubes da divisão
+ * (ordem embaralhada pela seed → confrontos variam por ano). Sem divisão
+ * informada, sorteia do país inteiro (legado/testes).
+ */
+export const createSeason = (
+  playerClubId: string,
+  seed: number,
+  divisionClubIds?: readonly string[],
+): SeasonState => {
+  const source = divisionClubIds ?? CLUBS.map((club) => club.id)
+  const pool = source.filter((id) => id !== playerClubId)
   let rng = createRng(seed)
   const participants: string[] = [playerClubId]
   while (participants.length < SEASON_TEAMS && pool.length > 0) {
@@ -143,3 +152,21 @@ export const computeTable = (state: SeasonState): readonly TableRow[] =>
 
 export const tablePosition = (state: SeasonState, clubId: string): number =>
   computeTable(state).findIndex((row) => row.clubId === clubId) + 1
+
+
+export type FormResult = 'V' | 'E' | 'D'
+
+/** Últimas `count` partidas do clube (V/E/D), da mais antiga à mais recente. */
+export const recentForm = (
+  state: SeasonState,
+  clubId: string,
+  count: number,
+): readonly FormResult[] =>
+  state.results
+    .filter((result) => result.homeId === clubId || result.awayId === clubId)
+    .slice(-count)
+    .map((result) => {
+      const scored = result.homeId === clubId ? result.homeGoals : result.awayGoals
+      const conceded = result.homeId === clubId ? result.awayGoals : result.homeGoals
+      return scored > conceded ? 'V' : scored === conceded ? 'E' : 'D'
+    })

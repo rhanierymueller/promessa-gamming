@@ -62,9 +62,9 @@ export const trainingPointsForRating = (rating: number): number => {
 const levelFactor = (level: number): number =>
   Math.min(MAX_ATTRIBUTE, Math.max(MIN_ATTRIBUTE, level)) - 1
 
-/** Finalização: chute mais confiável — dispersão cai até ~50% no nível máximo. */
+/** Finalização: chute mais confiável — dispersão cai até ~67% no nível máximo. */
 export const shotTuning = (config: ShotConfig, finalizacao: number): ShotConfig => {
-  const precision = 1 - levelFactor(finalizacao) * 0.055
+  const precision = 1 - levelFactor(finalizacao) * 0.075
   return {
     ...config,
     dispersionX: config.dispersionX * precision,

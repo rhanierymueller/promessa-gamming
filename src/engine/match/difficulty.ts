@@ -4,20 +4,40 @@ const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
 
 /**
- * Ajusta a partida pela diferença de estrelas entre os clubes: enfrentar um
- * grande deixa o adversário mais perigoso e o seu time menos produtivo.
- * (O goleiro nos SEUS lances segue a rampa padrão — evolução na Fase 2.)
+ * A partida é dirigida pelo OVERALL das duas escalações (estilo FIFA): o
+ * favorito cria e sofre menos, mas a zebra continua matematicamente viva —
+ * e os SEUS lances (mini-games) podem virar qualquer jogo.
  */
-export const matchConfigFor = (
+
+/** Diferença de rating que já conta como "abismo" (satura o efeito). */
+const RATING_SPAN = 60
+const TEAM_SWING = 0.45
+const OPPONENT_SWING = 0.5
+const MIN_CHANCE = 0.05
+const MAX_TEAM_CHANCE = 0.85
+const MAX_OPPONENT_CHANCE = 0.9
+/** Vantagem (em edge) que libera um gol a mais no teto do dominante. */
+const EXTRA_GOAL_EDGE = 0.25
+
+/** Vantagem técnica normalizada (−0.5..0.5) — usada também no lance corrido. */
+export const ratingEdgeFor = (myRating: number, opponentRating: number): number =>
+  clamp((myRating - opponentRating) / RATING_SPAN, -0.5, 0.5)
+
+export const matchConfigForRatings = (
   base: MatchConfig,
-  myStars: number,
-  opponentStars: number,
+  myRating: number,
+  opponentRating: number,
 ): MatchConfig => {
-  const delta = opponentStars - myStars
+  const edge = ratingEdgeFor(myRating, opponentRating)
   return {
     ...base,
-    teamGoalChance: clamp(base.teamGoalChance - delta * 0.08, 0.1, 0.75),
-    opponentGoalChance: clamp(base.opponentGoalChance + delta * 0.12, 0.1, 0.9),
-    maxOpponentGoals: delta >= 2 ? base.maxOpponentGoals + 1 : base.maxOpponentGoals,
+    teamGoalChance: clamp(base.teamGoalChance + edge * TEAM_SWING, MIN_CHANCE, MAX_TEAM_CHANCE),
+    opponentGoalChance: clamp(
+      base.opponentGoalChance - edge * OPPONENT_SWING,
+      MIN_CHANCE,
+      MAX_OPPONENT_CHANCE,
+    ),
+    maxTeamGoals: edge >= EXTRA_GOAL_EDGE ? base.maxTeamGoals + 1 : base.maxTeamGoals,
+    maxOpponentGoals: edge <= -EXTRA_GOAL_EDGE ? base.maxOpponentGoals + 1 : base.maxOpponentGoals,
   }
 }

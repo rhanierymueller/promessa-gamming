@@ -1,4 +1,27 @@
 import { useEffect, useRef } from 'react'
+import gramadoUrl from '../assets/backgrounds/gramado.jpg'
+import { fieldName } from '../data/squadNames'
+import type { Tactic } from '../engine/match/tactics'
+
+/** Estatísticas VIVAS da mesa — contadas dos eventos reais da simulação. */
+export interface LivePitchStats {
+  teamShots: number
+  teamOnTarget: number
+  oppShots: number
+  oppOnTarget: number
+  /** Segundos de posse acumulados por lado. */
+  possessionTeam: number
+  possessionOpp: number
+}
+
+export const createLiveStats = (): LivePitchStats => ({
+  teamShots: 0,
+  teamOnTarget: 0,
+  oppShots: 0,
+  oppOnTarget: 0,
+  possessionTeam: 1,
+  possessionOpp: 1,
+})
 
 /**
  * Mesa tática ao vivo v2: simulação de posse pé em pé — passes entre
@@ -22,6 +45,14 @@ interface LivePitchProps {
   /** Nome do SEU craque — destacado em amarelo no ataque. */
   readonly userName: string
   readonly directive: PitchDirective | null
+  /** Instrução tática atual — muda o comportamento do bloco em tempo real. */
+  readonly tactic: Tactic
+  /** Contadores vivos (mutável de propósito: a mesa ACUMULA eventos reais). */
+  readonly stats: LivePitchStats
+  /** Desenho tático do SEU time (11 pontos normalizados); rival usa o padrão. */
+  readonly teamLayout?: readonly { readonly x: number; readonly y: number }[]
+  /** Índice do seu craque no desenho (slot da formação escolhida). */
+  readonly userIndex?: number
   readonly onDirectiveComplete?: (id: number) => void
 }
 
@@ -89,11 +120,19 @@ export const LivePitch = ({
   opponentSquad,
   userName,
   directive,
+  tactic,
+  stats,
+  teamLayout = FORMATION,
+  userIndex = USER_FORMATION_INDEX,
   onDirectiveComplete,
 }: LivePitchProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const speedRef = useRef(speed)
   speedRef.current = speed
+  const tacticRef = useRef(tactic)
+  tacticRef.current = tactic
+  const statsRef = useRef(stats)
+  statsRef.current = stats
   const simRef = useRef<SimState | null>(null)
   const directiveRef = useRef<PitchDirective | null>(directive)
   directiveRef.current = directive
@@ -112,11 +151,11 @@ export const LivePitch = ({
 
     const makePlayers = (): SimPlayer[] => {
       const players: SimPlayer[] = []
-      FORMATION.forEach((base, i) => {
+      teamLayout.forEach((base, i) => {
         players.push({
-          name: i === USER_FORMATION_INDEX ? userName : teamSquad[i] ?? `#${i}`,
+          name: i === userIndex ? userName : teamSquad[i] ?? `#${i}`,
           side: 'team',
-          isUser: i === USER_FORMATION_INDEX,
+          isUser: i === userIndex,
           base: { ...base },
           pos: { ...base },
         })
@@ -165,9 +204,10 @@ export const LivePitch = ({
       sim.phase = 'ballMoving'
     }
 
-    const passTo = (targetIndex: number): void => {
+    const passTo = (targetIndex: number, urgent = false): void => {
       sim.holder = targetIndex
-      startBallFlight({ ...sim.players[targetIndex].pos }, 0.4 + Math.random() * 0.25)
+      const flightTime = urgent ? 0.2 + Math.random() * 0.1 : 0.4 + Math.random() * 0.25
+      startBallFlight({ ...sim.players[targetIndex].pos }, flightTime)
     }
 
     /** Escolhe um companheiro: prefere quem está à frente, a distância sã. */
@@ -197,15 +237,28 @@ export const LivePitch = ({
       return rivals[0].i
     }
 
+    const countShot = (side: 'team' | 'opponent', onTarget: boolean): void => {
+      const s = statsRef.current
+      if (side === 'team') {
+        s.teamShots++
+        if (onTarget) s.teamOnTarget++
+      } else {
+        s.oppShots++
+        if (onTarget) s.oppOnTarget++
+      }
+    }
+
     const shoot = (side: 'team' | 'opponent', forcedGoal: boolean): void => {
       const goalMouth: Vec = { x: attackX(side), y: 0.42 + Math.random() * 0.16 }
       if (forcedGoal) {
         sim.pendingOutcome = 'goal'
+        countShot(side, true)
         startBallFlight(goalMouth, 0.4)
         return
       }
       const outcome = Math.random() < 0.55 ? 'saved' : 'wide'
       sim.pendingOutcome = outcome
+      countShot(side, outcome === 'saved')
       const target: Vec =
         outcome === 'wide'
           ? { x: attackX(side), y: Math.random() < 0.5 ? 0.16 : 0.84 }
@@ -215,7 +268,7 @@ export const LivePitch = ({
 
     /** Índice do protagonista da entrega: você, ou o atacante central deles. */
     const deliveryTarget = (side: 'team' | 'opponent'): number =>
-      side === 'team' ? USER_FORMATION_INDEX : 11 + USER_FORMATION_INDEX
+      side === 'team' ? userIndex : 11 + USER_FORMATION_INDEX
 
     /** Decide a próxima ação do portador. */
     const decide = (): void => {
@@ -238,18 +291,18 @@ export const LivePitch = ({
         if (side === queue.side) {
           const holderPos = holder.pos
           const targetPos = sim.players[target].pos
-          if (dist(holderPos, targetPos) < 0.45) {
-            passTo(target)
+          // urgência: lançamento longo direto se der; senão UMA escala rápida
+          if (dist(holderPos, targetPos) < 0.75) {
+            passTo(target, true)
           } else {
-            // aproxima: companheiro mais perto do protagonista
             const closer = teammatesOf(side)
               .filter((i) => i !== sim.holder)
               .sort((a, b) => dist(sim.players[a].pos, targetPos) - dist(sim.players[b].pos, targetPos))[0]
-            passTo(closer ?? target)
+            passTo(closer ?? target, true)
           }
         } else {
           // a bola está com o outro time: perde para o lado do lance
-          passTo(nearestOpponent(side, holder.pos))
+          passTo(nearestOpponent(side, holder.pos), true)
         }
         return
       }
@@ -276,8 +329,11 @@ export const LivePitch = ({
       }
 
       const inFinalThird = side === 'team' ? holder.pos.x > 0.7 : holder.pos.x < 0.3
+      const shootChance = side === 'team'
+        ? tacticRef.current === 'contra-ataque' ? 0.5 : tacticRef.current === 'recuar' ? 0.28 : 0.4
+        : 0.4
       const roll = Math.random()
-      if (inFinalThird && roll < 0.4) {
+      if (inFinalThird && roll < shootChance) {
         shoot(side, false)
         return
       }
@@ -332,12 +388,23 @@ export const LivePitch = ({
       if (directive && directive.id !== sim.lastDirectiveId) {
         sim.lastDirectiveId = directive.id
         sim.directiveQueue = directive
+        // entrega: corta qualquer "pensamento" em andamento — o lance é agora
+        if (directive.kind === 'deliver' && sim.phase === 'holding') {
+          sim.holdTimer = Math.min(sim.holdTimer, 0.08)
+        }
       }
 
       // movimento coletivo: o bloco com a posse AVANÇA, o outro recua e pressiona
       const clamp01 = (v: number, min: number, max: number): number =>
         Math.min(max, Math.max(min, v))
       const possessSide = sim.players[sim.holder].side
+      // posse REAL: cada segundo com a bola conta
+      if (possessSide === 'team') statsRef.current.possessionTeam += dt
+      else statsRef.current.possessionOpp += dt
+      // tática do SEU time: recuar tranca o bloco; contra-ataque arma o bote
+      const tacticNow = tacticRef.current
+      const teamShift = tacticNow === 'recuar' ? -0.08 : tacticNow === 'contra-ataque' ? -0.04 : 0
+      const teamPushMult = tacticNow === 'contra-ataque' ? 1.6 : tacticNow === 'recuar' ? 0.55 : 1
       let closestChaser = -1
       let closestChaserDist = Infinity
       sim.players.forEach((p, i) => {
@@ -362,7 +429,8 @@ export const LivePitch = ({
         let targetX = p.base.x
         let targetY = p.base.y
         if (hasBall) {
-          const push = (0.08 + ballDepth * 0.32) * (0.4 + aggressiveness * 1.8)
+          const pushMult = p.side === 'team' ? teamPushMult : 1
+          const push = (0.08 + ballDepth * 0.32) * (0.4 + aggressiveness * 1.8) * pushMult
           targetX = p.base.x + push * dir
           // bola no terço final: atacantes invadem a área
           if (ballDepth > 0.62 && aggressiveness > 0.32) {
@@ -375,6 +443,7 @@ export const LivePitch = ({
           targetX = p.base.x - (0.04 + Math.max(0, 0.5 - threat) * 0.18) * dir
           targetY = 0.5 + (p.base.y - 0.5) * 0.85
         }
+        if (p.side === 'team' && !isKeeper) targetX += teamShift
         if (isKeeper) {
           targetX = p.base.x + (hasBall ? 0.03 : 0) * dir
           targetY = p.base.y
@@ -388,11 +457,12 @@ export const LivePitch = ({
         p.pos.x += (targetX - p.pos.x) * rate
         p.pos.y += (targetY - p.pos.y) * rate
 
-        // pressão: o marcador mais próximo persegue a bola (em ritmo humano)
+        // pressão: o marcador mais próximo persegue a bola (em ritmo humano);
+        // goleiros NUNCA são puxados pela bola — ficam na meta
         if (i === closestChaser) {
           p.pos.x += (sim.ball.x - p.pos.x) * 0.6 * dt
           p.pos.y += (sim.ball.y - p.pos.y) * 0.6 * dt
-        } else {
+        } else if (!isKeeper) {
           p.pos.x += (sim.ball.x - p.pos.x) * 0.06 * dt
           p.pos.y += (sim.ball.y - p.pos.y) * 0.06 * dt
         }
@@ -411,7 +481,10 @@ export const LivePitch = ({
           } else {
             sim.ball = { ...sim.players[sim.holder].pos }
             sim.phase = 'holding'
-            sim.holdTimer = 0.35 + Math.random() * 0.4
+            // entrega em andamento: decisões instantâneas até a bola chegar em você
+            sim.holdTimer = sim.directiveQueue?.kind === 'deliver'
+              ? 0.08
+              : 0.35 + Math.random() * 0.4
           }
         }
       } else if (sim.phase === 'holding') {
@@ -424,34 +497,112 @@ export const LivePitch = ({
       }
     }
 
-    const drawPitch = (): void => {
-      const grad = ctx.createLinearGradient(0, 0, 0, H)
-      grad.addColorStop(0, '#2f6132')
-      grad.addColorStop(1, '#27522b')
-      ctx.fillStyle = grad
-      ctx.fillRect(0, 0, W, H)
-      ctx.fillStyle = 'rgba(255,255,255,0.035)'
-      for (let i = 0; i < 8; i++) if (i % 2 === 0) ctx.fillRect((W / 8) * i, 0, W / 8, H)
+    /** Campo completo pré-renderizado (gramado, linhas, gols com rede). */
+    const buildPitchCanvas = (texture: HTMLImageElement | null): HTMLCanvasElement => {
+      const off = document.createElement('canvas')
+      off.width = W * scale
+      off.height = H * scale
+      const c = off.getContext('2d')!
+      c.scale(scale, scale)
 
-      ctx.strokeStyle = 'rgba(245,240,230,0.6)'
-      ctx.lineWidth = 1.2
-      ctx.strokeRect(12, PITCH_TOP, W - 24, PITCH_BOTTOM - PITCH_TOP)
-      ctx.beginPath()
-      ctx.moveTo(W / 2, PITCH_TOP)
-      ctx.lineTo(W / 2, PITCH_BOTTOM)
-      ctx.stroke()
-      ctx.beginPath()
-      ctx.arc(W / 2, (PITCH_TOP + PITCH_BOTTOM) / 2, 26, 0, Math.PI * 2)
-      ctx.stroke()
       const midY = (PITCH_TOP + PITCH_BOTTOM) / 2
-      ctx.strokeRect(12, midY - 48, 42, 96)
-      ctx.strokeRect(W - 12 - 42, midY - 48, 42, 96)
-      ctx.strokeRect(12, midY - 24, 16, 48)
-      ctx.strokeRect(W - 12 - 16, midY - 24, 16, 48)
-      // gols
-      ctx.fillStyle = '#F5F0E6'
-      ctx.fillRect(8, midY - 16, 4, 32)
-      ctx.fillRect(W - 12, midY - 16, 4, 32)
+      if (texture) {
+        // gramado desenhado pelo Rhaniery — linhas do jogo por cima
+        c.drawImage(texture, 0, 0, W, H)
+      } else {
+        const grad = c.createLinearGradient(0, 0, 0, H)
+        grad.addColorStop(0, '#31663a')
+        grad.addColorStop(1, '#26512e')
+        c.fillStyle = grad
+        c.fillRect(0, 0, W, H)
+        c.fillStyle = 'rgba(255,255,255,0.05)'
+        const stripes = 12
+        for (let i = 0; i < stripes; i++) {
+          if (i % 2 === 0) c.fillRect((W / stripes) * i, 0, W / stripes, H)
+        }
+      }
+      // vinheta suave (profundidade)
+      const vig = c.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, W * 0.65)
+      vig.addColorStop(0, 'rgba(0,0,0,0)')
+      vig.addColorStop(1, 'rgba(0,0,0,0.22)')
+      c.fillStyle = vig
+      c.fillRect(0, 0, W, H)
+
+      c.strokeStyle = 'rgba(245,240,230,0.75)'
+      c.lineWidth = 1.2
+      c.strokeRect(12, PITCH_TOP, W - 24, PITCH_BOTTOM - PITCH_TOP)
+      // linha do meio + círculo central + ponto
+      c.beginPath()
+      c.moveTo(W / 2, PITCH_TOP)
+      c.lineTo(W / 2, PITCH_BOTTOM)
+      c.stroke()
+      c.beginPath()
+      c.arc(W / 2, midY, 26, 0, Math.PI * 2)
+      c.stroke()
+      c.beginPath()
+      c.arc(W / 2, midY, 1.6, 0, Math.PI * 2)
+      c.fillStyle = 'rgba(245,240,230,0.75)'
+      c.fill()
+
+      // áreas, marca do pênalti e meia-lua (dos dois lados)
+      for (const side of [0, 1]) {
+        const flip = side === 1
+        const x0 = flip ? W - 12 : 12
+        const dir = flip ? -1 : 1
+        c.strokeRect(Math.min(x0, x0 + 42 * dir), midY - 48, 42, 96)
+        c.strokeRect(Math.min(x0, x0 + 16 * dir), midY - 24, 16, 48)
+        const penX = x0 + 30 * dir
+        c.beginPath()
+        c.arc(penX, midY, 1.4, 0, Math.PI * 2)
+        c.fill()
+        c.beginPath()
+        c.arc(penX, midY, 16, flip ? Math.PI * 0.62 : -Math.PI * 0.38, flip ? Math.PI * 1.38 : Math.PI * 0.38)
+        c.stroke()
+        // arco de escanteio
+        c.beginPath()
+        c.arc(flip ? W - 12 : 12, PITCH_TOP, 4, flip ? Math.PI * 0.5 : 0, flip ? Math.PI : Math.PI * 0.5)
+        c.stroke()
+        c.beginPath()
+        c.arc(flip ? W - 12 : 12, PITCH_BOTTOM, 4, flip ? Math.PI : Math.PI * 1.5, flip ? Math.PI * 1.5 : Math.PI * 2)
+        c.stroke()
+      }
+
+      // gols com rede (atrás da linha de fundo)
+      for (const side of [0, 1]) {
+        const flip = side === 1
+        const gx = flip ? W - 12 : 12 - 6
+        c.fillStyle = 'rgba(20,30,22,0.55)'
+        c.fillRect(gx, midY - 16, 6, 32)
+        c.strokeStyle = 'rgba(245,240,230,0.4)'
+        c.lineWidth = 0.6
+        for (let i = 1; i < 3; i++) {
+          c.beginPath()
+          c.moveTo(gx + i * 2, midY - 16)
+          c.lineTo(gx + i * 2, midY + 16)
+          c.stroke()
+        }
+        for (let j = 1; j < 8; j++) {
+          c.beginPath()
+          c.moveTo(gx, midY - 16 + j * 4)
+          c.lineTo(gx + 6, midY - 16 + j * 4)
+          c.stroke()
+        }
+        // traves
+        c.fillStyle = '#F5F0E6'
+        c.fillRect(flip ? W - 13 : 11, midY - 17, 2, 34)
+      }
+      return off
+    }
+
+    let pitchCanvas = buildPitchCanvas(null)
+    const grassTexture = new Image()
+    grassTexture.onload = () => {
+      pitchCanvas = buildPitchCanvas(grassTexture)
+    }
+    grassTexture.src = gramadoUrl
+
+    const drawPitch = (): void => {
+      ctx.drawImage(pitchCanvas, 0, 0, W, H)
     }
 
     const drawPlayer = (p: SimPlayer, t: number): void => {
@@ -471,36 +622,63 @@ export const LivePitch = ({
         ctx.lineWidth = 1.5
         ctx.stroke()
       }
+      // corpo com volume: gradiente radial (luz vinda de cima-esquerda)
+      const body = ctx.createRadialGradient(pos.x - 1.6, pos.y + wobble - 1.8, 0.8, pos.x, pos.y + wobble, 5.4)
+      body.addColorStop(0, 'rgba(255,255,255,0.85)')
+      body.addColorStop(0.25, color)
+      body.addColorStop(1, color)
       ctx.beginPath()
       ctx.arc(pos.x, pos.y + wobble, 5, 0, Math.PI * 2)
-      ctx.fillStyle = color
+      ctx.fillStyle = body
       ctx.fill()
-      ctx.strokeStyle = 'rgba(0,0,0,0.5)'
-      ctx.lineWidth = 1
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)'
+      ctx.lineWidth = 1.1
+      ctx.stroke()
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)'
+      ctx.lineWidth = 0.6
       ctx.stroke()
       // nome
       ctx.font = p.isUser ? 'bold 7.5px monospace' : '7px monospace'
       ctx.textAlign = 'center'
+      const label = fieldName(p.name)
       ctx.fillStyle = 'rgba(10,14,10,0.85)'
-      ctx.fillText(p.name, pos.x + 0.7, pos.y + 14.7)
+      ctx.fillText(label, pos.x + 0.7, pos.y + 14.7)
       ctx.fillStyle = p.isUser ? USER_COLOR : 'rgba(245,240,230,0.92)'
-      ctx.fillText(p.name, pos.x, pos.y + 14)
+      ctx.fillText(label, pos.x, pos.y + 14)
     }
 
     const drawBall = (): void => {
       const pos = toPitch(sim.ball)
+      // voo em arco: a bola sobe no meio do passe (comprimento dita a altura)
+      let lift = 0
       if (sim.phase === 'ballMoving') {
         const from = toPitch(sim.ballFrom)
+        const to = toPitch(sim.ballTo)
+        const span = Math.min(1, dist(sim.ballFrom, sim.ballTo) / 0.5)
+        lift = Math.sin(sim.ballProgress * Math.PI) * (2 + span * 7)
+        // rastro esmaecendo
+        const trail = ctx.createLinearGradient(from.x, from.y, to.x, to.y)
+        trail.addColorStop(0, 'rgba(255,210,63,0)')
+        trail.addColorStop(1, 'rgba(255,210,63,0.5)')
         ctx.beginPath()
         ctx.moveTo(from.x, from.y)
         ctx.lineTo(pos.x, pos.y)
-        ctx.strokeStyle = 'rgba(255,210,63,0.4)'
+        ctx.strokeStyle = trail
         ctx.lineWidth = 1.5
         ctx.stroke()
       }
+      // sombra no chão (separa a bola do gramado durante o voo)
       ctx.beginPath()
-      ctx.arc(pos.x, pos.y - 2, 3, 0, Math.PI * 2)
-      ctx.fillStyle = '#FFFFFF'
+      ctx.ellipse(pos.x, pos.y + 1.5, 2.6, 1.1, 0, 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(0,0,0,${0.35 - lift * 0.02})`
+      ctx.fill()
+      const ballY = pos.y - 2 - lift
+      const shine = ctx.createRadialGradient(pos.x - 1, ballY - 1, 0.4, pos.x, ballY, 3.4)
+      shine.addColorStop(0, '#FFFFFF')
+      shine.addColorStop(1, '#D8D4C8')
+      ctx.beginPath()
+      ctx.arc(pos.x, ballY, 3, 0, Math.PI * 2)
+      ctx.fillStyle = shine
       ctx.fill()
       ctx.strokeStyle = 'rgba(0,0,0,0.55)'
       ctx.lineWidth = 1

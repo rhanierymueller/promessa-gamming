@@ -7,6 +7,7 @@ import {
   fixturesForRound,
   isSeasonOver,
   playerFixture,
+  recentForm,
   playerOpponentId,
   tablePosition,
 } from './season'
@@ -141,6 +142,56 @@ describe('computeTable', () => {
     expect(isSeasonOver(finished)).toBe(true)
     for (const row of computeTable(finished)) {
       expect(row.played).toBe(SEASON_ROUNDS)
+    }
+  })
+})
+
+describe('recentForm', () => {
+  test('devolve as últimas partidas do clube em V/E/D, da mais antiga à mais recente', () => {
+    // Arrange: joga 7 rodadas
+    const created = createSeason('real-vila', 42)
+    let state = created
+    let rng = createRng(9)
+    for (let round = 0; round < 7; round++) {
+      const advanced = advanceSeason(state, 2, 1, rng)
+      state = advanced.value
+      rng = advanced.next
+    }
+
+    // Act
+    const form = recentForm(state, 'real-vila', 5)
+
+    // Assert: jogador venceu todas de 2x1
+    expect(form).toHaveLength(5)
+    expect(form.every((entry) => entry === 'V')).toBe(true)
+  })
+
+  test('sem jogos, forma vazia; com poucos jogos, devolve o que tem', () => {
+    // Arrange
+    const created = createSeason('real-vila', 42)
+    const one = advanceSeason(created, 0, 3, createRng(9)).value
+
+    // Act & Assert
+    expect(recentForm(created, 'real-vila', 5)).toHaveLength(0)
+    expect(recentForm(one, 'real-vila', 5)).toEqual(['D'])
+    expect(recentForm(one, 'clube-fantasma', 5)).toHaveLength(0)
+  })
+
+  test('todos os participantes têm forma após rodadas jogadas', () => {
+    // Arrange
+    let state = createSeason('real-vila', 7)
+    let rng = createRng(3)
+    for (let round = 0; round < 6; round++) {
+      const advanced = advanceSeason(state, 1, 1, rng)
+      state = advanced.value
+      rng = advanced.next
+    }
+
+    // Act & Assert
+    for (const clubId of state.participants) {
+      const form = recentForm(state, clubId, 5)
+      expect(form.length).toBeGreaterThan(0)
+      for (const entry of form) expect(['V', 'E', 'D']).toContain(entry)
     }
   })
 })
