@@ -9,6 +9,7 @@ import type { Club } from '../data/clubs'
 import { newsFor, type NewsSource } from '../engine/career/news'
 import type { PlayerSave } from '../state/save'
 import { ClubCrest } from './ClubCrest'
+import { NationFlag } from './NationFlag'
 
 /** Central de notícias da Home: carrossel que reage ao que acontece no jogo. */
 
@@ -73,7 +74,11 @@ export const NewsCarousel = ({ save, club }: NewsCarouselProps) => {
             <article key={entry.id} className="news-card">
               <div className="news-media">
                 {entry.source === 'clube' ? (
-                  <ClubCrest club={club} customUrl={save.customClubCrests[club.id]} size={64} />
+                  entry.context === 'selecao' ? (
+                    <NationFlag nationId={save.nationalityId} size={64} title="Bandeira da seleção" />
+                  ) : (
+                    <ClubCrest club={club} customUrl={save.customClubCrests[club.id]} size={64} />
+                  )
                 ) : (
                   portrait && (
                     <img

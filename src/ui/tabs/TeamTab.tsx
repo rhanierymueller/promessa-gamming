@@ -131,7 +131,7 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
       </div>
 
       <div className="card">
-        <span className="card-label">Sua campanha pelo clube</span>
+        <span className="card-label campaign-label">Sua campanha pelo clube</span>
         <div className="stat-grid">
           <div className="stat"><span className="stat-value">{save.career.games}</span><span className="stat-label">jogos</span></div>
           <div className="stat"><span className="stat-value">{wins}</span><span className="stat-label">vitórias</span></div>

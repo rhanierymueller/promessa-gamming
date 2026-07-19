@@ -14,6 +14,8 @@ export type NewsSource = 'reporter' | 'olheiro' | 'agente' | 'comentarista' | 'c
 export interface NewsItem {
   readonly id: string
   readonly source: NewsSource
+  /** Contexto visual da notícia, para clube e seleção não compartilharem escudo/nome. */
+  readonly context: 'clube' | 'selecao'
   /** Chapéu da notícia (quem fala). */
   readonly kicker: string
   readonly headline: string
@@ -36,9 +38,16 @@ const STRIKER_GOALS = 2
 const STREAK = 3
 const ROUT_MARGIN = 3
 
-const item = (id: string, source: NewsSource, headline: string, body: string): NewsItem => ({
+const item = (
+  id: string,
+  source: NewsSource,
+  headline: string,
+  body: string,
+  context: NewsItem['context'] = 'clube',
+): NewsItem => ({
   id,
   source,
+  context,
   kicker: KICKERS[source],
   headline,
   body,
@@ -66,30 +75,47 @@ export const newsFor = (save: PlayerSave): readonly NewsItem[] => {
 
   const last = save.history[save.history.length - 1]
   if (last) {
+    const lastContext = last.competition === 'selecao' ? 'selecao' : 'clube'
+    const lastTeam =
+      lastContext === 'selecao'
+        ? nationById(save.nationalityId)?.name ?? 'Seleção'
+        : team
     const rival = rivalName(save, last.opponentId)
     const score = `${last.teamGoals}×${last.opponentGoals}`
     if (last.teamGoals > last.opponentGoals) {
-      news.push(item('ultimo-vitoria', 'clube', `VITÓRIA! ${team} ${score} ${rival}`,
-        `Três pontos na conta e clima leve no treino. O ${team} segue firme na temporada.`))
+      news.push(item('ultimo-vitoria', 'clube', `VITÓRIA! ${lastTeam} ${score} ${rival}`,
+        lastContext === 'selecao'
+          ? `Vitória do ${lastTeam} e festa no país. A seleção segue firme no torneio.`
+          : `Três pontos na conta e clima leve no treino. O ${lastTeam} segue firme na temporada.`,
+        lastContext))
     } else if (last.teamGoals < last.opponentGoals) {
-      news.push(item('ultimo-derrota', 'reporter', `${rival} vence: ${team} cai por ${score}`,
-        'Resultado ruim, mas campeonato é maratona — a resposta precisa vir já na próxima rodada.'))
+      news.push(item('ultimo-derrota', 'reporter', `${rival} vence: ${lastTeam} cai por ${score}`,
+        lastContext === 'selecao'
+          ? 'Resultado ruim no torneio de seleções — a resposta precisa vir já no próximo jogo.'
+          : 'Resultado ruim, mas campeonato é maratona — a resposta precisa vir já na próxima rodada.',
+        lastContext))
     } else {
-      news.push(item('ultimo-empate', 'reporter', `${team} ${score} ${rival}: sabor de pouco`,
-        'Um ponto que mantém a rodada viva, mas a arquibancada queria mais.'))
+      news.push(item('ultimo-empate', 'reporter', `${lastTeam} ${score} ${rival}: sabor de pouco`,
+        lastContext === 'selecao'
+          ? 'Empate que mantém o torneio aberto, mas a torcida esperava mais da seleção.'
+          : 'Um ponto que mantém a rodada viva, mas a arquibancada queria mais.',
+        lastContext))
     }
 
     if (last.rating >= GREAT_RATING) {
       news.push(item('olheiro-elogio', 'olheiro', `Anotei o nome: ${save.playerName}`,
-        `Nota ${last.rating.toFixed(1)} contra o ${rival}. Decide, aparece e não se esconde. Vale o ingresso.`))
+        `Nota ${last.rating.toFixed(1)} contra o ${rival}. Decide, aparece e não se esconde. Vale o ingresso.`,
+        lastContext))
     }
     if (last.rating <= AWFUL_RATING) {
       news.push(item('comentarista-critica', 'comentarista', `${save.playerName} deve mais`,
-        `Nota ${last.rating.toFixed(1)} não paga o talento que ele tem. Craque joga TODO dia, não quando quer.`))
+        `Nota ${last.rating.toFixed(1)} não paga o talento que ele tem. Craque joga TODO dia, não quando quer.`,
+        lastContext))
     }
     if (last.playerGoals >= STRIKER_GOALS) {
       news.push(item('artilheiro', 'jogador', `${last.playerGoals} gols: noite de artilheiro`,
-        `${save.playerName} resolveu contra o ${rival} e a torcida já grita o nome dele no alambrado.`))
+        `${save.playerName} resolveu contra o ${rival} e a torcida já grita o nome dele no alambrado.`,
+        lastContext))
     }
   } else {
     news.push(item('estreia', 'agente', `A promessa ${save.playerName} chega ao ${team}`,

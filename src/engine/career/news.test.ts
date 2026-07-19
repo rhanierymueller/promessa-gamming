@@ -93,17 +93,25 @@ describe('newsFor', () => {
 })
 
 describe('rival seleção no noticiário', () => {
-  test('jogo contra seleção mostra o nome do país, não ???', () => {
+  test('jogo de seleção mostra os dois países, nunca o clube nem ???', () => {
     // Arrange
-    const save = recordMatch(baseSave(), record({ opponentId: 'nation-argentina', competition: 'selecao' }))
+    const save = recordMatch(baseSave(), record({
+      opponentId: 'nation-argentina',
+      competition: 'selecao',
+      teamGoals: 0,
+      opponentGoals: 1,
+    }))
 
     // Act
     const news = newsFor(save)
 
     // Assert
-    const headline = news.find((item) => item.id === 'ultimo-vitoria')!
+    const headline = news.find((item) => item.id === 'ultimo-derrota')!
+    expect(headline.context).toBe('selecao')
+    expect(headline.headline).toContain('Brasil')
     expect(headline.headline).toContain('Argentina')
     expect(headline.headline).not.toContain('???')
+    expect(headline.headline).not.toContain('Estrela FC')
   })
 })
 
