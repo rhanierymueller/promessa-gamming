@@ -1,4 +1,5 @@
 import { LogOut } from 'lucide-react'
+import { TrophyRoom } from '../TrophyRoom'
 import { useEffect, useRef } from 'react'
 import portraitUrl from '../../assets/sprites/s_portrait.png'
 import portraitFUrl from '../../assets/sprites/f_portrait.png'
@@ -229,6 +230,8 @@ export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout }
           })}
         </div>
       </div>
+
+      <TrophyRoom trophies={save.trophies} />
 
       <button className="btn btn-secondary btn-icon" onClick={onLogout}>
         <LogOut size={15} aria-hidden="true" /> Sair

@@ -1,8 +1,10 @@
-import { CalendarDays, House, Shield, User, Volume2, VolumeX, type LucideIcon } from 'lucide-react'
+import { BadgeDollarSign, CalendarDays, House, Shield, User, Volume2, VolumeX, type LucideIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { clubById, type Club } from '../data/clubs'
 import { nationAsClub, nationById } from '../data/nations'
 import { isCallUpEligible } from '../engine/career/callup'
+import { stadiumTierFor } from '../engine/career/stadium'
+import { divisionOf } from '../engine/pyramid/pyramid'
 import { createRng } from '../engine/rng'
 import { advanceSeason, isSeasonOver, playerOpponentId } from '../engine/season/season'
 import {
@@ -12,6 +14,7 @@ import {
   type TournamentKind,
 } from '../engine/tournament/tournament'
 import { initAudio, setMuted } from '../game/audio'
+import { stadiumBackgroundUrl } from '../game/assets'
 import { submitLeagueMatch } from '../online/leagues'
 import { MatchScreen } from '../game/MatchScreen'
 import { ShotStage } from '../game/ShotStage'
@@ -23,6 +26,7 @@ import {
   persistSave,
   recordMatch,
   startNewSeason,
+  withTournamentState,
   type MatchRecord,
   type PlayerSave,
 } from '../state/save'
@@ -37,11 +41,12 @@ import { AuthGate } from './AuthGate'
 import { CharacterCreate } from './CharacterCreate'
 import { Landing } from './Landing'
 import { HomeTab } from './tabs/HomeTab'
+import { MarketTab } from './tabs/MarketTab'
 import { MatchesTab } from './tabs/MatchesTab'
 import { ProfileTab } from './tabs/ProfileTab'
 import { TeamTab } from './tabs/TeamTab'
 
-type Tab = 'home' | 'matches' | 'team' | 'profile'
+type Tab = 'home' | 'matches' | 'team' | 'market' | 'profile'
 type Screen = 'tabs' | 'match' | 'training' | 'gk-training'
 
 interface MatchSetup {
@@ -74,7 +79,7 @@ const applyMatchOutcome = (
       record.opponentGoals,
       createRng((seed ^ 0x51ed2701) >>> 0),
     )
-    updated = { ...updated, tournament: advanced.value.state }
+    updated = withTournamentState(updated, advanced.value.state)
   }
   return updated
 }
@@ -115,6 +120,7 @@ const TAB_ITEMS: readonly { id: Tab; icon: LucideIcon; label: string }[] = [
   { id: 'home', icon: House, label: 'Início' },
   { id: 'matches', icon: CalendarDays, label: 'Liga' },
   { id: 'team', icon: Shield, label: 'Time' },
+  { id: 'market', icon: BadgeDollarSign, label: 'Mercado' },
   { id: 'profile', icon: User, label: 'Perfil' },
 ]
 
@@ -223,9 +229,10 @@ export const App = () => {
     setTab('home')
   }
 
-  // convocação: só a forma na LIGA desta temporada conta, e só na janela de dezembro
+  // convocação: forma na LIGA + vitrine — olheiro da seleção só olha Séries B e A
   const callUpAvailable = Boolean(
     save &&
+      divisionOf(save.divisions, save.clubId) <= 1 &&
       !save.tournamentPlayed &&
       isSeasonOver(save.season) &&
       isCallUpEligible(
@@ -297,7 +304,14 @@ export const App = () => {
           playerPosition={save.playerPosition}
           careerYear={save.careerYear}
           playerNames={save.customPlayerNames}
+          stadiumUrl={stadiumBackgroundUrl(
+            stadiumTierFor(
+              matchSetup.kind === 'torneio' ? null : divisionOf(save.divisions, save.clubId),
+              matchSetup.kind === 'torneio' ? 'selecao' : 'liga',
+            ),
+          )}
           lineup={matchSetup.kind === 'liga' ? save.lineup : undefined}
+          signings={matchSetup.kind === 'liga' ? save.signings : undefined}
           onExit={onMatchFinished}
         />
         <footer className="footer">PROMESSA · em desenvolvimento</footer>
@@ -365,6 +379,7 @@ export const App = () => {
       )}
       {tab === 'matches' && <MatchesTab save={save} />}
       {tab === 'team' && <TeamTab save={save} club={club} onSaveChange={updateSave} />}
+      {tab === 'market' && <MarketTab save={save} onSaveChange={updateSave} />}
       {tab === 'profile' && (
         <ProfileTab
           save={save}

@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'vitest'
 import { clubById } from '../data/clubs'
+import { marketPoolFor } from '../engine/market/market'
+import { createRng } from '../engine/rng'
+import { advanceSeason } from '../engine/season/season'
+import { createTournament } from '../engine/tournament/tournament'
 import { userSlotIndex } from '../engine/squad/formation'
 import { USER_SQUAD_INDEX } from '../engine/squad/players'
 import { divisionOf } from '../engine/pyramid/pyramid'
@@ -10,6 +14,8 @@ import {
   HISTORY_LIMIT,
   setClubColors,
   setPlayerName,
+  signPlayer,
+  withTournamentState,
   CELEBRATION_COUNT,
   clubDisplayName,
   createSave,
@@ -278,6 +284,106 @@ describe('formação e escalação — só do meu time', () => {
   })
 })
 
+describe('verba e contratações (transfermarket)', () => {
+  const base = createSave({ playerName: 'Craque', teamName: 'Mercado FC', nationalityId: 'brasil' }, fixedRoll())!
+  const listed = marketPoolFor(base.season.seed, base.careerYear)[0]
+
+  test('carreira nova na Série D começa com R$ 500 mil', () => {
+    expect(base.budget).toBe(500_000)
+  })
+
+  test('contratar desconta a verba e grava a contratação', () => {
+    // Arrange: verba suficiente
+    const rich = { ...base, budget: 200_000_000 }
+
+    // Act
+    const after = signPlayer(rich, listed)
+
+    // Assert
+    expect(after.budget).toBe(200_000_000 - listed.price)
+    expect(after.signings).toHaveLength(1)
+    expect(after.signings[0].id).toBe(listed.id)
+    expect(after.signings[0].boughtYear).toBe(base.careerYear)
+  })
+
+  test('sem verba não contrata; duplicado não contrata', () => {
+    // Arrange
+    const poor = { ...base, budget: 100 }
+    const rich = signPlayer({ ...base, budget: 200_000_000 }, listed)
+
+    // Act & Assert
+    expect(signPlayer(poor, listed)).toBe(poor)
+    expect(signPlayer(rich, listed)).toBe(rich)
+  })
+
+  test('virada de temporada ACUMULA: sobra + cota da nova divisão', () => {
+    // Act
+    const renewed = startNewSeason({ ...base, budget: 300_000 }, fixedRoll(0.9))
+
+    // Assert: o que sobrou não some
+    const division = divisionOf(renewed.divisions, renewed.clubId)
+    const allowance = [20_000_000, 12_000_000, 800_000, 500_000][division]
+    expect(renewed.budget).toBe(300_000 + allowance)
+  })
+
+  test('CAMPEÃO da Série D: prêmio de 500 mil + taça na estante', () => {
+    // Arrange: vence as 13 rodadas
+    let champion = { ...base, budget: 0 }
+    let rng = createRng(5)
+    for (let round = 0; round < 13; round++) {
+      const advanced = advanceSeason(champion.season, 5, 0, rng)
+      champion = { ...champion, season: advanced.value }
+      rng = advanced.next
+    }
+
+    // Act
+    const renewed = startNewSeason(champion, fixedRoll(0.9))
+
+    // Assert: subiu para a C → 0 + prêmio 500 mil + cota 800 mil
+    expect(renewed.budget).toBe(1_300_000)
+    expect(renewed.trophies).toContainEqual({ kind: 'serie-d', year: champion.careerYear })
+  })
+
+  test('título de torneio de seleção dá TAÇA mas não dinheiro (e não duplica)', () => {
+    // Arrange
+    const tournament = createTournament('copa-america', 'brasil', 9)
+    const champion = { ...tournament, stage: 'champion' as const }
+
+    // Act
+    const once = withTournamentState(base, champion)
+    const twice = withTournamentState(once, champion)
+
+    // Assert
+    expect(once.budget).toBe(base.budget)
+    expect(once.trophies).toContainEqual({ kind: 'copa-america', year: base.careerYear })
+    expect(twice.trophies).toHaveLength(once.trophies.length)
+  })
+
+  test('troféus sobrevivem ao parse; lixo é descartado', () => {
+    // Arrange
+    const decorated = { ...base, trophies: [{ kind: 'serie-a', year: 3 }] }
+    const raw = JSON.stringify(decorated)
+    const broken = JSON.stringify({ ...decorated, trophies: [{ kind: 'bola-de-ouro', year: 'ontem' }] })
+
+    // Act & Assert
+    expect(parseSave(raw)!.trophies).toEqual([{ kind: 'serie-a', year: 3 }])
+    expect(parseSave(broken)!.trophies).toHaveLength(0)
+  })
+
+  test('contratações sobrevivem ao parse; verba inválida volta ao padrão', () => {
+    // Arrange
+    const rich = signPlayer({ ...base, budget: 200_000_000 }, listed)
+    const raw = JSON.stringify(rich)
+    const broken = JSON.stringify({ ...rich, budget: 'muito', signings: [{ id: 1 }] })
+
+    // Act & Assert
+    expect(parseSave(raw)!.signings).toHaveLength(1)
+    expect(parseSave(raw)!.budget).toBe(rich.budget)
+    expect(parseSave(broken)!.signings).toHaveLength(0)
+    expect(parseSave(broken)!.budget).toBe(500_000)
+  })
+})
+
 describe('cores personalizadas do clube — locais ao save', () => {
   const base = createSave({ playerName: 'Craque', clubId: 'real-vila', nationalityId: 'brasil' }, fixedRoll())!
 
@@ -336,6 +442,14 @@ describe('renomear jogadores do MEU time — uma vez só, local ao save', () => 
     // Act & Assert
     expect(setPlayerName(once, 'real-vila-3', 'Outro Nome')).toBe(once)
     expect(once.customPlayerNames['real-vila-3']).toBe('Zé Craque')
+  })
+
+  test('reforço contratado (id de mercado) pode ser batizado — é do MEU time', () => {
+    // Act
+    const renamed = setPlayerName(base, 'mkt-lenda-1', 'Ronaldo')
+
+    // Assert
+    expect(renamed.customPlayerNames['mkt-lenda-1']).toBe('Ronaldo')
   })
 
   test('não renomeia jogador de outro clube, o próprio craque, nem aceita nome vazio', () => {

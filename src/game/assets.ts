@@ -40,6 +40,8 @@ import fceleb2Url from '../assets/sprites/fceleb_2.png'
 import fceleb3Url from '../assets/sprites/fceleb_3.png'
 import wallJumpUrl from '../assets/sprites/wall_jump.png'
 import wallStandUrl from '../assets/sprites/wall_stand.png'
+import estadioGrandeUrl from '../assets/backgrounds/estadio-grande.jpg'
+import estadioMedioUrl from '../assets/backgrounds/estadio-medio.jpg'
 import varzeaUrl from '../assets/backgrounds/varzea.jpg'
 
 export type KeeperPose =
@@ -182,3 +184,19 @@ export const tintSprite = (holder: SpriteHolder, color: string): SpriteHolder | 
 }
 
 export const BACKGROUND_URL = varzeaUrl
+
+/**
+ * Cenário do palco por nível de estádio. O PEQUENO ainda usa a várzea como
+ * fallback (prompt 1e pronto em Prompts de Imagem no vault).
+ */
+export const stadiumBackgroundUrl = (tier: 'varzea' | 'pequeno' | 'medio' | 'grande'): string => {
+  switch (tier) {
+    case 'grande':
+      return estadioGrandeUrl
+    case 'medio':
+      return estadioMedioUrl
+    case 'pequeno':
+    default:
+      return varzeaUrl
+  }
+}

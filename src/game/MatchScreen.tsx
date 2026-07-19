@@ -19,6 +19,7 @@ import {
 } from '../data/narration'
 import { simulateToEnd, type AutoPlayEvent, type AutoPlayProbs } from '../engine/match/autoplay'
 import { FORMATIONS, type FormationId, type PlayerFieldPosition } from '../engine/squad/formation'
+import { squadWithSignings, type Signing } from '../engine/market/market'
 import { lineupRating, squadPlayersFor, userAsSquadPlayer, USER_SQUAD_INDEX } from '../engine/squad/players'
 import { createRng, type RngState } from '../engine/rng'
 import { DEFAULT_MATCH_CONFIG } from '../engine/match/config'
@@ -98,6 +99,10 @@ interface MatchScreenProps {
   readonly careerYear?: number
   /** Batismos locais dos SEUS jogadores (playerId → nome). */
   readonly playerNames?: Readonly<Record<string, string>>
+  /** Cenário dos lances — o palco cresce com a divisão. */
+  readonly stadiumUrl?: string
+  /** Reforços contratados (só nos jogos do SEU clube). */
+  readonly signings?: readonly Signing[]
   readonly onExit: (record: MatchRecord) => void
 }
 
@@ -132,11 +137,13 @@ export const MatchScreen = ({
   lineup,
   careerYear = 1,
   playerNames = {},
+  stadiumUrl,
+  signings = [],
   onExit,
 }: MatchScreenProps) => {
   // elenco com o SEU craque dentro — a força do time muda com a escalação
   const teamPlayers = useMemo(() => {
-    const squad = squadPlayersFor(club, careerYear)
+    const squad = squadWithSignings(squadPlayersFor(club, careerYear), signings, careerYear)
     return squad.map((player, index) =>
       index === USER_SQUAD_INDEX
         ? userAsSquadPlayer(player, playerName, attributes, playerPosition)
@@ -144,7 +151,7 @@ export const MatchScreen = ({
           ? { ...player, name: playerNames[player.id] }
           : player,
     )
-  }, [club, careerYear, playerName, attributes, playerPosition, playerNames])
+  }, [club, careerYear, playerName, attributes, playerPosition, playerNames, signings])
 
   const effectiveLineup = useMemo(
     () => lineup ?? Array.from({ length: 11 }, (_, index) => index),
@@ -455,11 +462,9 @@ export const MatchScreen = ({
         <span className="match-team">
           <ClubCrest club={club} customUrl={crestUrls[club.id]} size={20} />
           {club.abbr}
-          <em className="match-ovr">{teamRating}</em>
         </span>
         <span className="match-score">{match.score.team} × {match.score.opponent}</span>
         <span className="match-team">
-          <em className="match-ovr">{opponentRating}</em>
           {opponent.abbr}
           <ClubCrest club={opponent} customUrl={crestUrls[opponent.id]} size={20} />
         </span>
@@ -469,6 +474,7 @@ export const MatchScreen = ({
       {isLance ? (
         <ShotStage
           key={`lance-${match.cursor}`}
+          backgroundUrl={stadiumUrl}
           shots={1}
           autoStart
           hideEndOverlay
@@ -543,6 +549,9 @@ export const MatchScreen = ({
       <div className="live-stats" aria-label="Estatísticas ao vivo">
         <span className="live-stats-team">{club.abbr}</span>
         <span className="live-stats-cell">
+          <strong>{teamRating}</strong> força <strong>{opponentRating}</strong>
+        </span>
+        <span className="live-stats-cell">
           <strong>{possessionPct}%</strong> posse <strong>{100 - possessionPct}%</strong>
         </span>
         <span className="live-stats-cell">
@@ -596,8 +605,28 @@ export const MatchScreen = ({
 
       {mode === 'summary' && (
         <div className="match-summary">
-          <h2>Fim de jogo</h2>
-          <div className="match-final">{club.name} {match.score.team} × {match.score.opponent} {opponent.name}</div>
+          <div className="summary-content">
+          <div className="summary-header">
+            <h2>Fim de jogo</h2>
+            <button className="btn summary-continue" onClick={finishMatch}>Continuar ▸</button>
+          </div>
+
+          <div className="summary-scoreline">
+            <span className="summary-side">
+              <ClubCrest club={club} customUrl={crestUrls[club.id]} size={44} />
+              <span className="summary-team">{club.abbr}</span>
+            </span>
+            <span className="summary-score">
+              {match.score.team}
+              <em>×</em>
+              {match.score.opponent}
+            </span>
+            <span className="summary-side">
+              <ClubCrest club={opponent} customUrl={crestUrls[opponent.id]} size={44} />
+              <span className="summary-team">{opponent.abbr}</span>
+            </span>
+          </div>
+
           <div className="match-rating">
             <span className="match-rating-value">{displayRating(match.rating).toFixed(1)}</span>
             <span className="match-rating-label">sua nota</span>
@@ -609,6 +638,11 @@ export const MatchScreen = ({
               <span>{club.abbr}</span>
               <span />
               <span>{opponent.abbr}</span>
+            </div>
+            <div className="facts-row">
+              <span>{match.score.team}</span>
+              <span>Gols</span>
+              <span>{match.score.opponent}</span>
             </div>
             <div className="facts-row">
               <span>{possessionPct}%</span>
@@ -625,6 +659,24 @@ export const MatchScreen = ({
               <span>No gol</span>
               <span>{liveStatsRef.current.oppOnTarget}</span>
             </div>
+            <div className="facts-row">
+              <span>
+                {liveStatsRef.current.teamShots > 0
+                  ? Math.round((liveStatsRef.current.teamOnTarget / liveStatsRef.current.teamShots) * 100)
+                  : 0}%
+              </span>
+              <span>Pontaria</span>
+              <span>
+                {liveStatsRef.current.oppShots > 0
+                  ? Math.round((liveStatsRef.current.oppOnTarget / liveStatsRef.current.oppShots) * 100)
+                  : 0}%
+              </span>
+            </div>
+            <div className="facts-row">
+              <span>{Math.max(0, liveStatsRef.current.oppOnTarget - match.score.opponent)}</span>
+              <span>Defesas</span>
+              <span>{Math.max(0, liveStatsRef.current.teamOnTarget - match.score.team)}</span>
+            </div>
           </div>
 
           <div className={`facts-motm${bestPlayer.isUser ? ' facts-motm-user' : ''}`}>
@@ -632,17 +684,27 @@ export const MatchScreen = ({
             {bestPlayer.isUser ? ' — você!' : ''}
           </div>
 
-          <p className="match-stats">
-            {match.stats.goals} gol(s) em {match.stats.shots} finalizações
-            {match.stats.golacos > 0 ? ` · ${match.stats.golacos} golaço(s)` : ''}
-            {' · '}{match.stats.passesCompleted}/{match.stats.passes} passes certos
-          </p>
+          <div className="summary-you">
+            <span className="card-label">Seu jogo</span>
+            <div className="stat-grid summary-you-grid">
+              <div className="stat"><span className="stat-value">{match.stats.goals}</span><span className="stat-label">gols</span></div>
+              <div className="stat"><span className="stat-value">{match.stats.shots}</span><span className="stat-label">finalizações</span></div>
+              <div className="stat"><span className="stat-value">{match.stats.passesCompleted}/{match.stats.passes}</span><span className="stat-label">passes certos</span></div>
+              <div className="stat">
+                <span className="stat-value">
+                  {match.stats.golacos > 0 ? match.stats.golacos : displayRating(match.rating).toFixed(1)}
+                </span>
+                <span className="stat-label">{match.stats.golacos > 0 ? 'golaços' : 'nota'}</span>
+              </div>
+            </div>
+          </div>
+
           {trainingPointsForRating(displayRating(match.rating)) > 0 && (
             <p className="match-training">
               +{trainingPointsForRating(displayRating(match.rating))} pontos de treino
             </p>
           )}
-          <button className="btn" onClick={finishMatch}>Continuar ▸</button>
+          </div>
         </div>
       )}
     </div>

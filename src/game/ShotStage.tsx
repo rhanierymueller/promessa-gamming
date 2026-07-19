@@ -30,6 +30,8 @@ export interface RoundSummary {
 }
 
 interface ShotStageProps {
+  /** Cenário do palco — muda com a divisão (várzea → estádio). */
+  readonly backgroundUrl?: string
   /** Quantos chutes na rodada (treino: 10; lance de partida: 1). */
   readonly shots?: number
   /** Pula a tela de introdução e já começa pronto para chutar. */
@@ -80,6 +82,7 @@ export const ShotStage = ({
   wallColor,
   defense,
   attrs = DEFAULT_ATTRIBUTES,
+  backgroundUrl = BACKGROUND_URL,
   celebrationId = 0,
   keeperQuality = TRAINING_KEEPER_QUALITY,
   appearance = DEFAULT_APPEARANCE,
@@ -261,7 +264,7 @@ export const ShotStage = ({
 
   return (
     <div className="stage">
-      <img className="stage-bg" src={BACKGROUND_URL} alt="" />
+      <img className="stage-bg" src={backgroundUrl} alt="" />
       <canvas
         ref={canvasRef}
         aria-label="Mini-game de chute ao gol"

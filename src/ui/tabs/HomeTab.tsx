@@ -1,4 +1,4 @@
-import { Play, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { PartyPopper, Play, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
 import type { Club } from '../../data/clubs'
 import { nationById } from '../../data/nations'
 import { DIVISION_NAMES, divisionOf } from '../../engine/pyramid/pyramid'
@@ -9,16 +9,16 @@ import {
   tournamentKindForYear,
   type TournamentKind,
 } from '../../engine/tournament/tournament'
-import { FORMATIONS } from '../../engine/squad/formation'
-import {
-  lineupRating,
-  squadPlayersFor,
-  userAsSquadPlayer,
-  USER_SQUAD_INDEX,
-} from '../../engine/squad/players'
+import { useState } from 'react'
+import trophySerieA from '../../assets/trophies/serie-a.png'
+import trophySerieB from '../../assets/trophies/serie-b.png'
+import trophySerieC from '../../assets/trophies/serie-c.png'
+import trophySerieD from '../../assets/trophies/serie-d.png'
+import { titlePrizeFor, formatMoney } from '../../engine/market/market'
+import { myTeamRating, opponentTeamRating } from '../../engine/squad/myTeam'
 import type { PlayerSave } from '../../state/save'
 import { ClubCrest } from '../ClubCrest'
-import { Stars } from '../Stars'
+import { NewsCarousel } from '../NewsCarousel'
 
 interface HomeTabProps {
   readonly save: PlayerSave
@@ -43,22 +43,6 @@ const STAGE_LABEL: Record<string, string> = {
   final: 'FINAL',
 }
 
-/** Força da SUA escalação (com você dentro) — igual à conta da partida. */
-const myTeamRating = (save: PlayerSave, club: Club): number => {
-  const squad = squadPlayersFor(club, save.careerYear).map((player, index) =>
-    index === USER_SQUAD_INDEX
-      ? userAsSquadPlayer(player, save.playerName, save.attributes, save.playerPosition)
-      : player,
-  )
-  return lineupRating(
-    save.lineup.map((squadIndex) => squad[squadIndex]),
-    FORMATIONS[save.formation].slots,
-  )
-}
-
-const opponentTeamRating = (club: Club, careerYear: number): number =>
-  lineupRating(squadPlayersFor(club, careerYear).slice(0, 11), FORMATIONS['4-3-3'].slots)
-
 export const HomeTab = ({
   save,
   club,
@@ -73,6 +57,7 @@ export const HomeTab = ({
   onTraining,
   onGkTraining,
 }: HomeTabProps) => {
+  const [isCelebrating, setCelebrating] = useState(false)
   const seasonOver = isSeasonOver(save.season)
   const position = tablePosition(save.season, save.clubId)
   const divisionName = DIVISION_NAMES[divisionOf(save.divisions, save.clubId)] ?? 'Liga'
@@ -169,11 +154,18 @@ export const HomeTab = ({
           <p className="season-final">
             {position === 1 ? 'CAMPEÃO! Que campanha histórica!' : `Vocês terminaram em ${ordinal(position)}.`}
           </p>
-          {!callUpAvailable && !tournament && (
-            <p className="muted callup-text">A seleção não te chamou desta vez — jogue mais e melhor.</p>
-          )}
-          {(!tournament || tournamentDone) && !callUpAvailable && (
-            <button className="btn" onClick={onNewSeason}>Começar ano {save.careerYear + 1} ▸</button>
+          {tournament && !tournamentDone ? (
+            <p className="muted callup-text">Termine a copa de seleções para virar o ano.</p>
+          ) : callUpAvailable ? null : (
+            <button
+              className="btn btn-icon"
+              onClick={() => {
+                if (position === 1) setCelebrating(true)
+                else onNewSeason()
+              }}
+            >
+              <Play size={15} aria-hidden="true" /> Encerrar temporada e começar o ano {save.careerYear + 1}
+            </button>
           )}
         </div>
       ) : (
@@ -182,20 +174,34 @@ export const HomeTab = ({
             <span className="card-label">Rodada {save.season.currentRound + 1} · próximo jogo</span>
             <div className="next-match-clubs">
               <span className="next-club">
-                <ClubCrest club={club} customUrl={save.customClubCrests[club.id]} size={22} />
+                <ClubCrest club={club} customUrl={save.customClubCrests[club.id]} size={30} />
                 {club.name}
-                <em className="match-ovr">{myTeamRating(save, club)}</em>
               </span>
               <span className="next-vs">×</span>
               <span className="next-club">
-                <em className="match-ovr">{opponentTeamRating(nextOpponent, save.careerYear)}</em>
                 {nextOpponent.name}
-                <ClubCrest club={nextOpponent} customUrl={save.customClubCrests[nextOpponent.id]} size={22} />
+                <ClubCrest club={nextOpponent} customUrl={save.customClubCrests[nextOpponent.id]} size={30} />
               </span>
             </div>
-            <p className="next-meta">
-              {nextOpponent.city} · <Stars strength={nextOpponent.strength} />
-            </p>
+            <p className="next-meta">{nextOpponent.city}</p>
+            <div className="power-compare" aria-label="Força dos elencos">
+              <span className="power-label">Força dos elencos (overall médio dos 11)</span>
+              <div className="power-row">
+                <span className="power-value">{myTeamRating(save, club)}</span>
+                <div className="power-bar">
+                  <div
+                    className="power-fill"
+                    style={{
+                      width: `${Math.round(
+                        (myTeamRating(save, club) /
+                          (myTeamRating(save, club) + opponentTeamRating(nextOpponent, save.careerYear))) * 100,
+                      )}%`,
+                    }}
+                  />
+                </div>
+                <span className="power-value power-value-opp">{opponentTeamRating(nextOpponent, save.careerYear)}</span>
+              </div>
+            </div>
             <button className="btn btn-icon" onClick={onPlayMatch}><Play size={15} aria-hidden="true" /> Jogar partida</button>
           </div>
         )
@@ -205,6 +211,37 @@ export const HomeTab = ({
         <button className="btn btn-secondary" onClick={onTraining}>Treino de finalização</button>
         <button className="btn btn-secondary" onClick={onGkTraining}>Treino de goleiro</button>
       </div>
+
+      <NewsCarousel save={save} club={club} />
+
+      {isCelebrating && (
+        <div className="champion-overlay" role="dialog" aria-modal="true" aria-label="Campeão da temporada">
+          <div className="champion-box">
+            <PartyPopper size={26} aria-hidden="true" className="champion-pop" />
+            <h2 className="champion-title">
+              CAMPEÃO DA {DIVISION_NAMES[divisionOf(save.divisions, save.clubId)].toUpperCase()}!
+            </h2>
+            <img
+              className="champion-trophy"
+              src={[trophySerieA, trophySerieB, trophySerieC, trophySerieD][divisionOf(save.divisions, save.clubId)]}
+              alt="Troféu da divisão"
+            />
+            <p className="champion-team">{club.name} · ano {save.careerYear}</p>
+            <p className="champion-prize">
+              Prêmio: <strong>{formatMoney(titlePrizeFor(divisionOf(save.divisions, save.clubId)))}</strong> + taça na estante
+            </p>
+            <button
+              className="btn"
+              onClick={() => {
+                setCelebrating(false)
+                onNewSeason()
+              }}
+            >
+              Levantar a taça e começar o ano {save.careerYear + 1} ▸
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

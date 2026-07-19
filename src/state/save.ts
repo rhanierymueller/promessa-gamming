@@ -17,10 +17,11 @@ import {
   type Divisions,
 } from '../engine/pyramid/pyramid'
 import { FORMATION_IDS, userSlotIndex, type FormationId, type PlayerFieldPosition } from '../engine/squad/formation'
+import { allowanceFor, titlePrizeFor, type MarketPlayer, type Signing } from '../engine/market/market'
 import { USER_PLAYER_ID, USER_SQUAD_INDEX } from '../engine/squad/players'
-import { computeTable, createSeason } from '../engine/season/season'
+import { computeTable, createSeason, isSeasonOver } from '../engine/season/season'
 import { createRng } from '../engine/rng'
-import type { TournamentState } from '../engine/tournament/tournament'
+import type { TournamentKind, TournamentState } from '../engine/tournament/tournament'
 import { SEASON_TEAMS, type SeasonState } from '../engine/season/types'
 
 /**
@@ -28,7 +29,7 @@ import { SEASON_TEAMS, type SeasonState } from '../engine/season/types'
  * (nacionalidade padrão Brasil + temporada nova).
  */
 
-export const SAVE_VERSION = 15
+export const SAVE_VERSION = 17
 const SAVE_KEY = 'promessa.save'
 export const MAX_PLAYER_NAME = 16
 const DEFAULT_SHIRT_NUMBER = 10
@@ -155,7 +156,22 @@ export interface PlayerSave {
   readonly customPlayerNames: Readonly<Record<string, string>>
   /** Cores LOCAIS dos clubes (clubId → {primary, secondary}). */
   readonly customClubColors: Readonly<Record<string, ClubColors>>
+  /** Verba de transferências da temporada (renova pela divisão). */
+  readonly budget: number
+  /** Reforços contratados no mercado. */
+  readonly signings: readonly Signing[]
+  /** Sala de troféus: títulos conquistados com o ano. */
+  readonly trophies: readonly Trophy[]
 }
+
+export type TrophyKind = 'serie-a' | 'serie-b' | 'serie-c' | 'serie-d' | TournamentKind
+
+export interface Trophy {
+  readonly kind: TrophyKind
+  readonly year: number
+}
+
+const DIVISION_TROPHIES: readonly TrophyKind[] = ['serie-a', 'serie-b', 'serie-c', 'serie-d']
 
 export interface ClubColors {
   readonly primary: string
@@ -262,6 +278,9 @@ export const createSave = (
     career: EMPTY_CAREER,
     customPlayerNames: {},
     customClubColors: {},
+    budget: allowanceFor(divisionOf(divisions, clubId)),
+    signings: [],
+    trophies: [],
   }
 }
 
@@ -352,11 +371,43 @@ export const MAX_SQUAD_PLAYER_NAME = 20
  */
 export const setPlayerName = (save: PlayerSave, playerId: string, rawName: string): PlayerSave => {
   if (playerId === USER_PLAYER_ID) return save
-  if (!playerId.startsWith(`${save.clubId}-`)) return save
+  // vale para o elenco do MEU clube e para reforços contratados no mercado
+  if (!playerId.startsWith(`${save.clubId}-`) && !playerId.startsWith('mkt-')) return save
   if (save.customPlayerNames[playerId] !== undefined) return save
   const name = rawName.trim().slice(0, MAX_SQUAD_PLAYER_NAME)
   if (name.length === 0) return save
   return { ...save, customPlayerNames: { ...save.customPlayerNames, [playerId]: name } }
+}
+
+/** Aplica o estado do torneio; título de seleção dá TAÇA (sem dinheiro). */
+export const withTournamentState = (save: PlayerSave, state: TournamentState): PlayerSave => {
+  const becameChampion = state.stage === 'champion' && save.tournament?.stage !== 'champion'
+  return {
+    ...save,
+    tournament: state,
+    trophies: becameChampion
+      ? [...save.trophies, { kind: state.kind, year: save.careerYear }]
+      : save.trophies,
+  }
+}
+
+/** Contrata um jogador do mercado: desconta a verba e grava o reforço. */
+export const signPlayer = (save: PlayerSave, player: MarketPlayer): PlayerSave => {
+  if (player.price > save.budget) return save
+  if (save.signings.some((signing) => signing.id === player.id)) return save
+  const signing: Signing = {
+    id: player.id,
+    name: player.name,
+    position: player.position,
+    altPositions: player.altPositions,
+    nationality: player.nationality,
+    baseAge: player.baseAge,
+    boughtYear: save.careerYear,
+    potential: player.potential,
+    peakAttrs: player.peakAttrs,
+    price: player.price,
+  }
+  return { ...save, budget: save.budget - player.price, signings: [...save.signings, signing] }
 }
 
 /** Nome de exibição de um jogador do elenco, com o batismo local aplicado. */
@@ -404,6 +455,46 @@ export const setClubColors = (
     customClubColors: { ...save.customClubColors, [clubId]: { primary, secondary } },
   }
 }
+
+const normalizeBudget = (value: unknown, divisions: Divisions, clubId: string): number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.round(value)
+    : allowanceFor(divisionOf(divisions, clubId))
+
+const VALID_POSITIONS = ['GOL', 'LD', 'ZAG', 'LE', 'VOL', 'MEI', 'PON', 'ATA']
+
+const isValidSigning = (value: unknown): value is Signing => {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Record<string, unknown>
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    VALID_POSITIONS.includes(candidate.position as string) &&
+    typeof candidate.baseAge === 'number' &&
+    typeof candidate.boughtYear === 'number' &&
+    typeof candidate.price === 'number' &&
+    typeof candidate.peakAttrs === 'object' &&
+    candidate.peakAttrs !== null
+  )
+}
+
+const normalizeSignings = (value: unknown): readonly Signing[] =>
+  Array.isArray(value) ? value.filter(isValidSigning) : []
+
+const VALID_TROPHIES: readonly string[] = [
+  'serie-a', 'serie-b', 'serie-c', 'serie-d', 'copa-america', 'liga-nacoes', 'copa-mundo',
+]
+
+const normalizeTrophies = (value: unknown): readonly Trophy[] =>
+  Array.isArray(value)
+    ? value.filter(
+        (entry): entry is Trophy =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          VALID_TROPHIES.includes((entry as Trophy).kind) &&
+          typeof (entry as Trophy).year === 'number',
+      )
+    : []
 
 const normalizeClubColors = (value: unknown): Readonly<Record<string, ClubColors>> => {
   if (typeof value !== 'object' || value === null) return {}
@@ -573,6 +664,8 @@ export const applyTournament = (save: PlayerSave, tournament: TournamentState | 
 export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random): PlayerSave => {
   const playerDivision = divisionOf(save.divisions, save.clubId)
   const finalOrder = computeTable(save.season).map((row) => row.clubId)
+  // título da divisão: prêmio em dinheiro + taça na estante
+  const isChampion = isSeasonOver(save.season) && finalOrder[0] === save.clubId
   const shiftSeed = seasonSeed(roll)
   const shift = applyPromotionRelegation(
     save.divisions,
@@ -591,6 +684,10 @@ export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random)
     divisions: shift.value.divisions,
     divisionMovement: shift.value.movement,
     season: createSeason(save.clubId, seasonSeed(roll), shift.value.divisions[nextDivision]),
+    budget: save.budget + allowanceFor(nextDivision) + (isChampion ? titlePrizeFor(playerDivision) : 0),
+    trophies: isChampion
+      ? [...save.trophies, { kind: DIVISION_TROPHIES[playerDivision], year: save.careerYear }]
+      : save.trophies,
   }
 }
 
@@ -752,6 +849,9 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
     career: normalizeCareer(candidate.career, normalizeHistory(candidate.history)),
     customPlayerNames: normalizePlayerNames(candidate.customPlayerNames),
     customClubColors: normalizeClubColors(candidate.customClubColors),
+    budget: normalizeBudget(candidate.budget, divisions, candidate.clubId),
+    signings: normalizeSignings(candidate.signings),
+    trophies: normalizeTrophies(candidate.trophies),
   }
   return setShirtNumber(base, base.shirtNumber)
 }
@@ -775,6 +875,8 @@ export const parseSave = (raw: string | null): PlayerSave | null => {
       candidate.version === 12 ||
       candidate.version === 13 ||
       candidate.version === 14 ||
+      candidate.version === 15 ||
+      candidate.version === 16 ||
       candidate.version === SAVE_VERSION
     ) {
       return parseCurrent(candidate)

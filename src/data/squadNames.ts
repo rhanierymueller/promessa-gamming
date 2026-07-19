@@ -3,7 +3,7 @@
  * mesma partida = mesmos nomes). Mistura "Nome Sobrenome" com apelidos de
  * boleiro clássicos, como em qualquer elenco brasileiro de verdade.
  */
-const FIRST_NAMES: readonly string[] = [
+export const FIRST_NAMES: readonly string[] = [
   'Rafael', 'Diego', 'Matheus', 'Lucas', 'Gabriel', 'Vitor', 'Caio', 'Thiago',
   'Bruno', 'Felipe', 'André', 'Éverton', 'Wesley', 'Renan', 'Igor', 'Jean',
   'Douglas', 'Alan', 'Márcio', 'Paulo', 'Pedro', 'João', 'Luiz', 'Carlos',
@@ -12,7 +12,7 @@ const FIRST_NAMES: readonly string[] = [
   'Édson', 'Nilton', 'Valdir', 'Gilmar', 'Adriano',
 ]
 
-const SURNAMES: readonly string[] = [
+export const SURNAMES: readonly string[] = [
   'Silva', 'Santos', 'Oliveira', 'Souza', 'Costa', 'Pereira', 'Almeida',
   'Nascimento', 'Lima', 'Araújo', 'Ribeiro', 'Carvalho', 'Gomes', 'Martins',
   'Rocha', 'Barbosa', 'Freitas', 'Moreira', 'Cardoso', 'Teixeira', 'Correia',

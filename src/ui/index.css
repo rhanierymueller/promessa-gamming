@@ -645,9 +645,9 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 16px;
   flex-wrap: wrap;
 }
 
@@ -1741,6 +1741,7 @@ h1 {
   .tab-panel > .training-row,
   .tab-panel > .next-match,
   .tab-panel > .callup-card,
+  .tab-panel > .news-center,
   .tab-panel > .card-wide {
     grid-column: 1 / -1;
   }
@@ -1749,6 +1750,64 @@ h1 {
   .tab-panel > .btn-danger {
     grid-column: 1 / -1;
     justify-self: center;
+  }
+
+  /* Home com presença: próximo jogo, treinos e notícia maiores */
+  .tab-panel > .next-match {
+    padding: 34px 40px;
+    gap: 20px;
+  }
+
+  .tab-panel > .next-match .card-label {
+    font-size: 13px;
+  }
+
+  .next-match-clubs {
+    font-size: 26px;
+    gap: 16px;
+  }
+
+  .next-match .club-crest {
+    width: 42px;
+    height: auto;
+  }
+
+  .next-match .match-ovr {
+    font-size: 14px;
+    padding: 3px 8px;
+  }
+
+  .next-meta {
+    font-size: 15px;
+  }
+
+  .next-match .btn {
+    font-size: 17px;
+    padding: 18px 26px;
+  }
+
+  .training-row .btn {
+    padding: 22px 24px;
+    font-size: 16px;
+  }
+
+  .news-card {
+    min-height: 168px;
+    padding: 28px 32px;
+  }
+
+  .news-headline {
+    font-size: 21px;
+  }
+
+  .news-body {
+    font-size: 14px;
+  }
+
+  .news-media,
+  .news-portrait {
+    width: 92px;
+    height: 92px;
   }
 
   /* editor de clubes: lista em duas colunas */
@@ -2626,4 +2685,548 @@ h1 {
 .club-color-input::-webkit-color-swatch {
   border: none;
   border-radius: 4px;
+}
+
+/* ---------- central de notícias ---------- */
+
+.news-center {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.news-track {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.news-track::-webkit-scrollbar {
+  display: none;
+}
+
+.news-card {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  background: linear-gradient(135deg, rgba(255, 210, 63, 0.07), rgba(30, 23, 49, 0.9));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 22px;
+  min-height: 130px;
+}
+
+.news-media {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+}
+
+.news-portrait {
+  width: 76px;
+  height: 76px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  object-fit: cover;
+}
+
+.news-portrait-pixel {
+  image-rendering: pixelated;
+  object-fit: contain;
+  background: var(--bg);
+}
+
+.news-text {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.news-kicker {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.news-headline {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.news-body {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.news-dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.news-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: var(--line);
+  cursor: pointer;
+  padding: 0;
+}
+
+.news-dot-active {
+  background: var(--accent);
+}
+
+/* ---------- transfermarket ---------- */
+
+.market-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.market-budget {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--accent);
+}
+
+.market-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.market-filters .squad-select {
+  max-width: none;
+  width: 100%;
+}
+
+.market-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.market-row {
+  font-family: var(--mono);
+  display: grid;
+  grid-template-columns: 34px 22px 1fr 64px 132px 92px auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.market-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.market-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.market-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.market-price {
+  text-align: right;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.market-buy {
+  padding: 8px 14px;
+  font-size: 11px;
+}
+
+.market-buy:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* estrelas de overall */
+.ovr-stars {
+  position: relative;
+  display: inline-flex;
+  color: var(--muted);
+  line-height: 0;
+}
+
+.ovr-stars-row {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.ovr-stars-fill {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .market-row {
+    grid-template-columns: 30px 20px 1fr 64px auto;
+  }
+  .market-row .market-stars,
+  .market-row .squad-age {
+    display: none;
+  }
+}
+
+/* paginação do mercado */
+.market-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.market-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+}
+
+.market-page-info {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ---------- sala de troféus ---------- */
+
+.trophy-room {
+  width: 100%;
+  min-width: 0;
+}
+
+.trophy-shelf {
+  justify-items: center;
+}
+
+.trophy-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 14px;
+}
+
+.trophy-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(20, 16, 31, 0.6));
+  text-align: center;
+}
+
+.trophy-img {
+  height: 72px;
+  width: auto;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 5px 12px rgba(0, 0, 0, 0.55));
+}
+
+.trophy-serie-a .trophy-img { filter: drop-shadow(0 0 14px rgba(255, 210, 63, 0.5)); }
+.trophy-copa-mundo .trophy-img { filter: drop-shadow(0 0 16px rgba(255, 242, 176, 0.6)); }
+
+.trophy-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.trophy-year {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+/* reforço contratado: acha na hora */
+.squad-row-signing {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.signing-tag {
+  margin-left: 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid rgba(255, 210, 63, 0.5);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.market-hired-note {
+  margin: 0;
+  color: #7acc6e;
+  font-size: 12.5px;
+  background: rgba(122, 204, 110, 0.1);
+  border: 1px solid rgba(122, 204, 110, 0.35);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.market-row-history {
+  cursor: default;
+}
+
+.market-row-history:hover {
+  background: none;
+}
+
+.team-strength {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.team-rating {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ---------- resumo v2: placar em destaque ---------- */
+
+.summary-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 560px);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.summary-scoreline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(16px, 4vw, 34px);
+  width: 100%;
+}
+
+.summary-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 74px;
+}
+
+.summary-team {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+
+.summary-score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: clamp(42px, 7vw, 58px);
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+}
+
+.summary-score em {
+  font-style: normal;
+  font-size: 0.45em;
+  color: var(--muted);
+}
+
+.summary-you {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.summary-you-grid {
+  width: 100%;
+}
+
+.facts-table {
+  width: 100%;
+}
+
+@media (min-width: 1024px) {
+  .summary-content {
+    width: min(100%, 640px);
+    gap: 14px;
+  }
+
+  .match-summary h2 {
+    font-size: 24px;
+  }
+}
+
+/* força dos elencos com legenda (sem números soltos) */
+.power-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(100%, 420px);
+  margin: 0 auto;
+}
+
+.power-label {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+
+.power-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.power-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 26px;
+  text-align: center;
+}
+
+.power-value-opp {
+  color: var(--muted);
+}
+
+.power-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(156, 147, 179, 0.3);
+  overflow: hidden;
+}
+
+.power-fill {
+  height: 100%;
+  border-radius: 999px 0 0 999px;
+  background: linear-gradient(90deg, var(--accent), #e8762c);
+}
+
+.summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+}
+
+.summary-header h2 {
+  margin: 0;
+}
+
+.summary-continue {
+  padding: 10px 20px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* ---------- celebração de campeão ---------- */
+
+.champion-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: radial-gradient(60% 50% at 50% 40%, rgba(255, 210, 63, 0.14), rgba(16, 12, 26, 0.96));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.champion-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  background: var(--card);
+  border: 1px solid rgba(255, 210, 63, 0.5);
+  border-radius: 18px;
+  padding: 34px 30px;
+  width: min(100%, 460px);
+  text-align: center;
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(255, 210, 63, 0.15);
+}
+
+.champion-pop {
+  color: var(--accent);
+}
+
+.champion-title {
+  margin: 0;
+  font-size: clamp(20px, 4vw, 28px);
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+.champion-trophy {
+  height: 150px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 26px rgba(255, 210, 63, 0.5));
+  animation: hint-bob 2.6s ease-in-out infinite;
+}
+
+.champion-team {
+  margin: 0;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.champion-prize {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
 }

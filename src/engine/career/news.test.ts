@@ -1,0 +1,126 @@
+import { describe, expect, test } from 'vitest'
+import { createRng } from '../rng'
+import { advanceSeason } from '../season/season'
+import { createSave, recordMatch, type MatchRecord, type PlayerSave } from '../../state/save'
+import { newsFor } from './news'
+
+const fixedRoll = (value = 0.4): (() => number) => () => value
+
+const baseSave = (): PlayerSave =>
+  createSave({ playerName: 'Craque', teamName: 'Estrela FC', nationalityId: 'brasil' }, fixedRoll())!
+
+const record = (partial: Partial<MatchRecord>): MatchRecord => ({
+  opponentId: 'mare-rubra',
+  teamGoals: 2,
+  opponentGoals: 1,
+  rating: 7,
+  playerGoals: 1,
+  playedAt: 1,
+  competition: 'liga',
+  ...partial,
+})
+
+/** Joga uma rodada da liga para a tabela existir. */
+const playRound = (save: PlayerSave, our: number, their: number): PlayerSave => {
+  const advanced = advanceSeason(save.season, our, their, createRng(7))
+  return { ...recordMatch(save, record({ teamGoals: our, opponentGoals: their })), season: advanced.value }
+}
+
+describe('newsFor', () => {
+  test('sem jogos ainda, a manchete é a estreia da promessa', () => {
+    // Act
+    const news = newsFor(baseSave())
+
+    // Assert
+    expect(news.length).toBeGreaterThan(0)
+    expect(news.some((item) => item.id === 'estreia')).toBe(true)
+  })
+
+  test('vitória com show individual rende manchete do clube, do olheiro e de artilheiro', () => {
+    // Arrange
+    const save = recordMatch(baseSave(), record({ teamGoals: 3, opponentGoals: 0, rating: 9.1, playerGoals: 2 }))
+
+    // Act
+    const news = newsFor(save)
+    const ids = news.map((item) => item.id)
+
+    // Assert
+    expect(ids).toContain('ultimo-vitoria')
+    expect(ids).toContain('olheiro-elogio')
+    expect(ids).toContain('artilheiro')
+  })
+
+  test('derrota com nota vergonhosa rende manchete de derrota e crítica do comentarista', () => {
+    // Arrange
+    const save = recordMatch(baseSave(), record({ teamGoals: 0, opponentGoals: 3, rating: 4.2, playerGoals: 0 }))
+
+    // Act
+    const ids = newsFor(save).map((item) => item.id)
+
+    // Assert
+    expect(ids).toContain('ultimo-derrota')
+    expect(ids).toContain('comentarista-critica')
+  })
+
+  test('líder da divisão vira manchete', () => {
+    // Arrange: vence rodadas para liderar
+    let save = baseSave()
+    for (let i = 0; i < 3; i++) save = playRound(save, 4, 0)
+
+    // Act
+    const ids = newsFor(save).map((item) => item.id)
+
+    // Assert
+    expect(ids).toContain('lider')
+    expect(ids).toContain('embalo')
+  })
+
+  test('acesso conquistado abre o noticiário; tudo é determinístico', () => {
+    // Arrange
+    const save = { ...baseSave(), divisionMovement: 'up' as const }
+
+    // Act
+    const news = newsFor(save)
+
+    // Assert
+    expect(news[0].id).toBe('acesso')
+    expect(newsFor(save)).toEqual(news)
+    for (const item of news) {
+      expect(item.headline.length).toBeGreaterThan(0)
+      expect(item.body.length).toBeGreaterThan(0)
+    }
+  })
+})
+
+describe('rival seleção no noticiário', () => {
+  test('jogo contra seleção mostra o nome do país, não ???', () => {
+    // Arrange
+    const save = recordMatch(baseSave(), record({ opponentId: 'nation-argentina', competition: 'selecao' }))
+
+    // Act
+    const news = newsFor(save)
+
+    // Assert
+    const headline = news.find((item) => item.id === 'ultimo-vitoria')!
+    expect(headline.headline).toContain('Argentina')
+    expect(headline.headline).not.toContain('???')
+  })
+})
+
+describe('notícias da liga inteira', () => {
+  test('a rodada dos OUTROS clubes vira manchete; máximo de 5 notícias', () => {
+    // Arrange: três rodadas jogadas
+    let save = baseSave()
+    for (let i = 0; i < 3; i++) save = playRound(save, 1, 2)
+
+    // Act
+    const news = newsFor(save)
+    const ids = news.map((item) => item.id)
+
+    // Assert
+    expect(news.length).toBeLessThanOrEqual(5)
+    expect(ids).toContain('rodada-destaque')
+    // perdendo todas, o líder é outro clube — e vira notícia
+    expect(ids).toContain('lider-rival')
+  })
+})

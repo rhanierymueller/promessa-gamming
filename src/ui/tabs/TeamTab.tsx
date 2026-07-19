@@ -13,12 +13,13 @@ import {
   USER_SQUAD_INDEX,
   type SquadPlayer,
 } from '../../engine/squad/players'
+import { squadWithSignings } from '../../engine/market/market'
+import { myTeamRating } from '../../engine/squad/myTeam'
 import { FORMATION_IDS, FORMATIONS } from '../../engine/squad/formation'
 import {
   clubDisplayName,
   displayClub,
   MAX_CLUB_NAME,
-  MAX_SQUAD_PLAYER_NAME,
   renameClub,
   setClubColors,
   setClubCrest,
@@ -29,7 +30,9 @@ import {
 } from '../../state/save'
 import { ClubCrest, fileToCrestDataUrl } from '../ClubCrest'
 import { FormationBoard } from '../FormationBoard'
-import { Stars } from '../Stars'
+import { TrophyRoom } from '../TrophyRoom'
+import { OverallStars } from '../OverallStars'
+import { ovrClass, PlayerCardModal } from '../PlayerCard'
 
 interface TeamTabProps {
   readonly save: PlayerSave
@@ -42,99 +45,7 @@ const averageRating = (save: PlayerSave): string => {
   return (save.career.ratingSum / save.career.games).toFixed(1)
 }
 
-type TeamSection = 'clube' | 'elenco' | 'editor'
-
-const ovrClass = (overall: number): string =>
-  overall >= 75 ? 'ovr-high' : overall >= 62 ? 'ovr-mid' : 'ovr-low'
-
-const ATTR_LABELS: readonly { readonly key: keyof SquadPlayer['attrs']; readonly label: string }[] = [
-  { key: 'pac', label: 'Ritmo' },
-  { key: 'fin', label: 'Finalização' },
-  { key: 'pas', label: 'Passe' },
-  { key: 'dri', label: 'Drible' },
-  { key: 'def', label: 'Defesa' },
-  { key: 'fis', label: 'Físico' },
-]
-
-interface PlayerCardModalProps {
-  readonly player: SquadPlayer
-  readonly clubName: string
-  readonly isUser: boolean
-  /** null = não pode batizar; 'livre' = pode UMA vez; 'usado' = já batizou. */
-  readonly renameState: 'livre' | 'usado' | null
-  readonly onRename: (name: string) => void
-  readonly onClose: () => void
-}
-
-/** Card de jogador estilo FIFA: overall grande, posição e as seis barras. */
-const PlayerCardModal = ({ player, clubName, isUser, renameState, onRename, onClose }: PlayerCardModalProps) => {
-  const [draft, setDraft] = useState('')
-  return (
-  <div className="player-modal" role="dialog" aria-modal="true" aria-label={`Carta de ${player.name}`} onClick={onClose}>
-    <div className="player-card" onClick={(event) => event.stopPropagation()}>
-      <button className="banner-close player-card-close" onClick={onClose} aria-label="Fechar carta">
-        <X size={16} />
-      </button>
-      <div className="player-card-top">
-        <div className="player-card-ovr">
-          <span className={`player-ovr ${ovrClass(player.overall)}`}>{player.overall}</span>
-          <span className="player-pos">{player.position}</span>
-        </div>
-        <div className="player-card-id">
-          <h3 className="player-card-name">{player.name}{isUser ? ' (você)' : ''}</h3>
-          <p className="muted player-card-meta">
-            {clubName} · camisa {player.shirt} · {player.age} anos
-            {player.altPositions.length > 0 && (
-              <> · também joga: {player.altPositions.join(', ')}</>
-            )}
-          </p>
-          {player.age < 27 && (
-            <p className={`player-potential potential-${player.potential}`}>
-              potencial {player.potential === 'medio' ? 'médio' : player.potential}
-            </p>
-          )}
-        </div>
-      </div>
-      <div className="player-attr-list">
-        {ATTR_LABELS.map(({ key, label }) => (
-          <div key={key} className="player-attr-row">
-            <span className="player-attr-label">{label}</span>
-            <div className="player-attr-bar">
-              <div
-                className={`player-attr-fill ${ovrClass(player.attrs[key])}`}
-                style={{ width: `${Math.min(100, player.attrs[key])}%` }}
-              />
-            </div>
-            <span className="player-attr-value">{player.attrs[key]}</span>
-          </div>
-        ))}
-      </div>
-      {renameState === 'livre' && (
-        <div className="player-rename">
-          <input
-            className="create-input player-rename-input"
-            type="text"
-            maxLength={MAX_SQUAD_PLAYER_NAME}
-            placeholder="Batizar jogador (vale UMA vez)"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-          />
-          <button
-            className="btn btn-secondary player-rename-btn"
-            disabled={draft.trim().length === 0}
-            onClick={() => onRename(draft)}
-          >
-            Batizar
-          </button>
-        </div>
-      )}
-      {renameState === 'usado' && (
-        <p className="muted player-rename-note">Nome já editado — cada jogador só pode ser batizado uma vez.</p>
-      )}
-    </div>
-  </div>
-  )
-}
+type TeamSection = 'clube' | 'elenco' | 'trofeus' | 'editor'
 
 export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
   const wins = save.career.wins
@@ -142,6 +53,7 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
   const [section, setSection] = useState<TeamSection>('clube')
   const [crestError, setCrestError] = useState<string | null>(null)
   const [squadClubId, setSquadClubId] = useState(save.clubId)
+  const [squadDivision, setSquadDivision] = useState<'all' | number>('all')
   const [selectedPlayer, setSelectedPlayer] = useState<SquadPlayer | null>(null)
   // modo troca: slot do titular saindo (só no MEU time)
   const [swapSlot, setSwapSlot] = useState<number | null>(null)
@@ -150,8 +62,9 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
   const squadClub = displayClub(save, squadClubBase)
   const isMyClub = squadClub.id === save.clubId
   const squad = useMemo(() => {
-    const base = squadPlayersFor(squadClub, save.careerYear)
-    if (squadClub.id !== save.clubId) return base
+    const generated = squadPlayersFor(squadClub, save.careerYear)
+    if (squadClub.id !== save.clubId) return generated
+    const base = squadWithSignings(generated, save.signings, save.careerYear)
     // o SEU craque entra com atributos reais; os demais ganham o batismo local
     return base.map((player, index) =>
       index === USER_SQUAD_INDEX
@@ -163,7 +76,18 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
           ? { ...player, name: save.customPlayerNames[player.id] }
           : player,
     )
-  }, [squadClub, save.careerYear, save.clubId, save.playerName, save.attributes, save.shirtNumber, save.playerPosition, save.customPlayerNames])
+  }, [squadClub, save.careerYear, save.clubId, save.playerName, save.attributes, save.shirtNumber, save.playerPosition, save.customPlayerNames, save.signings])
+
+  // a etiqueta REFORÇO só vale na temporada da chegada
+  const newSigningIds = useMemo(
+    () =>
+      new Set(
+        save.signings
+          .filter((signing) => signing.boughtYear === save.careerYear)
+          .map((signing) => signing.id),
+      ),
+    [save.signings, save.careerYear],
+  )
 
   const formation = isMyClub ? FORMATIONS[save.formation] : FORMATIONS['4-3-3']
   const starters = isMyClub ? save.lineup : squad.slice(0, 11).map((_, index) => index)
@@ -174,7 +98,7 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
   return (
     <div className="tab-panel">
       <div className="subtabs" role="tablist" aria-label="Seções do time">
-        {([['clube', 'Meu clube'], ['elenco', 'Elenco'], ['editor', 'Editor de clubes']] as const).map(([id, label]) => (
+        {([['clube', 'Meu clube'], ['elenco', 'Elenco'], ['trofeus', 'Troféus'], ['editor', 'Editor de clubes']] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -197,7 +121,10 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
         </div>
         <h2 className="team-name">{club.name}</h2>
         <p className="muted">“{club.nickname}” · {club.city}</p>
-        <p className="team-strength"><Stars strength={club.strength} /></p>
+        <p className="team-strength">
+          <OverallStars overall={myTeamRating(save, club)} size={15} />
+          <span className="team-rating">força {myTeamRating(save, club)}</span>
+        </p>
         {save.season.currentRound > 0 && (
           <p className="muted">{tablePosition(save.season, save.clubId)}º na {DIVISION_NAMES[divisionOf(save.divisions, save.clubId)]}</p>
         )}
@@ -225,6 +152,25 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
             </strong>
           </span>
           <span className="squad-club-pick">
+            <select
+              className="squad-select squad-division-select"
+              value={String(squadDivision)}
+              aria-label="Filtrar clubes por divisão"
+              onChange={(event) => {
+                const value = event.target.value
+                const division = value === 'all' ? 'all' : Number(value)
+                setSwapSlot(null)
+                setSquadDivision(division)
+                if (division !== 'all' && divisionOf(save.divisions, squadClubId) !== division) {
+                  setSquadClubId(save.divisions[division][0])
+                }
+              }}
+            >
+              <option value="all">Todas as divisões</option>
+              {DIVISION_NAMES.map((name, division) => (
+                <option key={name} value={division}>{name}</option>
+              ))}
+            </select>
             <ClubCrest club={squadClub} customUrl={save.customClubCrests[squadClub.id]} size={20} />
             <select
               className="squad-select"
@@ -235,10 +181,14 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
                 setSquadClubId(event.target.value)
               }}
             >
-              {CLUBS.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {clubDisplayName(save, entry.id)}
-                </option>
+              {(squadDivision === 'all' ? [0, 1, 2, 3] : [squadDivision]).map((division) => (
+                <optgroup key={division} label={DIVISION_NAMES[division]}>
+                  {save.divisions[division].map((clubId) => (
+                    <option key={clubId} value={clubId}>
+                      {clubDisplayName(save, clubId)}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </span>
@@ -287,13 +237,14 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
             const player = squad[squadIndex]
             if (!player) return null
             const isUser = isMyClub && squadIndex === USER_SQUAD_INDEX
+            const isSigning = newSigningIds.has(player.id)
             const slotPosition = isMyClub ? formation.slots[slot] : player.position
             const fit = positionFit(player, slotPosition)
             const effective = overallAt(player, slotPosition)
             return (
               <div
                 key={player.id}
-                className={`squad-row${isUser ? ' squad-row-user' : ''}${swapSlot === slot ? ' squad-row-swapping' : ''}`}
+                className={`squad-row${isUser ? ' squad-row-user' : ''}${isSigning ? ' squad-row-signing' : ''}${swapSlot === slot ? ' squad-row-swapping' : ''}`}
                 role="button"
                 tabIndex={0}
                 onClick={() => setSelectedPlayer(player)}
@@ -305,6 +256,7 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
                 </span>
                 <span className="squad-name">
                   {player.name}{isUser ? ' — você' : ''}
+                  {isSigning && <span className="signing-tag">reforço</span>}
                   {fit === 'improvisado' && (
                     <span className="pos-wrong-tag" title={`Fora de posição (é ${player.position})`}>
                       fora de posição
@@ -335,10 +287,11 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
             const player = squad[squadIndex]
             if (!player) return null
             const isTarget = isMyClub && swapSlot !== null
+            const isSigning = newSigningIds.has(player.id)
             return (
               <div
                 key={player.id}
-                className={`squad-row${benchRow === 0 ? ' squad-row-bench' : ''}${isTarget ? ' squad-row-target' : ''}`}
+                className={`squad-row${benchRow === 0 ? ' squad-row-bench' : ''}${isSigning ? ' squad-row-signing' : ''}${isTarget ? ' squad-row-target' : ''}`}
                 role="button"
                 tabIndex={0}
                 onClick={() => {
@@ -353,7 +306,10 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
               >
                 <span className="squad-shirt">{player.shirt}</span>
                 <span className="squad-pos">{player.position}</span>
-                <span className="squad-name">{player.name}</span>
+                <span className="squad-name">
+                  {player.name}
+                  {isSigning && <span className="signing-tag">reforço</span>}
+                </span>
                 <span className="squad-age">{player.age} anos</span>
                 <span className={`squad-ovr ${ovrClass(player.overall)}`}>{player.overall}</span>
               </div>
@@ -368,6 +324,8 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
         </p>
       </div>
       )}
+
+      {section === 'trofeus' && <TrophyRoom trophies={save.trophies} />}
 
       {section === 'editor' && (
       <div className="card card-wide">
