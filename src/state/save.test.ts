@@ -344,6 +344,31 @@ describe('verba e contratações (transfermarket)', () => {
     expect(renewed.trophies).toContainEqual({ kind: 'serie-d', year: champion.careerYear })
   })
 
+  test('BICAMPEÃO acumula uma taça por título, cada uma com o seu ano', () => {
+    // Arrange: já tem duas Séries A na estante, de anos diferentes
+    let champion = {
+      ...base,
+      trophies: [
+        { kind: 'serie-a' as const, year: 3 },
+        { kind: 'serie-a' as const, year: 5 },
+      ],
+    }
+    let rng = createRng(5)
+    for (let round = 0; round < 13; round++) {
+      const advanced = advanceSeason(champion.season, 5, 0, rng)
+      champion = { ...champion, season: advanced.value }
+      rng = advanced.next
+    }
+
+    // Act
+    const renewed = startNewSeason(champion, fixedRoll(0.9))
+
+    // Assert: nada é sobrescrito — 3 taças, anos preservados
+    expect(renewed.trophies).toHaveLength(3)
+    expect(renewed.trophies.filter((t) => t.kind === 'serie-a')).toHaveLength(2)
+    expect(renewed.trophies).toContainEqual({ kind: 'serie-d', year: champion.careerYear })
+  })
+
   test('título de torneio de seleção dá TAÇA mas não dinheiro (e não duplica)', () => {
     // Arrange
     const tournament = createTournament('copa-america', 'brasil', 9)
@@ -421,6 +446,20 @@ describe('cores personalizadas do clube — locais ao save', () => {
     // Assert
     expect(parsed!.customClubColors['real-vila']).toEqual({ primary: '#112233', secondary: '#445566' })
     expect(parsed!.customClubColors['pampa']).toBeUndefined()
+  })
+})
+
+describe('filtro de nomes ofensivos nas entradas do save', () => {
+  const base = createSave({ playerName: 'Craque', teamName: 'Limpo FC', nationalityId: 'brasil' }, fixedRoll())!
+
+  test('createSave recusa nome de craque ou de time ofensivo', () => {
+    expect(createSave({ playerName: 'Merda FC', teamName: 'Time' }, fixedRoll())).toBeNull()
+    expect(createSave({ playerName: 'Craque', teamName: 'B0STA CITY' }, fixedRoll())).toBeNull()
+  })
+
+  test('renameClub e setPlayerName ignoram nomes ofensivos', () => {
+    expect(renameClub(base, 'real-vila', 'p.u.t.a')).toBe(base)
+    expect(setPlayerName(base, `${base.clubId}-3`, 'c4ralho')).toBe(base)
   })
 })
 

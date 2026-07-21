@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { CLUBS } from '../../data/clubs'
+import { nationAsClub, NATIONS } from '../../data/nations'
 import { RETIRE_AGE } from './aging'
 import {
   lineupRating,
@@ -13,6 +14,28 @@ import {
 } from './players'
 
 const strongClub = CLUBS.find((club) => club.strength === 5)!
+
+const averageOverall = (clubs: readonly (typeof CLUBS)[number][]): number => {
+  const all = clubs.flatMap((club) => squadPlayersFor(club, 1).map((p) => p.overall))
+  return all.reduce((sum, value) => sum + value, 0) / all.length
+}
+
+test('qualidade escala com a divisão: A > B > C > D, e seleção acima de tudo', () => {
+  // Arrange
+  const byDivision = [0, 1, 2, 3].map((division) =>
+    averageOverall(CLUBS.filter((club) => club.division === division)),
+  )
+  const brasil = nationAsClub(NATIONS.find((nation) => nation.id === 'brasil')!)
+  const nationAvg = squadPlayersFor(brasil, 1).reduce((sum, p) => sum + p.overall, 0) / SQUAD_SIZE
+
+  // Assert: cada divisão claramente melhor que a de baixo (5+ pontos de média)
+  expect(byDivision[0]).toBeGreaterThan(byDivision[1] + 5)
+  expect(byDivision[1]).toBeGreaterThan(byDivision[2] + 5)
+  expect(byDivision[2]).toBeGreaterThan(byDivision[3] + 5)
+  // seleção do Brasil acima da média da Série A
+  expect(nationAvg).toBeGreaterThan(byDivision[0] + 5)
+})
+
 const weakClub = CLUBS.find((club) => club.strength === 1)!
 
 describe('squadPlayersFor', () => {

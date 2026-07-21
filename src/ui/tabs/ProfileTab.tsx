@@ -1,6 +1,6 @@
-import { LogOut } from 'lucide-react'
+import { LogOut, Trash2 } from 'lucide-react'
 import { TrophyRoom } from '../TrophyRoom'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import portraitUrl from '../../assets/sprites/s_portrait.png'
 import portraitFUrl from '../../assets/sprites/f_portrait.png'
 import type { Club } from '../../data/clubs'
@@ -62,6 +62,8 @@ interface ProfileTabProps {
   readonly onResetCareer: () => void
   /** Sai para a landing (home) — o save continua guardado. */
   readonly onLogout: () => void
+  /** Apaga conta online + carreira local. Retorna mensagem de erro ou null. */
+  readonly onDeleteAccount: () => Promise<string | null>
 }
 
 const ATTRIBUTE_HINTS: Record<string, string> = {
@@ -71,7 +73,11 @@ const ATTRIBUTE_HINTS: Record<string, string> = {
   defesa: 'luva mais comprida',
 }
 
-export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout }: ProfileTabProps) => {
+export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout, onDeleteAccount }: ProfileTabProps) => {
+  const [isDeleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [isBusy, setBusy] = useState(false)
+
   const confirmReset = (): void => {
     if (window.confirm('Recomeçar a carreira apaga seu histórico. Tem certeza?')) {
       onResetCareer()
@@ -237,6 +243,42 @@ export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout }
         <LogOut size={15} aria-hidden="true" /> Sair
       </button>
       <button className="btn btn-danger" onClick={confirmReset}>Recomeçar carreira</button>
+      <button className="btn btn-danger btn-icon" onClick={() => { setDeleteError(null); setDeleting(true) }}>
+        <Trash2 size={15} aria-hidden="true" /> Excluir conta
+      </button>
+
+      {isDeleting && (
+        <div className="sim-confirm" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
+          <div className="sim-confirm-box">
+            <h3 id="delete-account-title">Excluir a conta?</h3>
+            <p>
+              Isso apaga a sua conta online (e-mail, usuário, ligas) e a carreira
+              deste aparelho. <strong>Não tem volta.</strong>
+            </p>
+            {deleteError && <p className="crest-error" role="alert">{deleteError}</p>}
+            <div className="sim-confirm-actions">
+              <button className="btn btn-secondary" disabled={isBusy} onClick={() => setDeleting(false)}>
+                Cancelar
+              </button>
+              <button
+                className="btn btn-danger"
+                disabled={isBusy}
+                onClick={() => {
+                  setBusy(true)
+                  void onDeleteAccount()
+                    .then((message) => {
+                      if (message) setDeleteError(message)
+                      else setDeleting(false)
+                    })
+                    .finally(() => setBusy(false))
+                }}
+              >
+                {isBusy ? 'Excluindo…' : 'Excluir definitivamente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

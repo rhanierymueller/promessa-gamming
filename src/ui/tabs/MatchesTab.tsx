@@ -1,37 +1,20 @@
 import { useState } from 'react'
 import { clubById } from '../../data/clubs'
 import { nationById } from '../../data/nations'
-import { isCallUpEligible } from '../../engine/career/callup'
-import { computeTable, fixturesForRound, isSeasonOver, recentForm } from '../../engine/season/season'
+import { computeTable, recentForm } from '../../engine/season/season'
 import { SEASON_ROUNDS } from '../../engine/season/types'
-import { groupStandings, TOURNAMENT_NAMES, tournamentKindForYear } from '../../engine/tournament/tournament'
+import { groupStandings, TOURNAMENT_NAMES } from '../../engine/tournament/tournament'
 import { DIVISION_NAMES, divisionOf, PROMOTED_COUNT, RELEGATED_COUNT, DIVISION_TEAMS } from '../../engine/pyramid/pyramid'
 import { clubDisplayName, displayClub, type PlayerSave } from '../../state/save'
 import { FriendsLeagues } from '../FriendsLeagues'
+import { SeasonCalendar } from '../SeasonCalendar'
 import { ClubCrest } from '../ClubCrest'
 import { NationFlag } from '../NationFlag'
-import { Stars } from '../Stars'
 
 interface MatchesTabProps {
   readonly save: PlayerSave
 }
 
-
-const decemberStatus = (save: PlayerSave): string => {
-  const t = save.tournament
-  if (t) {
-    if (t.stage === 'champion') return 'campeão'
-    if (t.stage === 'eliminated') return 'eliminado'
-    return 'em disputa'
-  }
-  if (save.tournamentPlayed) return 'encerrado'
-  if (!isSeasonOver(save.season)) return 'jogue bem para ser convocado'
-  const leagueRatings = save.history
-    .filter((r) => r.competition === 'liga')
-    .slice(-save.season.currentRound)
-    .map((r) => r.rating)
-  return isCallUpEligible(leagueRatings) ? 'CONVOCADO!' : 'não convocado'
-}
 
 const opponentName = (save: PlayerSave, opponentId: string): string => {
   if (opponentId.startsWith('nation-')) {
@@ -167,48 +150,7 @@ export const MatchesTab = ({ save }: MatchesTabProps) => {
       </div>
       )}
 
-      {section === 'calendario' && (
-      <div className="card card-wide">
-        <span className="card-label">Calendário · ano {save.careerYear}</span>
-        {Array.from({ length: SEASON_ROUNDS }, (_, round) => {
-          const fixture = fixturesForRound(season, round).find(
-            (f) => f.homeId === save.clubId || f.awayId === save.clubId,
-          )
-          if (!fixture) return null
-          const opponentId = fixture.homeId === save.clubId ? fixture.awayId : fixture.homeId
-          const opponent = clubById(opponentId)
-          if (!opponent) return null
-          const played = round < season.currentRound
-          const leagueGames = save.history.filter((r) => r.competition === 'liga')
-          const record = played ? leagueGames[leagueGames.length - season.currentRound + round] : null
-          return (
-            <div key={round} className={`fixture-row${played ? ' fixture-played' : ''}`}>
-              <span className="fixture-round">R{round + 1}</span>
-              <ClubCrest club={displayClub(save, opponent)} customUrl={save.customClubCrests[opponent.id]} size={15} />
-              <span className="fixture-name">
-                {clubDisplayName(save, opponent.id)}
-                <span className="fixture-venue"> · {fixture.homeId === save.clubId ? 'casa' : 'fora'}</span>
-              </span>
-              {record ? (
-                <span className={`fixture-score fixture-${record.teamGoals > record.opponentGoals ? 'win' : record.teamGoals === record.opponentGoals ? 'draw' : 'loss'}`}>
-                  {record.teamGoals}×{record.opponentGoals}
-                </span>
-              ) : (
-                <Stars strength={opponent.strength} />
-              )}
-            </div>
-          )
-        })}
-        <div className="fixture-row fixture-december">
-          <span className="fixture-round">DEZ</span>
-          <span className="fixture-name">
-            {TOURNAMENT_NAMES[tournamentKindForYear(save.careerYear, nationById(save.nationalityId)?.confederation ?? 'america')]}
-            <span className="fixture-venue"> · seleções</span>
-          </span>
-          <span className="fixture-venue">{decemberStatus(save)}</span>
-        </div>
-      </div>
-      )}
+      {section === 'calendario' && <SeasonCalendar save={save} />}
 
       {section === 'amigos' && <FriendsLeagues save={save} />}
 

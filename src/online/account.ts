@@ -26,7 +26,7 @@ const isNetworkError = (message: string): boolean =>
 
 /** Migração 0003 ainda não aplicada no projeto — segue local sem bloquear. */
 const isMissingRpc = (message: string): boolean =>
-  /claim_username|does not exist|not found/i.test(message)
+  /claim_username|delete_account|does not exist|not found/i.test(message)
 
 export const registerAccount = async (
   email: string,
@@ -107,5 +107,28 @@ export const currentSessionEmail = async (): Promise<string | null> => {
     return user.email
   } catch {
     return null
+  }
+}
+
+export type DeleteAccountResult =
+  | { readonly ok: true }
+  | { readonly ok: true; readonly offline: true }
+  | { readonly ok: false; readonly message: string }
+
+/** Apaga a conta online (RPC delete_account) e encerra a sessão. */
+export const deleteAccount = async (): Promise<DeleteAccountResult> => {
+  const client = getClient()
+  if (!client) return { ok: true, offline: true }
+  try {
+    const { error } = await client.rpc('delete_account')
+    if (error && !isNetworkError(error.message) && !isMissingRpc(error.message)) {
+      return { ok: false, message: `Não deu para excluir a conta agora: ${error.message}` }
+    }
+    await client.auth.signOut().catch(() => undefined)
+    return error ? { ok: true, offline: true } : { ok: true }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : ''
+    if (isNetworkError(message)) return { ok: true, offline: true }
+    return { ok: false, message: `Não deu para excluir a conta agora: ${message}` }
   }
 }

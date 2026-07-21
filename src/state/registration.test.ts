@@ -87,6 +87,20 @@ describe('validateRegistration com sessão ativa (sem campos de conta)', () => {
   })
 })
 
+describe('filtro de ofensas no cadastro', () => {
+  test('nome do time, do craque e username ofensivos são apontados', () => {
+    const result = validateRegistration({
+      ...valid,
+      playerName: 'Bosta',
+      teamName: 'Puta FC',
+      username: 'fdp_10',
+    })
+    expect(result.playerName).toBeTruthy()
+    expect(result.teamName).toBeTruthy()
+    expect(result.username).toBeTruthy()
+  })
+})
+
 describe('remainingCreatePoints', () => {
   test('conta o que falta distribuir a partir da base', () => {
     expect(remainingCreatePoints(DEFAULT_ATTRIBUTES)).toBe(10)

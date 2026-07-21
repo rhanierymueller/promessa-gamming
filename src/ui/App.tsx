@@ -1,5 +1,5 @@
 import { BadgeDollarSign, CalendarDays, House, Shield, User, Volume2, VolumeX, type LucideIcon } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { clubById, type Club } from '../data/clubs'
 import { nationAsClub, nationById } from '../data/nations'
 import { isCallUpEligible } from '../engine/career/callup'
@@ -36,7 +36,8 @@ import {
   markPendingMatch,
   readPendingMatch,
 } from '../state/pendingMatch'
-import { getClient } from '../online/leagues'
+import { currentSessionEmail, deleteAccount } from '../online/account'
+import { getClient, isOnlineAvailable } from '../online/leagues'
 import { AuthGate } from './AuthGate'
 import { CharacterCreate } from './CharacterCreate'
 import { Landing } from './Landing'
@@ -128,6 +129,9 @@ export const App = () => {
   const [save, setSave] = useState<PlayerSave | null>(loadSaveChargingForfeit)
   // a landing é a home; Jogar passa pelo portão de login/cadastro
   const [gate, setGate] = useState<'landing' | 'auth' | 'signup' | 'game'>('landing')
+  // sessão lembrada pelo SDK do Supabase (token em localStorage, renovado
+  // automaticamente — a SENHA nunca é guardada); com ela, Jogar pula o login
+  const [hasSession, setHasSession] = useState(false)
   const [screen, setScreen] = useState<Screen>('tabs')
   const [tab, setTab] = useState<Tab>('home')
   const [matchSetup, setMatchSetup] = useState<MatchSetup | null>(null)
@@ -136,6 +140,10 @@ export const App = () => {
     setMuted(stored)
     return stored
   })
+
+  useEffect(() => {
+    void currentSessionEmail().then((email) => setHasSession(email !== null))
+  }, [gate])
 
   const toggleMute = (): void => {
     const next = !muted
@@ -221,6 +229,19 @@ export const App = () => {
     window.scrollTo({ top: 0 })
   }
 
+  const eraseAccount = async (): Promise<string | null> => {
+    const result = await deleteAccount()
+    if (!result.ok) return result.message
+    localStorage.removeItem('promessa.save')
+    clearPendingMatch(localStorage)
+    setSave(null)
+    setScreen('tabs')
+    setTab('home')
+    setGate('landing')
+    window.scrollTo({ top: 0 })
+    return null
+  }
+
   const resetCareer = (): void => {
     localStorage.removeItem('promessa.save')
     clearPendingMatch(localStorage)
@@ -244,7 +265,14 @@ export const App = () => {
   )
 
   if (gate === 'landing') {
-    return <Landing hasSave={Boolean(save && club)} onPlay={() => setGate('auth')} />
+    // logado (ou modo local) com carreira: entra direto, sem redigitar login
+    const canSkipLogin = Boolean(save && club) && (hasSession || !isOnlineAvailable())
+    return (
+      <Landing
+        hasSave={Boolean(save && club)}
+        onPlay={() => setGate(canSkipLogin ? 'game' : 'auth')}
+      />
+    )
   }
 
   if (gate === 'auth') {
@@ -310,6 +338,7 @@ export const App = () => {
               matchSetup.kind === 'torneio' ? 'selecao' : 'liga',
             ),
           )}
+          opponentDivision={matchSetup.kind === 'liga' ? divisionOf(save.divisions, matchSetup.opponent.id) : -1}
           lineup={matchSetup.kind === 'liga' ? save.lineup : undefined}
           signings={matchSetup.kind === 'liga' ? save.signings : undefined}
           onExit={onMatchFinished}
@@ -387,6 +416,7 @@ export const App = () => {
           onSaveChange={updateSave}
           onResetCareer={resetCareer}
           onLogout={leaveToLanding}
+          onDeleteAccount={eraseAccount}
         />
       )}
 

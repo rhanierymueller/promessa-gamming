@@ -1,5 +1,6 @@
 import type { Club } from '../../data/clubs'
 import type { PlayerSave } from '../../state/save'
+import { rivalSquadFor } from '../market/aiTransfers'
 import { squadWithSignings } from '../market/market'
 import { FORMATIONS } from './formation'
 import { lineupRating, squadPlayersFor, userAsSquadPlayer, USER_SQUAD_INDEX, type SquadPlayer } from './players'
@@ -27,6 +28,9 @@ export const myTeamRating = (save: PlayerSave, club: Club): number => {
   )
 }
 
-/** Força padrão de um clube rival (11 titulares, formação clássica). */
-export const opponentTeamRating = (club: Club, careerYear: number): number =>
-  lineupRating(squadPlayersFor(club, careerYear).slice(0, 11), FORMATIONS['4-3-3'].slots)
+/**
+ * Força padrão de um clube rival (11 titulares, formação clássica).
+ * Com a divisão informada, inclui as contratações da IA (Séries A/B).
+ */
+export const opponentTeamRating = (club: Club, careerYear: number, division = -1): number =>
+  lineupRating(rivalSquadFor(club, division, careerYear).slice(0, 11), FORMATIONS['4-3-3'].slots)

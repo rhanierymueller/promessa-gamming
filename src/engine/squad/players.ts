@@ -97,8 +97,11 @@ const ALT_POSITION_SHARE = 0.45
 
 const STRONG_BOOST = 8
 const WEAK_PENALTY = 12
-const CLUB_BASE = 40
-const CLUB_PER_STAR = 7
+/** Qualidade-base do elenco pela divisão de ORIGEM (0=A..3=D). */
+const DIVISION_QUALITY = [58, 52, 46, 40] as const
+/** Seleções nacionais jogam acima do topo da Série A. */
+const NATION_QUALITY = 62
+const CLUB_PER_STAR = 4
 const PLAYER_SPREAD = 5
 const ATTR_SPREAD = 6
 const MIN_ATTR = 35
@@ -212,10 +215,17 @@ const scaleAttrs = (peak: FifaAttributes, factor: number): FifaAttributes => ({
  * jovens crescem rumo ao potencial, veteranos decaem dos 32 em diante e quem
  * passa dos 38 se aposenta — um garoto da base (regen) herda a vaga.
  */
+/** Régua de qualidade de um clube: divisão manda, estrelas refinam. */
+export const clubBaseQuality = (club: Club): number =>
+  (club.id.startsWith('nation-')
+    ? NATION_QUALITY
+    : DIVISION_QUALITY[club.division] ?? DIVISION_QUALITY[3]) +
+  club.strength * CLUB_PER_STAR
+
 export const squadPlayersFor = (club: Club, careerYear = 1): readonly SquadPlayer[] => {
   const names = squadFor(`${club.id}-elenco`, SQUAD_SIZE)
   const positions = [...STARTING_FORMATION, ...BENCH_POSITIONS]
-  const clubBase = CLUB_BASE + club.strength * CLUB_PER_STAR
+  const clubBase = clubBaseQuality(club)
   let state = hashSeed(`${club.id}-atributos`)
 
   return positions.map((position, index) => {

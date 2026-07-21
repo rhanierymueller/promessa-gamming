@@ -194,12 +194,12 @@ export const HomeTab = ({
                     style={{
                       width: `${Math.round(
                         (myTeamRating(save, club) /
-                          (myTeamRating(save, club) + opponentTeamRating(nextOpponent, save.careerYear))) * 100,
+                          (myTeamRating(save, club) + opponentTeamRating(nextOpponent, save.careerYear, divisionOf(save.divisions, nextOpponent.id)))) * 100,
                       )}%`,
                     }}
                   />
                 </div>
-                <span className="power-value power-value-opp">{opponentTeamRating(nextOpponent, save.careerYear)}</span>
+                <span className="power-value power-value-opp">{opponentTeamRating(nextOpponent, save.careerYear, divisionOf(save.divisions, nextOpponent.id))}</span>
               </div>
             </div>
             <button className="btn btn-icon" onClick={onPlayMatch}><Play size={15} aria-hidden="true" /> Jogar partida</button>

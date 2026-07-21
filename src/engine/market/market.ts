@@ -118,14 +118,14 @@ const OVERALL_WEIGHTS: Record<SquadPosition, FifaAttributes> = {
 
 const ATTR_KEYS = ['pac', 'fin', 'pas', 'dri', 'def', 'fis'] as const
 
-const overallFor = (position: SquadPosition, attrs: FifaAttributes): number => {
+export const overallFor = (position: SquadPosition, attrs: FifaAttributes): number => {
   const weights = OVERALL_WEIGHTS[position]
   return Math.round(ATTR_KEYS.reduce((sum, key) => sum + attrs[key] * weights[key], 0))
 }
 
-const clampAttr = (value: number): number => Math.max(30, Math.min(95, Math.round(value)))
+export const clampAttr = (value: number): number => Math.max(30, Math.min(95, Math.round(value)))
 
-const hashSeed = (input: string): number => {
+export const hashSeed = (input: string): number => {
   let hash = 2166136261
   for (let i = 0; i < input.length; i++) {
     hash ^= input.charCodeAt(i)
@@ -134,12 +134,12 @@ const hashSeed = (input: string): number => {
   return hash >>> 0
 }
 
-const nextRoll = (state: number): readonly [number, number] => {
+export const nextRoll = (state: number): readonly [number, number] => {
   const next = (Math.imul(state, 1664525) + 1013904223) >>> 0
   return [next / 4294967296, next]
 }
 
-const scaleAttrs = (peak: FifaAttributes, factor: number): FifaAttributes => ({
+export const scaleAttrs = (peak: FifaAttributes, factor: number): FifaAttributes => ({
   pac: clampAttr(peak.pac * factor),
   fin: clampAttr(peak.fin * factor),
   pas: clampAttr(peak.pas * factor),
@@ -155,7 +155,7 @@ const brazilianName = (rollFirst: number, rollLast: number): string => {
 }
 
 /** Nome único no pool: nacionalidade certa e sem repetição (varre o banco). */
-const uniqueName = (
+export const uniqueName = (
   nationality: string,
   rollFirst: number,
   rollLast: number,

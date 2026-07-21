@@ -1,5 +1,6 @@
 import { ATTRIBUTE_KEYS, type PlayerAttributes } from '../engine/career/attributes'
 import type { PlayerFieldPosition } from '../engine/squad/formation'
+import { isOffensiveName } from './moderation'
 import { CREATE_EXTRA_POINTS, MAX_CLUB_NAME, PLAYER_MAX_AGE, PLAYER_MIN_AGE } from './save'
 
 /**
@@ -47,10 +48,14 @@ export const validateRegistration = (
 
   if (form.playerName.trim().length === 0) {
     errors.playerName = 'Diga como a torcida vai te chamar.'
+  } else if (isOffensiveName(form.playerName)) {
+    errors.playerName = 'Esse nome não pode ser usado — escolha outro.'
   }
   const teamName = form.teamName.trim()
   if (teamName.length < MIN_TEAM_NAME || teamName.length > MAX_CLUB_NAME) {
     errors.teamName = `O nome do time precisa ter entre ${MIN_TEAM_NAME} e ${MAX_CLUB_NAME} letras.`
+  } else if (isOffensiveName(teamName)) {
+    errors.teamName = 'Esse nome de time não pode ser usado — escolha outro.'
   }
   if (
     !Number.isInteger(form.playerAge) ||
@@ -69,6 +74,8 @@ export const validateRegistration = (
     }
     if (!USERNAME_PATTERN.test(form.username.trim())) {
       errors.username = 'Nome de usuário: 3-16 letras, números ou _ (sem espaços).'
+    } else if (isOffensiveName(form.username)) {
+      errors.username = 'Esse nome de usuário não pode ser usado.'
     }
     if (form.password.length < MIN_PASSWORD) {
       errors.password = `A senha precisa de pelo menos ${MIN_PASSWORD} caracteres.`

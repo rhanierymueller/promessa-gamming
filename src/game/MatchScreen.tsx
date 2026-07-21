@@ -20,6 +20,7 @@ import {
 import { simulateToEnd, type AutoPlayEvent, type AutoPlayProbs } from '../engine/match/autoplay'
 import { FORMATIONS, type FormationId, type PlayerFieldPosition } from '../engine/squad/formation'
 import { squadWithSignings, type Signing } from '../engine/market/market'
+import { rivalSquadFor } from '../engine/market/aiTransfers'
 import { lineupRating, squadPlayersFor, userAsSquadPlayer, USER_SQUAD_INDEX } from '../engine/squad/players'
 import { createRng, type RngState } from '../engine/rng'
 import { DEFAULT_MATCH_CONFIG } from '../engine/match/config'
@@ -81,6 +82,8 @@ interface MatchScreenProps {
   readonly playerName: string
   readonly club: Club
   readonly opponent: Club
+  /** Divisão do adversário (-1 = seleção/sem mercado da IA). */
+  readonly opponentDivision?: number
   readonly competition?: Competition
   readonly attributes?: PlayerAttributes
   /** Comemoração escolhida no Perfil (índice em celeb_0..3). */
@@ -139,6 +142,7 @@ export const MatchScreen = ({
   playerNames = {},
   stadiumUrl,
   signings = [],
+  opponentDivision = -1,
   onExit,
 }: MatchScreenProps) => {
   // elenco com o SEU craque dentro — a força do time muda com a escalação
@@ -167,9 +171,9 @@ export const MatchScreen = ({
     [effectiveLineup, teamPlayers, formation],
   )
   const opponentRating = useMemo(() => {
-    const squad = squadPlayersFor(opponent, careerYear)
+    const squad = rivalSquadFor(opponent, opponentDivision, careerYear)
     return lineupRating(squad.slice(0, 11), FORMATIONS['4-3-3'].slots)
-  }, [opponent, careerYear])
+  }, [opponent, opponentDivision, careerYear])
 
   const config = useMemo(
     () => matchConfigForRatings(DEFAULT_MATCH_CONFIG, teamRating, opponentRating),
@@ -192,8 +196,8 @@ export const MatchScreen = ({
   )
   const userIndex = Math.max(0, effectiveLineup.indexOf(USER_SQUAD_INDEX))
   const opponentSquad = useMemo(
-    () => squadPlayersFor(opponent, careerYear).slice(0, 11).map((player) => player.name),
-    [opponent, careerYear],
+    () => rivalSquadFor(opponent, opponentDivision, careerYear).slice(0, 11).map((player) => player.name),
+    [opponent, opponentDivision, careerYear],
   )
 
   // contadores VIVOS: tudo que aparece no resumo aconteceu no campo

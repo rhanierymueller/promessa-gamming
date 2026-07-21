@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { createRng } from '../rng'
 import { advanceSeason } from '../season/season'
 import { createSave, recordMatch, type MatchRecord, type PlayerSave } from '../../state/save'
+import { blockbusterOfTheYear } from '../market/aiTransfers'
 import { newsFor } from './news'
 
 const fixedRoll = (value = 0.4): (() => number) => () => value
@@ -27,6 +28,24 @@ const playRound = (save: PlayerSave, our: number, their: number): PlayerSave => 
 }
 
 describe('newsFor', () => {
+  test('bomba de mercado de rival A/B vira manchete quando existe', () => {
+    // Arrange: procura a primeira temporada com bomba entre A e B
+    const save = baseSave()
+    let bombYear = 0
+    for (let year = 1; year <= 12 && bombYear === 0; year++) {
+      if (blockbusterOfTheYear(save.divisions, year, save.clubId)) bombYear = year
+    }
+    expect(bombYear).toBeGreaterThan(0)
+
+    // Act
+    const news = newsFor({ ...save, careerYear: bombYear })
+
+    // Assert
+    const bomb = news.find((item) => item.id === 'mercado-bomba')
+    expect(bomb).toBeDefined()
+    expect(bomb!.headline).toContain('BOMBA')
+  })
+
   test('sem jogos ainda, a manchete é a estreia da promessa', () => {
     // Act
     const news = newsFor(baseSave())

@@ -1,6 +1,7 @@
 import { ArrowLeftRight, Camera, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { CLUBS, clubById, type Club } from '../../data/clubs'
+import { rivalSquadFor } from '../../engine/market/aiTransfers'
 import { DIVISION_NAMES, divisionOf } from '../../engine/pyramid/pyramid'
 import { tablePosition } from '../../engine/season/season'
 import {
@@ -63,7 +64,9 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
   const isMyClub = squadClub.id === save.clubId
   const squad = useMemo(() => {
     const generated = squadPlayersFor(squadClub, save.careerYear)
-    if (squadClub.id !== save.clubId) return generated
+    if (squadClub.id !== save.clubId) {
+      return rivalSquadFor(squadClub, divisionOf(save.divisions, squadClub.id), save.careerYear)
+    }
     const base = squadWithSignings(generated, save.signings, save.careerYear)
     // o SEU craque entra com atributos reais; os demais ganham o batismo local
     return base.map((player, index) =>
@@ -76,7 +79,7 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
           ? { ...player, name: save.customPlayerNames[player.id] }
           : player,
     )
-  }, [squadClub, save.careerYear, save.clubId, save.playerName, save.attributes, save.shirtNumber, save.playerPosition, save.customPlayerNames, save.signings])
+  }, [squadClub, save.careerYear, save.clubId, save.divisions, save.playerName, save.attributes, save.shirtNumber, save.playerPosition, save.customPlayerNames, save.signings])
 
   // a etiqueta REFORÇO só vale na temporada da chegada
   const newSigningIds = useMemo(
@@ -344,11 +347,19 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
               <span className="crest-upload-badge" aria-hidden="true"><Camera size={10} /></span>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg,image/webp"
                 aria-label={`Enviar escudo para ${entry.name}`}
                 onChange={(event) => {
                   const file = event.target.files?.[0]
                   if (!file) return
+                  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+                    setCrestError('Formato não aceito — envie PNG, JPG ou WebP.')
+                    return
+                  }
+                  if (file.size > 4 * 1024 * 1024) {
+                    setCrestError('Imagem grande demais — máximo 4MB.')
+                    return
+                  }
                   void fileToCrestDataUrl(file)
                     .then((dataUrl) => {
                       setCrestError(null)

@@ -1,3 +1,5 @@
+import { blockbusterOfTheYear } from '../market/aiTransfers'
+import { formatMoney } from '../market/market'
 import { DIVISION_NAMES, divisionOf } from '../pyramid/pyramid'
 import { computeTable, recentForm, tablePosition } from '../season/season'
 import { nationById } from '../../data/nations'
@@ -120,6 +122,13 @@ export const newsFor = (save: PlayerSave): readonly NewsItem[] => {
   } else {
     news.push(item('estreia', 'agente', `A promessa ${save.playerName} chega ao ${team}`,
       `Aos ${save.playerAge} anos, assina com o ${team} na ${division}. O plano: subir de divisão e vestir a camisa da seleção.`))
+  }
+
+  // mercado dos grandes: quando um rival de A/B anuncia um craque 80+, é manchete
+  const bomb = blockbusterOfTheYear(save.divisions, save.careerYear, save.clubId)
+  if (bomb) {
+    news.push(item('mercado-bomba', 'agente', `BOMBA: ${clubDisplayName(save, bomb.clubId)} anuncia ${bomb.signing.name}`,
+      `${bomb.signing.baseAge} anos, overall ${bomb.overallAtSigning}, por ${formatMoney(bomb.signing.price)}. O mercado parou para olhar.`))
   }
 
   if (save.season.currentRound > 0) {

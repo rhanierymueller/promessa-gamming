@@ -23,6 +23,7 @@ import { computeTable, createSeason, isSeasonOver } from '../engine/season/seaso
 import { createRng } from '../engine/rng'
 import type { TournamentKind, TournamentState } from '../engine/tournament/tournament'
 import { SEASON_TEAMS, type SeasonState } from '../engine/season/types'
+import { isOffensiveName } from './moderation'
 
 /**
  * Save do jogador com versão de schema — v1/v2 migram automaticamente para v3
@@ -228,6 +229,7 @@ export const createSave = (
   const position = input.playerPosition ?? DEFAULT_POSITION
   const attributes = input.attributes ?? DEFAULT_ATTRIBUTES
   if (name.length === 0 || !nationById(nationalityId)) return null
+  if (isOffensiveName(name)) return null
   if (!Number.isInteger(age) || age < PLAYER_MIN_AGE || age > PLAYER_MAX_AGE) return null
   if (!FIELD_POSITIONS.includes(position)) return null
   if (!isValidCreateAttributes(attributes)) return null
@@ -237,7 +239,7 @@ export const createSave = (
   let clubId = input.clubId ?? ''
   let customClubNames: Readonly<Record<string, string>> = {}
   if (!clubById(clubId)) {
-    if (teamName.length === 0) return null
+    if (teamName.length === 0 || isOffensiveName(teamName)) return null
     // o SEU time: um clube host da Série D veste o nome que você digitou
     const serieD = divisions[3]
     clubId = serieD[Math.floor(roll() * serieD.length) % serieD.length]
@@ -354,6 +356,7 @@ export const renameClub = (save: PlayerSave, clubId: string, rawName: string): P
   const club = clubById(clubId)
   if (!club) return save
   const name = rawName.trim().slice(0, MAX_CLUB_NAME)
+  if (name.length > 0 && isOffensiveName(name)) return save
   const next: Record<string, string> = { ...save.customClubNames }
   if (name.length === 0 || name === club.name) {
     delete next[clubId]
@@ -375,7 +378,7 @@ export const setPlayerName = (save: PlayerSave, playerId: string, rawName: strin
   if (!playerId.startsWith(`${save.clubId}-`) && !playerId.startsWith('mkt-')) return save
   if (save.customPlayerNames[playerId] !== undefined) return save
   const name = rawName.trim().slice(0, MAX_SQUAD_PLAYER_NAME)
-  if (name.length === 0) return save
+  if (name.length === 0 || isOffensiveName(name)) return save
   return { ...save, customPlayerNames: { ...save.customPlayerNames, [playerId]: name } }
 }
 
@@ -589,7 +592,7 @@ const normalizeCrests = (value: unknown): Readonly<Record<string, string>> => {
   for (const [clubId, dataUrl] of Object.entries(value as Record<string, unknown>)) {
     if (
       typeof dataUrl === 'string' &&
-      dataUrl.startsWith('data:image/') &&
+      dataUrl.startsWith('data:image/png;base64,') &&
       dataUrl.length <= 120_000 &&
       clubById(clubId)
     ) {
@@ -695,7 +698,7 @@ export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random)
 export const setClubCrest = (save: PlayerSave, clubId: string, dataUrl: string | null): PlayerSave => {
   if (!clubById(clubId)) return save
   const next: Record<string, string> = { ...save.customClubCrests }
-  if (dataUrl === null || !dataUrl.startsWith('data:image/') || dataUrl.length > 120_000) {
+  if (dataUrl === null || !dataUrl.startsWith('data:image/png;base64,') || dataUrl.length > 120_000) {
     delete next[clubId]
   } else {
     next[clubId] = dataUrl
