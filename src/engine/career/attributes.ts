@@ -36,8 +36,20 @@ export const DEFAULT_ATTRIBUTES: PlayerAttributes = {
   defesa: 3,
 }
 
-/** Subir do nível N para N+1 custa N pontos de treino. */
-export const upgradeCost = (currentLevel: number): number => currentLevel
+/** Nível a partir do qual o treino dobra de preço (jogador de elite). */
+const ELITE_LEVEL = 6
+/** Nível a partir do qual o treino triplica de preço (nível lenda). */
+const LEGEND_LEVEL = 8
+
+/**
+ * Subir do nível N para N+1: custa N pontos até o 5, dobra no 6-7 e
+ * triplica no 8-9 — o topo é meta de carreira, não de temporada.
+ */
+export const upgradeCost = (currentLevel: number): number => {
+  if (currentLevel >= LEGEND_LEVEL) return currentLevel * 3
+  if (currentLevel >= ELITE_LEVEL) return currentLevel * 2
+  return currentLevel
+}
 
 export const canUpgrade = (
   attributes: PlayerAttributes,

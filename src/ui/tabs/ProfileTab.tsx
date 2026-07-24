@@ -11,6 +11,7 @@ import {
   MAX_ATTRIBUTE,
   upgradeCost,
 } from '../../engine/career/attributes'
+import { perkById } from '../../engine/career/perks'
 import { applyAppearance, HAIR_COLORS, KIT_COLORS, SKIN_TONES } from '../../game/appearance'
 import { celebrationUrlsFor } from '../../game/assets'
 import { CELEBRATION_NAMES } from '../../game/assets'
@@ -138,7 +139,32 @@ export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout, 
             </div>
           )
         })}
-        <p className="muted table-note">Pontos vêm das suas notas: 8.0+ rende 3, 6.5+ rende 2, 5.0+ rende 1.</p>
+        <p className="muted table-note">
+          Pontos vêm das suas notas: 8.0+ rende 3, 6.5+ rende 2, 5.0+ rende 1.
+          Treinar encarece no topo: dobra do nível 6 e triplica do nível 8 — lenda se constrói em anos.
+        </p>
+      </div>
+
+      <div className="card">
+        <span className="card-label">Habilidades</span>
+        {save.perks.length === 0 ? (
+          <p className="muted">
+            Nenhuma ainda — habilidades destravam em marcos da carreira: nota 8+, 10 gols,
+            acesso, título… Faça história que elas aparecem.
+          </p>
+        ) : (
+          <div className="perk-list">
+            {save.perks.map((perkId) => {
+              const perk = perkById(perkId)
+              return (
+                <div key={perkId} className="perk-owned">
+                  <span className="perk-name">{perk.name}</span>
+                  <span className="perk-desc">{perk.description}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <div className="card">
