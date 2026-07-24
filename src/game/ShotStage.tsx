@@ -1,6 +1,7 @@
 import { Hand } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../engine/career/attributes'
+import type { PerkId, ShotPerkContext } from '../engine/career/perks'
 import type { ShotOutcomeKind, Vec2 } from '../engine/shot/types'
 import { DEFAULT_APPEARANCE, type PlayerAppearance } from '../state/save'
 import { applyAppearance } from './appearance'
@@ -52,6 +53,10 @@ interface ShotStageProps {
   readonly keeperQuality?: number
   /** Aparência do craque (pele/cabelo) — só se aplica ao SEU atacante. */
   readonly appearance?: PlayerAppearance
+  /** Perks de RPG do craque — camada extra sobre os atributos. */
+  readonly perks?: readonly PerkId[]
+  /** Contexto do lance para perks situacionais (matador, craque de copa). */
+  readonly perkContext?: ShotPerkContext
   readonly onRoundEnd?: (summary: RoundSummary) => void
 }
 
@@ -86,13 +91,15 @@ export const ShotStage = ({
   celebrationId = 0,
   keeperQuality = TRAINING_KEEPER_QUALITY,
   appearance = DEFAULT_APPEARANCE,
+  perks = [],
+  perkContext,
   onRoundEnd,
 }: ShotStageProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stateRef = useRef<StageState>(
     defense
-      ? createDefenseStage(Date.now() & 0xffffffff, defense.skill, attrs, shots)
-      : createStage(Date.now() & 0xffffffff, shots, freeKick, attrs, keeperQuality),
+      ? createDefenseStage(Date.now() & 0xffffffff, defense.skill, attrs, shots, perks)
+      : createStage(Date.now() & 0xffffffff, shots, freeKick, attrs, keeperQuality, perks, perkContext),
   )
   const dragRef = useRef<Vec2[] | null>(null)
   // na defesa o atacante é o RIVAL — o gênero do usuário não se aplica a ele

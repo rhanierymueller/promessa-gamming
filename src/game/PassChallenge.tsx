@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { boostedPassChance } from '../engine/career/attributes'
+import { perkDecisionSeconds, perkPassChance, type PerkId } from '../engine/career/perks'
 import type { RngState } from '../engine/rng'
 import {
   decisionSecondsFor,
@@ -22,23 +23,25 @@ interface PassChallengeProps {
   readonly rng: RngState
   /** Nível do atributo Passe — aumenta a chance das opções. */
   readonly passeLevel?: number
+  /** Perks do craque — maestro soma chance, frieza estica o relógio. */
+  readonly perks?: readonly PerkId[]
   readonly onResolved: (resolution: PassResolution, next: RngState, timedOut: boolean) => void
 }
 
 const TICK_MS = 50
 
-export const PassChallenge = ({ intro, rng, passeLevel = 1, onResolved }: PassChallengeProps) => {
+export const PassChallenge = ({ intro, rng, passeLevel = 1, perks = [], onResolved }: PassChallengeProps) => {
   const generated = useMemo(() => {
     const base = generatePassOptions(rng)
     return {
       ...base,
       value: base.value.map((option) => ({
         ...option,
-        successChance: boostedPassChance(option.successChance, passeLevel),
+        successChance: perkPassChance(boostedPassChance(option.successChance, passeLevel), perks),
       })),
     }
-  }, [rng, passeLevel])
-  const decisionSeconds = decisionSecondsFor(passeLevel)
+  }, [rng, passeLevel, perks])
+  const decisionSeconds = perkDecisionSeconds(decisionSecondsFor(passeLevel), perks)
   const [timeLeft, setTimeLeft] = useState(decisionSeconds)
   const resolvedRef = useRef(false)
   const onResolvedRef = useRef(onResolved)
@@ -46,17 +49,17 @@ export const PassChallenge = ({ intro, rng, passeLevel = 1, onResolved }: PassCh
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setTimeLeft((current) => {
-        const next = current - TICK_MS / 1000
-        if (next <= 0 && !resolvedRef.current) {
-          resolvedRef.current = true
-          onResolvedRef.current(timeoutPass(), generated.next, true)
-        }
-        return Math.max(0, next)
-      })
+      setTimeLeft((current) => Math.max(0, current - TICK_MS / 1000))
     }, TICK_MS)
     return () => clearInterval(interval)
   }, [generated])
+
+  // resolve o timeout FORA do updater: setState de pai durante render é proibido
+  useEffect(() => {
+    if (timeLeft > 0 || resolvedRef.current) return
+    resolvedRef.current = true
+    onResolvedRef.current(timeoutPass(), generated.next, true)
+  }, [timeLeft, generated])
 
   const choose = (option: PassOption): void => {
     if (resolvedRef.current) return

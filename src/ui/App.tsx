@@ -21,10 +21,13 @@ import { ShotStage } from '../game/ShotStage'
 import {
   applySeason,
   applyTournament,
+  choosePerk,
+  dismissEventNote,
   displayClub,
   loadSave,
   persistSave,
   recordMatch,
+  resolvePendingEvent,
   startNewSeason,
   withTournamentState,
   type MatchRecord,
@@ -325,6 +328,8 @@ export const App = () => {
           opponent={matchSetup.opponent}
           competition={matchSetup.kind === 'torneio' ? 'selecao' : 'liga'}
           attributes={save.attributes}
+          perks={save.perks}
+          morale={save.morale}
           celebrationId={save.celebrationId}
           appearance={save.appearance}
           crestUrls={save.customClubCrests}
@@ -404,6 +409,9 @@ export const App = () => {
           onNewSeason={onNewSeason}
           onTraining={() => setScreen('training')}
           onGkTraining={() => setScreen('gk-training')}
+          onChoosePerk={(perkId) => save && updateSave(choosePerk(save, perkId))}
+          onResolveEvent={(optionIndex) => save && updateSave(resolvePendingEvent(save, optionIndex))}
+          onDismissEventNote={() => save && updateSave(dismissEventNote(save))}
         />
       )}
       {tab === 'matches' && <MatchesTab save={save} />}

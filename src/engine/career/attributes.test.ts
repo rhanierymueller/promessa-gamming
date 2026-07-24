@@ -16,9 +16,25 @@ import {
 } from './attributes'
 
 describe('progressão de atributos', () => {
-  test('subir de nível custa o nível atual em pontos', () => {
+  test('subir de nível fica mais caro por faixa: base até 5, dobro no 6-7, triplo no 8-9', () => {
     expect(upgradeCost(3)).toBe(3)
-    expect(upgradeCost(9)).toBe(9)
+    expect(upgradeCost(4)).toBe(4)
+    expect(upgradeCost(5)).toBe(5)
+    expect(upgradeCost(6)).toBe(12)
+    expect(upgradeCost(7)).toBe(14)
+    expect(upgradeCost(8)).toBe(24)
+    expect(upgradeCost(9)).toBe(27)
+  })
+
+  test('maxar um atributo do início (3) ao teto custa 89 pontos', () => {
+    // Arrange
+    const levels = [3, 4, 5, 6, 7, 8, 9]
+
+    // Act
+    const total = levels.reduce((sum, level) => sum + upgradeCost(level), 0)
+
+    // Assert
+    expect(total).toBe(89)
   })
 
   test('canUpgrade exige pontos suficientes e respeita o teto', () => {

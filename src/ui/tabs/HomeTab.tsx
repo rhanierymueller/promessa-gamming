@@ -1,8 +1,10 @@
-import { PartyPopper, Play, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { Flame, PartyPopper, Play, Sparkles, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
 import type { Club } from '../../data/clubs'
 import { nationById } from '../../data/nations'
+import { eventById } from '../../engine/career/events'
+import { milestoneLabel, perkById, type PerkId } from '../../engine/career/perks'
 import { DIVISION_NAMES, divisionOf } from '../../engine/pyramid/pyramid'
-import { isSeasonOver, tablePosition } from '../../engine/season/season'
+import { isSeasonOver, playerFixture, tablePosition } from '../../engine/season/season'
 import {
   playerTournamentOpponentId,
   TOURNAMENT_NAMES,
@@ -33,6 +35,9 @@ interface HomeTabProps {
   readonly onDismissMovement: () => void
   readonly onTraining: () => void
   readonly onGkTraining: () => void
+  readonly onChoosePerk: (perkId: PerkId) => void
+  readonly onResolveEvent: (optionIndex: number) => void
+  readonly onDismissEventNote: () => void
 }
 
 const ordinal = (position: number): string => `${position}º`
@@ -56,6 +61,9 @@ export const HomeTab = ({
   onDismissMovement,
   onTraining,
   onGkTraining,
+  onChoosePerk,
+  onResolveEvent,
+  onDismissEventNote,
 }: HomeTabProps) => {
   const [isCelebrating, setCelebrating] = useState(false)
   const seasonOver = isSeasonOver(save.season)
@@ -94,7 +102,70 @@ export const HomeTab = ({
       <p className="muted">
         Fala, <strong>{save.playerName}</strong> — {club.nickname} conta com você.
         {save.season.currentRound > 0 && <> Vocês estão em <strong>{ordinal(position)}</strong>.</>}
+        {' '}
+        <span className={`morale-tag${save.morale >= 65 ? ' morale-high' : save.morale <= 35 ? ' morale-low' : ''}`}>
+          <Flame size={12} aria-hidden="true" /> moral {save.morale}
+        </span>
       </p>
+
+      {save.eventNote && (
+        <div className="division-banner event-note">
+          <Sparkles size={16} aria-hidden="true" />
+          <span className="division-banner-text">{save.eventNote}</span>
+          <button className="banner-close" onClick={onDismissEventNote} aria-label="Fechar aviso">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {save.pendingEvent && (() => {
+        const event = eventById(save.pendingEvent.templateId)
+        if (!event) return null
+        return (
+          <div className="card perk-offer event-card">
+            <div className="perk-offer-header">
+              <Flame size={18} aria-hidden="true" />
+              <div>
+                <strong>VIDA DE CRAQUE</strong>
+                <p className="muted perk-offer-reason">{event.prompt}</p>
+              </div>
+            </div>
+            <div className="perk-options">
+              {event.options.map((option, index) => (
+                <button key={option.label} className="perk-option" onClick={() => onResolveEvent(index)}>
+                  <span className="perk-name">{option.label}</span>
+                  <span className={`perk-desc event-tone event-${option.tone}`}>
+                    {option.tone}{option.chance < 1 ? ` · ${Math.round(option.chance * 100)}%` : ' · garantido'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
+      {save.perkOffer && (
+        <div className="card perk-offer">
+          <div className="perk-offer-header">
+            <Sparkles size={18} aria-hidden="true" />
+            <div>
+              <strong>NOVA HABILIDADE!</strong>
+              <p className="muted perk-offer-reason">{milestoneLabel(save.perkOffer.milestone)} Escolha UMA — sem volta.</p>
+            </div>
+          </div>
+          <div className="perk-options">
+            {save.perkOffer.options.map((perkId) => {
+              const perk = perkById(perkId)
+              return (
+                <button key={perkId} className="perk-option" onClick={() => onChoosePerk(perkId)}>
+                  <span className="perk-name">{perk.name}</span>
+                  <span className="perk-desc">{perk.description}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {callUpAvailable && nation && !tournament && seasonOver && (
         <div className="card callup-card">
@@ -169,21 +240,25 @@ export const HomeTab = ({
           )}
         </div>
       ) : (
-        nextOpponent && (
+        nextOpponent && (() => {
+          const isHomeGame = playerFixture(save.season, save.season.currentRound).homeId === save.clubId
+          const homeClub = isHomeGame ? club : nextOpponent
+          const awayClub = isHomeGame ? nextOpponent : club
+          return (
           <div className="card next-match">
             <span className="card-label">Rodada {save.season.currentRound + 1} · próximo jogo</span>
             <div className="next-match-clubs">
               <span className="next-club">
-                <ClubCrest club={club} customUrl={save.customClubCrests[club.id]} size={30} />
-                {club.name}
+                <ClubCrest club={homeClub} customUrl={save.customClubCrests[homeClub.id]} size={30} />
+                {homeClub.name}
               </span>
               <span className="next-vs">×</span>
               <span className="next-club">
-                {nextOpponent.name}
-                <ClubCrest club={nextOpponent} customUrl={save.customClubCrests[nextOpponent.id]} size={30} />
+                {awayClub.name}
+                <ClubCrest club={awayClub} customUrl={save.customClubCrests[awayClub.id]} size={30} />
               </span>
             </div>
-            <p className="next-meta">{nextOpponent.city}</p>
+            <p className="next-meta">{homeClub.city} · {isHomeGame ? 'em casa' : 'fora de casa'}</p>
             <div className="power-compare" aria-label="Força dos elencos">
               <span className="power-label">Força dos elencos (overall médio dos 11)</span>
               <div className="power-row">
@@ -204,7 +279,8 @@ export const HomeTab = ({
             </div>
             <button className="btn btn-icon" onClick={onPlayMatch}><Play size={15} aria-hidden="true" /> Jogar partida</button>
           </div>
-        )
+          )
+        })()
       )}
 
       <div className="training-row">

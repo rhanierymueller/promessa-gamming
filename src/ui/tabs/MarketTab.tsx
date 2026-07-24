@@ -39,6 +39,7 @@ export const MarketTab = ({ save, onSaveChange }: MarketTabProps) => {
   const [nationality, setNationality] = useState('all')
   const [ageFilter, setAgeFilter] = useState<(typeof AGE_FILTERS)[number]['id']>('all')
   const [priceFilter, setPriceFilter] = useState<(typeof PRICE_FILTERS)[number]['id']>('all')
+  const [isWithinBudgetOnly, setIsWithinBudgetOnly] = useState(true)
   const [selected, setSelected] = useState<MarketPlayer | null>(null)
   const [confirming, setConfirming] = useState<MarketPlayer | null>(null)
   const [hiredNote, setHiredNote] = useState<string | null>(null)
@@ -65,8 +66,9 @@ export const MarketTab = ({ save, onSaveChange }: MarketTabProps) => {
       .filter((player) => nationality === 'all' || player.nationality === nationality)
       .filter((player) => player.age >= age.min && player.age <= age.max)
       .filter((player) => player.price >= price.min && player.price <= price.max)
+      .filter((player) => !isWithinBudgetOnly || player.price <= save.budget)
       .sort((a, b) => b.overall - a.overall)
-  }, [pool, signedIds, position, nationality, ageFilter, priceFilter])
+  }, [pool, signedIds, position, nationality, ageFilter, priceFilter, isWithinBudgetOnly, save.budget])
 
   const PAGE_SIZE = 15
   const totalPages = Math.max(1, Math.ceil(listed.length / PAGE_SIZE))
@@ -134,6 +136,14 @@ export const MarketTab = ({ save, onSaveChange }: MarketTabProps) => {
               <option key={entry.id} value={entry.id}>{entry.label}</option>
             ))}
           </select>
+          <label className="market-within">
+            <input
+              type="checkbox"
+              checked={isWithinBudgetOnly}
+              onChange={(event) => { setPage(0); setIsWithinBudgetOnly(event.target.checked) }}
+            />
+            Só dentro da verba
+          </label>
         </div>
 
         {hiredNote && (
@@ -141,7 +151,11 @@ export const MarketTab = ({ save, onSaveChange }: MarketTabProps) => {
         )}
         <div className="market-list">
           {listed.length === 0 && (
-            <p className="muted">Nenhum jogador com esses filtros — afrouxa a peneira.</p>
+            <p className="muted">
+              {isWithinBudgetOnly
+                ? 'Nenhum jogador dentro da verba com esses filtros — desmarque "Só dentro da verba" para ver o mercado todo.'
+                : 'Nenhum jogador com esses filtros — afrouxa a peneira.'}
+            </p>
           )}
           {paged.map((player) => {
             const affordable = player.price <= save.budget
@@ -176,7 +190,7 @@ export const MarketTab = ({ save, onSaveChange }: MarketTabProps) => {
                     setConfirming(player)
                   }}
                 >
-                  Contratar
+                  {affordable ? 'Contratar' : 'Sem verba'}
                 </button>
               </div>
             )
