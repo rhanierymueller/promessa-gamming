@@ -10,6 +10,87 @@ interface NamePool {
 }
 
 export const NATIONAL_NAMES: Record<string, NamePool> = {
+  brasil: {
+    firsts: ['Gabriel', 'Matheus', 'Lucas', 'Rodrigo', 'Vinícius', 'Thiago', 'Bruno', 'Douglas', 'Everton', 'Wesley', 'Caio', 'Rafael', 'Danilo', 'Igor', 'Murilo', 'Kaio'],
+    lasts: ['Andrade', 'Batista', 'Cardoso', 'Duarte', 'Esteves', 'Franco', 'Guedes', 'Lacerda', 'Machado', 'Nogueira', 'Peixoto', 'Queiroz', 'Rezende', 'Siqueira', 'Teixeira', 'Vasques'],
+  },
+  'estados-unidos': {
+    firsts: ['Tyler', 'Brandon', 'Weston', 'Cameron', 'Jordan', 'Trevor', 'Chase', 'Aaron', 'Dylan', 'Shane', 'Kellyn', 'Reggie', 'Malik', 'Bryce', 'Devon', 'Hunter'],
+    lasts: ['Whitaker', 'Holloway', 'Bradley', 'Sanderson', 'Kimball', 'Rowley', 'Ferrell', 'Dawkins', 'Hollis', 'Sutter', 'Marsden', 'Boyle', 'Radcliff', 'Weaver', 'Norton', 'Ellery'],
+  },
+  honduras: {
+    firsts: ['Alberth', 'Maynor', 'Wilson', 'Deybi', 'Kervin', 'Denil', 'Romell', 'Bryan', 'Edwin', 'Jorge', 'Óscar', 'Rubilio', 'Emilio', 'Alexander', 'Marcelo', 'Jhow'],
+    lasts: ['Discua', 'Beckeles', 'Lozano', 'Chirinos', 'Quioto', 'Elis', 'Crisanto', 'Rivas', 'Bengtson', 'Álvarez', 'Sabillón', 'Meléndez', 'Arriaga', 'Vega', 'Maldonado', 'Acosta'],
+  },
+  'holanda-nz': {
+    firsts: ['Liam', 'Ryan', 'Callum', 'Bill', 'Marco', 'Storm', 'Jesse', 'Elijah', 'Tommy', 'Clayton', 'Alex', 'Logan', 'Matthew', 'Joe', 'Dane', 'Cameron'],
+    lasts: ['Tuiloma', 'Waine', 'Boxall', 'Garbett', 'Payne', 'Rufer', 'Stamenić', 'Just', 'Cacace', 'Barbarouses', 'Bindon', 'Lewis', 'Ridgway', 'Colvey', 'Ingham', 'Doyle'],
+  },
+  australia: {
+    firsts: ['Jackson', 'Mitchell', 'Riley', 'Harry', 'Connor', 'Lachlan', 'Bailey', 'Cooper', 'Declan', 'Jamie', 'Craig', 'Nathaniel', 'Aiden', 'Kye', 'Brandon', 'Marco'],
+    lasts: ['Hartley', 'Baccus', 'Metcalfe', 'Whelan', 'Goodwin', 'Atkinson', 'Behich', 'Wright', 'Deng', 'Mabil', 'Rowles', 'Souttar', 'Gersbach', 'Burgess', 'Redmayne', 'Hollman'],
+  },
+  japao: {
+    firsts: ['Takumi', 'Ren', 'Sota', 'Yuto', 'Kaito', 'Hayato', 'Riku', 'Daiki', 'Shota', 'Kenta', 'Yuki', 'Ryo', 'Haruto', 'Kosei', 'Naoki', 'Tatsuya'],
+    lasts: ['Matsuda', 'Kobayashi', 'Fujimoto', 'Ishikawa', 'Yamashita', 'Sakamoto', 'Nishida', 'Morita', 'Ogawa', 'Takeda', 'Hasegawa', 'Kurihara', 'Miyazaki', 'Aoyama', 'Uchida', 'Shimizu'],
+  },
+  'coreia-do-sul': {
+    firsts: ['Min-jun', 'Ji-hoon', 'Seo-jun', 'Do-yun', 'Ha-jun', 'Eun-woo', 'Si-woo', 'Jae-hyun', 'Tae-yang', 'Woo-jin', 'Hyun-woo', 'Sung-min', 'Jun-seo', 'Dong-hyun', 'Ye-jun', 'Gun-woo'],
+    lasts: ['Kang', 'Yoon', 'Jang', 'Lim', 'Shin', 'Oh', 'Han', 'Seo', 'Kwon', 'Hwang', 'Ahn', 'Song', 'Ryu', 'Baek', 'Nam', 'Cho'],
+  },
+  'africa-do-sul': {
+    firsts: ['Thabo', 'Sipho', 'Lebo', 'Kagiso', 'Tshepo', 'Bongani', 'Mandla', 'Katlego', 'Themba', 'Lucky', 'Percy', 'Siyabonga', 'Teboho', 'Refiloe', 'Aubrey', 'Keagan'],
+    lasts: ['Mokoena', 'Ndlovu', 'Dlamini', 'Zwane', 'Mashego', 'Nkosi', 'Sithole', 'Mabaso', 'Radebe', 'Khumalo', 'Maluleka', 'Sekgota', 'Mbatha', 'Mothiba', 'Ngcobo', 'Baartman'],
+  },
+  nigeria: {
+    firsts: ['Chidi', 'Emeka', 'Kelechi', 'Uche', 'Ifeanyi', 'Obinna', 'Samuel', 'Ola', 'Musa', 'Tunde', 'Chukwu', 'Ebere', 'Femi', 'Nnamdi', 'Sadiq', 'Kalu'],
+    lasts: ['Adeyemi', 'Onwuka', 'Balogun', 'Ekong', 'Ndidi', 'Aribo', 'Chukwueze', 'Olayinka', 'Ajayi', 'Iheanacho', 'Ogundele', 'Nwabali', 'Bassey', 'Adegoke', 'Umeh', 'Oyedele'],
+  },
+  argelia: {
+    firsts: ['Yacine', 'Riyad', 'Sofiane', 'Islam', 'Amine', 'Nabil', 'Karim', 'Adem', 'Ramy', 'Youcef', 'Hicham', 'Mehdi', 'Bilal', 'Farid', 'Zakaria', 'Anis'],
+    lasts: ['Benzia', 'Bounedjah', 'Zerrouki', 'Mandi', 'Atal', 'Boudaoui', 'Chaibi', 'Guedioura', 'Belaïli', 'Tahrat', 'Ounas', 'Zeghba', 'Bensebaini', 'Amoura', 'Ghezzal', 'Delort'],
+  },
+  gana: {
+    firsts: ['Kwame', 'Kofi', 'Yaw', 'Kojo', 'Mohammed', 'Daniel', 'Ernest', 'Baba', 'Elisha', 'Fatawu', 'Alidu', 'Osman', 'Gideon', 'Abdul', 'Joseph', 'Emmanuel'],
+    lasts: ['Owusu', 'Mensah', 'Boateng', 'Asamoah', 'Amartey', 'Djiku', 'Sulemana', 'Kudus', 'Semenyo', 'Nuamah', 'Adjei', 'Opoku', 'Kyereh', 'Bediako', 'Lamptey', 'Amoah'],
+  },
+  camaroes: {
+    firsts: ['Vincent', 'Karl', 'Bryan', 'Olivier', 'Jean', 'Christian', 'Nicolas', 'Georges', 'Martin', 'Frank', 'André', 'Ambroise', 'Collins', 'Wilfried', 'Enzo', 'Léandre'],
+    lasts: ['Ngadeu', 'Tolo', 'Mbeumo', 'Ntcham', 'Onana', 'Fai', 'Anguissa', 'Ebosse', 'Wooh', 'Toko', 'Mbekeli', 'Nkoulou', 'Choupo', 'Bassogog', 'Kunde', 'Etoundi'],
+  },
+  'costa-do-marfim': {
+    firsts: ['Sébastien', 'Franck', 'Ibrahim', 'Serge', 'Jean', 'Amad', 'Nicolas', 'Willy', 'Odilon', 'Yahia', 'Seko', 'Ghislain', 'Christian', 'Karim', 'Oumar', 'Simon'],
+    lasts: ['Kessié', 'Sangaré', 'Diomandé', 'Konaté', 'Boly', 'Aurier', 'Gradel', 'Bailly', 'Doumbia', 'Zaha', 'Fofana', 'Sylla', 'Kouassi', 'Traoré', 'Koné', 'Cissé'],
+  },
+  grecia: {
+    firsts: ['Giorgos', 'Dimitris', 'Kostas', 'Anastasios', 'Petros', 'Vangelis', 'Manolis', 'Sokratis', 'Christos', 'Alexandros', 'Panagiotis', 'Nikos', 'Stefanos', 'Lazaros', 'Ilias', 'Thanasis'],
+    lasts: ['Mantalos', 'Bakasetas', 'Siopis', 'Retsos', 'Tzolakis', 'Vagiannidis', 'Pelkas', 'Kourbelis', 'Zafeiris', 'Ioannidis', 'Konstantelias', 'Douvikas', 'Giannoulis', 'Baldock', 'Masouras', 'Rota'],
+  },
+  eslovenia: {
+    firsts: ['Jan', 'Miha', 'Luka', 'Nejc', 'Timi', 'Žan', 'Benjamin', 'Andraž', 'Adam', 'Vanja', 'Petar', 'Erik', 'David', 'Sandi', 'Tomi', 'Rok'],
+    lasts: ['Oblak', 'Verbič', 'Bijol', 'Stojanović', 'Elšnik', 'Črnigoj', 'Karničnik', 'Zajc', 'Gnezda', 'Horvat', 'Lovrić', 'Drkušić', 'Balkovec', 'Vipotnik', 'Šporar', 'Blažič'],
+  },
+  eslovaquia: {
+    firsts: ['Milan', 'Juraj', 'Ondrej', 'Lukáš', 'Dávid', 'Tomáš', 'Matúš', 'Peter', 'Róbert', 'Adam', 'Denis', 'Ivan', 'Patrik', 'Michal', 'Norbert', 'Samuel'],
+    lasts: ['Duda', 'Kucka', 'Hancko', 'Škriniar', 'Bénes', 'Suslov', 'Vavro', 'Lobotka', 'Haraslín', 'Bozeník', 'Rusnák', 'Gyömbér', 'Obert', 'Strelec', 'Pekarík', 'Dubravka'],
+  },
+  servia: {
+    firsts: ['Nikola', 'Aleksandar', 'Marko', 'Filip', 'Luka', 'Dušan', 'Stefan', 'Uroš', 'Miloš', 'Nemanja', 'Sergej', 'Andrija', 'Veljko', 'Strahinja', 'Ivan', 'Lazar'],
+    lasts: ['Milenković', 'Živković', 'Gudelj', 'Pavlović', 'Ilić', 'Kostić', 'Ristić', 'Racić', 'Babić', 'Jovanović', 'Samardžić', 'Terzić', 'Erakovic', 'Mimović', 'Radonjić', 'Stojić'],
+  },
+  dinamarca: {
+    firsts: ['Mikkel', 'Rasmus', 'Jonas', 'Anders', 'Kasper', 'Andreas', 'Jesper', 'Frederik', 'Emil', 'Joakim', 'Victor', 'Mathias', 'Oliver', 'Nicolai', 'Magnus', 'Alexander'],
+    lasts: ['Damsgaard', 'Wind', 'Nørgaard', 'Bruun', 'Kristensen', 'Skov', 'Højbjerg', 'Jensen', 'Andersen', 'Poulsen', 'Dolberg', 'Vestergaard', 'Bah', 'Christensen', 'Lerager', 'Olsen'],
+  },
+  noruega: {
+    firsts: ['Martin', 'Kristian', 'Sander', 'Ola', 'Håkon', 'Jørgen', 'Fredrik', 'Emil', 'Mats', 'Andreas', 'Morten', 'Sivert', 'Leo', 'Torbjørn', 'Ulrik', 'Oscar'],
+    lasts: ['Berge', 'Sørloth', 'Thorsby', 'Ryerson', 'Strand', 'Aursnes', 'Bjørkan', 'Østigård', 'Nusa', 'Myhre', 'Hanche', 'Solbakken', 'Elyounoussi', 'Kjetland', 'Bobb', 'Ellingsen'],
+  },
+  suica: {
+    firsts: ['Fabian', 'Remo', 'Silvan', 'Noah', 'Ruben', 'Michel', 'Andi', 'Renato', 'Dan', 'Nico', 'Zeki', 'Cédric', 'Loris', 'Denis', 'Vincent', 'Filip'],
+    lasts: ['Widmer', 'Freuler', 'Rieder', 'Aebischer', 'Vargas', 'Ndoye', 'Amdouni', 'Steffen', 'Sierro', 'Elvedi', 'Kobel', 'Zesiger', 'Stergiou', 'Schmidt', 'Jashari', 'Sow'],
+  },
+
   argentina: {
     firsts: ['Joaquín', 'Nicolás', 'Santiago', 'Agustín', 'Facundo', 'Matías', 'Tomás', 'Franco', 'Gonzalo', 'Ezequiel', 'Ramiro', 'Bautista', 'Ignacio', 'Julián', 'Lucio', 'Valentín'],
     lasts: ['Acosta', 'Benítez', 'Cabral', 'Domínguez', 'Escobar', 'Figueroa', 'Giménez', 'Herrera', 'Juárez', 'Ledesma', 'Molina', 'Núñez', 'Ojeda', 'Pereyra', 'Quiroga', 'Sosa'],

@@ -20,14 +20,14 @@ import {
   type PendingLifeEvent,
 } from '../engine/career/events'
 import {
-  dueMilestone,
-  isMilestoneId,
+  isPerfectRating,
   isPerkId,
-  offerForMilestone,
+  perkOptionsFor,
+  PERFECT_GAMES_FOR_PERK,
   perkTrainingBonus,
   type PerkId,
-  type PerkMilestoneId,
 } from '../engine/career/perks'
+import { playerAgeInSeason } from '../engine/squad/aging'
 import { createRival, rivalRoundGoals, type RivalState } from '../engine/career/rival'
 import {
   applyPromotionRelegation,
@@ -49,7 +49,7 @@ import { isOffensiveName } from './moderation'
  * (nacionalidade padrão Brasil + temporada nova).
  */
 
-export const SAVE_VERSION = 18
+export const SAVE_VERSION = 19
 const SAVE_KEY = 'promessa.save'
 export const MAX_PLAYER_NAME = 16
 const DEFAULT_SHIRT_NUMBER = 10
@@ -170,6 +170,13 @@ export interface PlayerSave {
   readonly formation: FormationId
   /** Escalação: índice do elenco (0-17) em cada um dos 11 slots da formação. */
   readonly lineup: readonly number[]
+  /**
+   * Escalação da SELEÇÃO, separada da do clube: são elencos diferentes e
+   * mexer num não pode desarrumar o outro.
+   */
+  readonly nationalLineup: readonly number[]
+  /** Esquema tático da seleção — você também é o técnico dela. */
+  readonly nationalFormation: FormationId
   /** Totais da carreira — o histórico detalhado guarda só as últimas 10. */
   readonly career: CareerTotals
   /** Nomes LOCAIS dos SEUS jogadores (playerId → nome) — cada um editável UMA vez. */
@@ -186,8 +193,8 @@ export interface PlayerSave {
   readonly perks: readonly PerkId[]
   /** Escolha de perk pendente (1 de até 3) — null sem marco aberto. */
   readonly perkOffer: PerkOffer | null
-  /** Marcos já disparados (cada um oferece perk uma única vez). */
-  readonly claimedMilestones: readonly PerkMilestoneId[]
+  /** Atuações nota 10 desde a última habilidade escolhida. */
+  readonly perfectGames: number
   /** Moral do craque (0-100) — entra em campo na nota inicial. */
   readonly morale: number
   /** Evento de vida aguardando decisão (null = semana tranquila). */
@@ -199,7 +206,6 @@ export interface PlayerSave {
 }
 
 export interface PerkOffer {
-  readonly milestone: PerkMilestoneId
   readonly options: readonly PerkId[]
 }
 
@@ -315,6 +321,8 @@ export const createSave = (
     account,
     formation: DEFAULT_FORMATION,
     lineup: defaultLineup(DEFAULT_FORMATION, position),
+    nationalLineup: Array.from({ length: 11 }, (_, index) => index),
+    nationalFormation: DEFAULT_FORMATION,
     career: EMPTY_CAREER,
     customPlayerNames: {},
     customClubColors: {},
@@ -323,7 +331,7 @@ export const createSave = (
     trophies: [],
     perks: [],
     perkOffer: null,
-    claimedMilestones: [],
+    perfectGames: 0,
     morale: DEFAULT_MORALE,
     pendingEvent: null,
     eventNote: null,
@@ -332,34 +340,26 @@ export const createSave = (
 }
 
 /** Checa marcos da carreira: dispara UMA oferta de perk por vez. */
-const withMilestoneCheck = (
-  save: PlayerSave,
-  lastRating: number,
-  promoted: boolean,
-): PlayerSave => {
-  if (save.perkOffer) return save
-  const due = dueMilestone(
-    {
-      games: save.career.games,
-      goals: save.career.goals,
-      lastRating,
-      trophiesCount: save.trophies.length,
-      promoted,
-    },
-    save.claimedMilestones,
-  )
-  if (!due) return save
-  const options = offerForMilestone(due, save.perks)
-  const claimedMilestones = [...save.claimedMilestones, due]
-  if (options.length === 0) return { ...save, claimedMilestones }
-  return { ...save, claimedMilestones, perkOffer: { milestone: due, options } }
+/**
+ * Conta a atuação e abre a escolha de habilidade na quinta nota 10.
+ * A contagem só zera quando o jogador ESCOLHE (ver choosePerk).
+ */
+const withPerkCheck = (save: PlayerSave, lastRating: number): PlayerSave => {
+  if (!isPerfectRating(lastRating)) return save
+  const perfectGames = save.perfectGames + 1
+  if (save.perkOffer || perfectGames < PERFECT_GAMES_FOR_PERK) return { ...save, perfectGames }
+  const options = perkOptionsFor(save.perks)
+  // catálogo esgotado: segue contando, mas não há o que oferecer
+  if (options.length === 0) return { ...save, perfectGames }
+  return { ...save, perfectGames, perkOffer: { options } }
 }
 
 /** Escolhe um perk da oferta pendente — no-op se a opção não estiver nela. */
 export const choosePerk = (save: PlayerSave, perkId: PerkId): PlayerSave => {
   if (!save.perkOffer || !save.perkOffer.options.includes(perkId)) return save
   if (save.perks.includes(perkId)) return { ...save, perkOffer: null }
-  return { ...save, perks: [...save.perks, perkId], perkOffer: null }
+  // ciclo reiniciado: a próxima habilidade custa outras cinco notas 10
+  return { ...save, perks: [...save.perks, perkId], perkOffer: null, perfectGames: 0 }
 }
 
 /** Você é o técnico: muda o desenho tático mantendo o seu craque em campo. */
@@ -394,6 +394,36 @@ export const swapLineup = (save: PlayerSave, slotIndex: number, squadIndex: numb
   lineup[slotIndex] = squadIndex
   return { ...save, lineup }
 }
+
+/**
+ * Troca na seleção — mesma regra do clube: o seu craque não sai de campo e
+ * quem já era titular apenas muda de vaga.
+ */
+export const swapNationalLineup = (
+  save: PlayerSave,
+  slotIndex: number,
+  squadIndex: number,
+): PlayerSave => {
+  const lineup = [...save.nationalLineup]
+  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= lineup.length) return save
+  if (!Number.isInteger(squadIndex) || squadIndex < 0 || squadIndex > 17) return save
+  const alreadyAt = lineup.indexOf(squadIndex)
+  if (alreadyAt === slotIndex) return save
+  if (alreadyAt >= 0) lineup[alreadyAt] = lineup[slotIndex]
+  lineup[slotIndex] = squadIndex
+  return { ...save, nationalLineup: lineup }
+}
+
+/**
+ * Troca o esquema da seleção. A escalação volta ao padrão porque os slots
+ * mudam de posição entre formações — manter os índices deixaria zagueiro na
+ * ponta sem o jogador ter pedido.
+ */
+export const setNationalFormation = (save: PlayerSave, formation: FormationId): PlayerSave => ({
+  ...save,
+  nationalFormation: formation,
+  nationalLineup: Array.from({ length: 11 }, (_, index) => index),
+})
 
 export const setShirtNumber = (save: PlayerSave, shirtNumber: number): PlayerSave => ({
   ...save,
@@ -468,7 +498,7 @@ export const withTournamentState = (save: PlayerSave, state: TournamentState): P
       ? [...save.trophies, { kind: state.kind, year: save.careerYear }]
       : save.trophies,
   }
-  return becameChampion ? withMilestoneCheck(updated, 0, false) : updated
+  return updated
 }
 
 /** Contrata um jogador do mercado: desconta a verba e grava o reforço. */
@@ -506,6 +536,13 @@ const normalizePlayerNames = (value: unknown): Readonly<Record<string, string>> 
 }
 
 /** Nome de exibição do clube, com a renomeação local aplicada. */
+/**
+ * Idade ATUAL do craque: a da criação mais uma por temporada. É a única
+ * fonte da idade — Perfil e elenco leem daqui.
+ */
+export const currentPlayerAge = (save: PlayerSave): number =>
+  playerAgeInSeason(save.playerAge, save.careerYear)
+
 export const clubDisplayName = (save: PlayerSave, clubId: string): string =>
   save.customClubNames[clubId] ?? clubById(clubId)?.name ?? '???'
 
@@ -571,13 +608,15 @@ const normalizePerks = (value: unknown): readonly PerkId[] =>
 const normalizePerkOffer = (value: unknown, owned: readonly PerkId[]): PerkOffer | null => {
   if (typeof value !== 'object' || value === null) return null
   const candidate = value as Record<string, unknown>
-  if (!isMilestoneId(candidate.milestone) || !Array.isArray(candidate.options)) return null
+  if (!Array.isArray(candidate.options)) return null
   const options = candidate.options.filter(isPerkId).filter((id) => !owned.includes(id))
-  return options.length > 0 ? { milestone: candidate.milestone, options } : null
+  return options.length > 0 ? { options } : null
 }
 
-const normalizeMilestones = (value: unknown): readonly PerkMilestoneId[] =>
-  Array.isArray(value) ? [...new Set(value.filter(isMilestoneId))] : []
+const normalizePerfectGames = (value: unknown): number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0
+    ? Math.min(value, PERFECT_GAMES_FOR_PERK)
+    : 0
 
 const normalizeRival = (value: unknown): RivalState | null => {
   if (typeof value !== 'object' || value === null) return null
@@ -642,7 +681,9 @@ export const displayClub = (save: PlayerSave, club: Club): Club => {
   if (!customName && !customColors) return club
   return {
     ...club,
-    ...(customName ? { name: customName, abbr: abbrFor(customName) } : {}),
+    // o apelido é do clube ORIGINAL: rebatizado, ele não vale mais e o nome
+    // novo assume (senão a saudação segue chamando o time pelo nome antigo)
+    ...(customName ? { name: customName, abbr: abbrFor(customName), nickname: customName } : {}),
     ...(customColors ? { colors: customColors } : {}),
   }
 }
@@ -660,6 +701,17 @@ const normalizeAccount = (value: unknown): SaveAccount | null => {
   const email = candidate.email.trim()
   const username = candidate.username.trim()
   return email.length > 0 && username.length > 0 ? { email, username } : null
+}
+
+/** Escalação da seleção: 11 índices distintos de 0 a 17, senão volta ao padrão. */
+const normalizeNationalLineup = (value: unknown): readonly number[] => {
+  const fallback = Array.from({ length: 11 }, (_, index) => index)
+  if (!Array.isArray(value) || value.length !== 11) return fallback
+  const valid = value.every(
+    (item) => Number.isInteger(item) && (item as number) >= 0 && (item as number) <= 17,
+  )
+  if (!valid || new Set(value).size !== 11) return fallback
+  return value as number[]
 }
 
 const normalizeLineup = (
@@ -792,7 +844,7 @@ export const recordMatch = (save: PlayerSave, record: MatchRecord): PlayerSave =
     pendingEvent,
     rival,
   }
-  return withMilestoneCheck(updated, record.rating, false)
+  return withPerkCheck(updated, record.rating)
 }
 
 /** Decide o evento de vida pendente: moral (e às vezes treino) reagem. */
@@ -862,7 +914,8 @@ export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random)
   const updated: PlayerSave = {
     ...save,
     careerYear: save.careerYear + 1,
-    playerAge: save.playerAge + 1,
+    // playerAge é a idade de CRIAÇÃO e não muda: currentPlayerAge já soma as
+    // temporadas por cima dela. Somar aqui também envelhecia dois anos por ano.
     tournamentPlayed: false,
     tournament: null,
     divisions: shift.value.divisions,
@@ -874,7 +927,7 @@ export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random)
       : save.trophies,
     rival,
   }
-  return withMilestoneCheck(updated, 0, shift.value.movement === 'up')
+  return updated
 }
 
 /** Envia (ou remove, com null) o escudo local de um clube. */
@@ -937,14 +990,32 @@ const normalizeAttributes = (value: unknown): PlayerAttributes => {
   return result
 }
 
+/**
+ * Até a v18 a virada de temporada somava um ano em playerAge, que já era
+ * somado de novo por currentPlayerAge — o craque envelhecia dois anos por
+ * temporada. Devolve a idade de criação para quem carrega um save antigo.
+ */
+const fixInflatedAge = (candidate: Record<string, unknown>): Record<string, unknown> => {
+  const version = candidate.version
+  if (typeof version !== 'number' || version >= SAVE_VERSION) return candidate
+  const age = candidate.playerAge
+  const year = candidate.careerYear
+  if (typeof age !== 'number' || typeof year !== 'number') return candidate
+  const seasons = Math.max(0, year - 1)
+  return { ...candidate, playerAge: Math.max(PLAYER_MIN_AGE, age - seasons) }
+}
+
 const isValidTournament = (value: unknown): value is TournamentState => {
   if (typeof value !== 'object' || value === null) return false
   const t = value as Record<string, unknown>
   return (
     typeof t.kind === 'string' &&
     typeof t.playerNationId === 'string' &&
-    Array.isArray(t.groupA) &&
-    Array.isArray(t.groupB) &&
+    // formato de grupos em lista: save antigo (groupA/groupB) é descartado
+    // em vez de quebrar a tela do torneio no meio da carreira
+    Array.isArray(t.groups) &&
+    t.groups.length > 0 &&
+    t.groups.every((group) => Array.isArray(group)) &&
     typeof t.stage === 'string' &&
     Array.isArray(t.results)
   )
@@ -1032,6 +1103,8 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
     account: normalizeAccount(candidate.account),
     formation: normalizeFormation(candidate.formation),
     lineup: normalizeLineup(candidate.lineup, normalizeFormation(candidate.formation), normalizePosition(candidate.playerPosition)),
+    nationalLineup: normalizeNationalLineup(candidate.nationalLineup),
+    nationalFormation: normalizeFormation(candidate.nationalFormation),
     career: normalizeCareer(candidate.career, normalizeHistory(candidate.history)),
     customPlayerNames: normalizePlayerNames(candidate.customPlayerNames),
     customClubColors: normalizeClubColors(candidate.customClubColors),
@@ -1040,7 +1113,7 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
     trophies: normalizeTrophies(candidate.trophies),
     perks: normalizePerks(candidate.perks),
     perkOffer: normalizePerkOffer(candidate.perkOffer, normalizePerks(candidate.perks)),
-    claimedMilestones: normalizeMilestones(candidate.claimedMilestones),
+    perfectGames: normalizePerfectGames(candidate.perfectGames),
     morale: normalizeMorale(candidate.morale),
     pendingEvent: normalizePendingEvent(candidate.pendingEvent),
     eventNote: typeof candidate.eventNote === 'string' && candidate.eventNote.length > 0
@@ -1073,9 +1146,10 @@ export const parseSave = (raw: string | null): PlayerSave | null => {
       candidate.version === 15 ||
       candidate.version === 16 ||
       candidate.version === 17 ||
+      candidate.version === 18 ||
       candidate.version === SAVE_VERSION
     ) {
-      return parseCurrent(candidate)
+      return parseCurrent(fixInflatedAge(candidate))
     }
     return null
   } catch {

@@ -6,7 +6,8 @@ import reporterUrl from '../assets/npcs/reporter.jpg'
 import portraitFUrl from '../assets/sprites/f_portrait.png'
 import portraitUrl from '../assets/sprites/s_portrait.png'
 import type { Club } from '../data/clubs'
-import { newsFor, type NewsSource } from '../engine/career/news'
+import { newsFor, type NewsItem, type NewsSource } from '../engine/career/news'
+import { faceUrlFor } from '../game/faces'
 import type { PlayerSave } from '../state/save'
 import { ClubCrest } from './ClubCrest'
 import { NationFlag } from './NationFlag'
@@ -52,11 +53,13 @@ export const NewsCarousel = ({ save, club }: NewsCarouselProps) => {
 
   if (news.length === 0) return null
 
-  const portraitFor = (source: NewsSource): string | null => {
-    if (source === 'jogador') {
+  const portraitFor = (entry: NewsItem): string | null => {
+    // entrevista: o rosto é o de quem falou, o mesmo das cartas do elenco
+    if (entry.speaker) return faceUrlFor(entry.speaker.playerId)
+    if (entry.source === 'jogador') {
       return save.appearance.gender === 'feminino' ? portraitFUrl : portraitUrl
     }
-    return PORTRAITS[source] ?? null
+    return PORTRAITS[entry.source] ?? null
   }
 
   return (
@@ -69,7 +72,7 @@ export const NewsCarousel = ({ save, club }: NewsCarouselProps) => {
         onPointerLeave={() => { pausedRef.current = false }}
       >
         {news.map((entry) => {
-          const portrait = portraitFor(entry.source)
+          const portrait = portraitFor(entry)
           return (
             <article key={entry.id} className="news-card">
               <div className="news-media">

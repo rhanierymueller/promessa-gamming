@@ -5,6 +5,7 @@ export const DEFAULT_MATCH_CONFIG: MatchConfig = {
   playerFreeKicks: 1,
   playerPasses: 2,
   opponentFreeKicks: 1,
+  diceDuelChance: 0.3,
   teamGoalChance: 0.4,
   opponentGoalChance: 0.35,
   maxTeamGoals: 2,

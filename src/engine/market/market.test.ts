@@ -8,6 +8,7 @@ import {
   starsFor,
   type Signing,
 } from './market'
+import { ageValueMultiplier } from './valuation'
 import { CLUBS } from '../../data/clubs'
 import { NATIONAL_NAMES } from '../../data/nationalNames'
 import { squadPlayersFor } from '../squad/players'
@@ -64,14 +65,38 @@ describe('marketPoolFor — o leque de jogadores', () => {
     expect(new Set(pool.map((p) => p.nationality)).size).toBeGreaterThanOrEqual(4)
   })
 
-  test('idades de mercado e preço sempre dentro da faixa do overall', () => {
+  test('preço parte da faixa do overall e é corrigido pela idade', () => {
     for (const player of pool) {
       expect(player.age).toBeGreaterThanOrEqual(16)
       expect(player.age).toBeLessThanOrEqual(36)
+      // a faixa do overall é a BASE; idade e potencial esticam ou encolhem
       const range = priceRangeFor(player.overall)
-      expect(player.price).toBeGreaterThanOrEqual(range.min)
-      expect(player.price).toBeLessThanOrEqual(range.max)
+      const multiplier = ageValueMultiplier(player.age, player.potential)
+      const middle = (range.min + range.max) / 2
+      // piso de mercado pode elevar o preço do jogador mais desvalorizado
+      expect(player.price).toBeGreaterThanOrEqual(Math.min(100_000, middle * multiplier * 0.8))
+      expect(player.price).toBeLessThanOrEqual(Math.max(150_000, middle * multiplier * 1.25))
     }
+  })
+
+  test('mesmo overall: o mais jovem custa mais que o veterano', () => {
+    // Arrange: agrupa por overall e compara os extremos de idade
+    const byOverall = new Map<number, typeof pool[number][]>()
+    for (const player of pool) {
+      byOverall.set(player.overall, [...(byOverall.get(player.overall) ?? []), player])
+    }
+    let comparados = 0
+    for (const grupo of byOverall.values()) {
+      if (grupo.length < 2) continue
+      const ordenado = [...grupo].sort((a, b) => a.age - b.age)
+      const jovem = ordenado[0]
+      const veterano = ordenado[ordenado.length - 1]
+      if (veterano.age - jovem.age < 8) continue
+      comparados++
+      expect(jovem.price).toBeGreaterThan(veterano.price)
+    }
+    // o pool precisa ter oferecido pelo menos um par para a comparação valer
+    expect(comparados).toBeGreaterThan(0)
   })
 
   test('tem baratos e tem estrelas caras', () => {
@@ -79,16 +104,14 @@ describe('marketPoolFor — o leque de jogadores', () => {
     expect(pool.some((p) => p.price >= 8_000_000)).toBe(true)
   })
 
-  test('de R$ 400 mil pra cima, overall NUNCA abaixo de 60', () => {
+  test('ninguém sai de graça, nem o veterano mais desvalorizado', () => {
     for (const player of pool) {
-      if (player.price >= 400_000) {
-        expect(player.overall).toBeGreaterThanOrEqual(60)
-      }
+      expect(player.price).toBeGreaterThanOrEqual(100_000)
     }
   })
 })
 
-describe('squadWithSignings — contratado entra no lugar do pior da posição', () => {
+describe('squadWithSignings — contratado ocupa uma vaga da posição dele', () => {
   const club = CLUBS[0]
   const base = squadPlayersFor(club, 1)
   const signing: Signing = {
@@ -104,7 +127,12 @@ describe('squadWithSignings — contratado entra no lugar do pior da posição',
     price: 5_000_000,
   }
 
-  test('substitui o zagueiro mais fraco e mantém 18 jogadores', () => {
+  test('ocupa uma vaga de zagueiro e mantém 18 jogadores', () => {
+    /*
+     * A vaga sai da POSIÇÃO, não de quem é o mais fraco: escolher pelo
+     * overall movia o reforço de índice a cada temporada e desmanchava a
+     * escalação do jogador. Ver signingSlot.test.ts.
+     */
     // Act
     const squad = squadWithSignings(base, [signing], 1)
 
@@ -113,9 +141,8 @@ describe('squadWithSignings — contratado entra no lugar do pior da posição',
     const reforco = squad.find((player) => player.id === 'mkt-teste')!
     expect(reforco.name).toBe('Reforço Caro')
     expect(reforco.age).toBe(24)
-    const zagueiros = base.filter((player) => player.position === 'ZAG')
-    const pior = zagueiros.reduce((worst, player) => (player.overall < worst.overall ? player : worst))
-    expect(squad.some((player) => player.id === pior.id)).toBe(false)
+    const slot = squad.findIndex((player) => player.id === 'mkt-teste')
+    expect(base[slot].position).toBe('ZAG')
   })
 
   test('contratado envelhece com as temporadas e se aposenta aos 38', () => {

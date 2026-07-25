@@ -2,6 +2,7 @@ import { goalCenter } from '../engine/shot/config'
 import type { Vec2 } from '../engine/shot/types'
 import type { GameSprites, KeeperPose, SpriteHolder, StrikerPose } from './assets'
 import { flightX } from '../engine/shot/flight'
+import { defenseKeeperPose, diveLift } from './keeperPose'
 import {
   ballFlightPosition,
   barTAt,
@@ -158,18 +159,47 @@ const drawGoal = (ctx: CanvasRenderingContext2D, state: StageState): void => {
   ctx.fillRect(goal.right - 2, top - 4, 4, 4)
 }
 
+/** Passinho lateral do goleiro na espera (unidades lógicas e rad/s). */
+const SHUFFLE_RANGE = 9
+const SHUFFLE_SPEED = 1.5
+
 const smoothstep = (t: number): number => t * t * (3 - 2 * t)
 
 const KEEPER_SAVED_HOLD = 0.6
+/** Tempo DEITADO no gramado depois do mergulho, antes de esboçar reação. */
+const KEEPER_GROUND_HOLD = 0.5
+/** Duração do levantar, antes de assumir a pose de cabeça baixa. */
+const KEEPER_GETUP_DELAY = 0.4
 /** Mergulho a partir daqui é VOO — corpo totalmente esticado. */
 const KEEPER_LONG_DIVE = 32
 
 const keeperPoseFor = (
   state: StageState,
-  drag: readonly Vec2[] | null,
 ): { pose: KeeperPose; x: number; lift: number; flip: boolean } => {
   const center = goalCenter(CFG)
   const lastResult = state.results[state.results.length - 1]
+
+  /*
+   * Defesa pilotada: a posição vem do MOTOR (keeperX), não da animação de
+   * mergulho. Esta checagem tem que vir ANTES do bloco de mergulho — ele usa
+   * sim.keeper.diveX, que na defesa é a posição inicial e faria o goleiro
+   * ignorar completamente o teclado/arrasto.
+   */
+  if (state.mode === 'defend' && state.phase !== 'result' && state.phase !== 'end') {
+    const offset = state.keeperX
+    const { pose, flip, airborne } = defenseKeeperPose(
+      offset,
+      state.keeperTargetX,
+      state.diveHigh,
+      state.phase === 'flying',
+    )
+    return {
+      pose,
+      x: center + offset,
+      lift: diveLift(state.keeperDiveP, offset, airborne),
+      flip,
+    }
+  }
 
   if (state.keeperDiveP > 0 && state.sim) {
     const d = smoothstep(state.keeperDiveP)
@@ -216,6 +246,26 @@ const keeperPoseFor = (
         flip: dist < 0,
       }
     }
+    /*
+     * Defesa pilotada + gol: ele acabou de mergulhar. Termina a queda com o
+     * corpo esticado e SÓ ENTÃO levanta — antes ele saltava direto para a
+     * pose triste em pé, como se nunca tivesse ido ao chão.
+     */
+    if (state.mode === 'defend' && state.phase === 'result' && lastResult === 'goal') {
+      const divePose: KeeperPose =
+        Math.abs(dist) > KEEPER_LONG_DIVE ? 'fly' : dist < 0 ? 'diveL' : 'diveR'
+      // caído no gramado → levanta → cabeça baixa. O tempo deitado é o que
+      // faltava: antes ele já aparecia levantando no primeiro quadro.
+      const lying = state.resultTimer < KEEPER_GROUND_HOLD
+      const gettingUp = state.resultTimer < KEEPER_GROUND_HOLD + KEEPER_GETUP_DELAY
+      return {
+        pose: lying ? divePose : gettingUp ? 'getup' : 'sad',
+        x: center + dist,
+        lift: lying ? Math.sin(Math.min(1, state.keeperDiveP) * Math.PI) * 5 : 0,
+        flip: lying && divePose === 'fly' && dist < 0,
+      }
+    }
+
     // antecipação: um instante agachado ANTES de voar (impulso de verdade)
     const anticipating = state.keeperDiveP < 0.22 && state.phase === 'flying'
     // decolagem: corpo na horizontal saindo do chão, antes do mergulho pleno
@@ -250,13 +300,6 @@ const keeperPoseFor = (
     return { pose, x: center + dist * d, lift, flip: mirrored }
   }
 
-  // defesa: o goleiro acompanha o dedo durante o arrasto (feedback imediato)
-  if (state.mode === 'defend' && state.phase === 'flying' && drag && drag.length > 1) {
-    const dragDx = drag[drag.length - 1].x - drag[0].x
-    const preview = Math.max(-16, Math.min(16, dragDx * 0.5))
-    return { pose: 'crouch', x: center + preview, lift: 0, flip: false }
-  }
-
   // ataque: o goleiro IA "lê" a bola em voo, deslocando-se sutilmente
   if (state.mode === 'shoot' && state.phase === 'flying' && state.sim) {
     const ballX = flightX(state.sim.flight, state.flightT)
@@ -272,14 +315,24 @@ const keeperPoseFor = (
   if (state.phase === 'flying' || state.phase === 'runup') {
     return { pose: 'crouch', x: center + alive, lift: bob, flip: false }
   }
-  // parado: passinhos laterais alternados no lugar de ficar congelado
-  const stepCycle = Math.floor(state.time * 1.8) % 4
-  const isStepping = stepCycle === 1 || stepCycle === 3
+  /*
+   * Passinho de CARANGUEJO da espera — só quando VOCÊ é o batedor. Quando
+   * você é o goleiro, ele não pode andar sozinho: o deslize brigaria com o
+   * seu comando e daria a sensação de controle travado no início do lance.
+   *
+   * Um sprite só de propósito: crouch É a pose de caranguejo, e alternar com
+   * step faria o goleiro "pular" de aparência — as duas artes são de levas
+   * diferentes. Quando existir um ciclo desenhado no mesmo traço, entra aqui.
+   */
+  const phase = state.time * SHUFFLE_SPEED
+  const shuffle = Math.sin(phase) * SHUFFLE_RANGE
+  // agacha um pouco mais nos extremos do trajeto, como quem planta o pé
+  const settle = Math.abs(Math.sin(phase)) * 1.4
   return {
-    pose: isStepping ? 'step' : 'idle',
-    x: center + alive,
-    lift: bob,
-    flip: stepCycle === 3,
+    pose: 'crouch',
+    x: center + shuffle,
+    lift: bob * 0.5 + settle,
+    flip: Math.cos(phase) < 0,
   }
 }
 
@@ -308,9 +361,8 @@ const drawKeeper = (
   ctx: CanvasRenderingContext2D,
   state: StageState,
   sprites: GameSprites,
-  drag: readonly Vec2[] | null,
 ): void => {
-  const { pose, x, lift, flip } = keeperPoseFor(state, drag)
+  const { pose, x, lift, flip } = keeperPoseFor(state)
   const kd = sprites.keeper
   if (!kd.idle.img) return
   const sp = kd[pose].img ? kd[pose] : kd.idle
@@ -556,7 +608,7 @@ export const drawStage = (
     ctx.globalAlpha = 1
   }
 
-  drawKeeper(ctx, state, sprites, drag)
+  drawKeeper(ctx, state, sprites)
   if (state.wall && wallSprites) drawWall(ctx, state, wallSprites)
   drawStriker(ctx, state, sprites)
 

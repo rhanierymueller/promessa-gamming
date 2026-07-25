@@ -3,7 +3,7 @@ import { createRng } from '../rng'
 import { advanceSeason } from '../season/season'
 import { createSave, recordMatch, type MatchRecord, type PlayerSave } from '../../state/save'
 import { blockbusterOfTheYear } from '../market/aiTransfers'
-import { newsFor } from './news'
+import { MAX_NEWS, newsFor } from './news'
 
 const fixedRoll = (value = 0.4): (() => number) => () => value
 
@@ -135,7 +135,7 @@ describe('rival seleção no noticiário', () => {
 })
 
 describe('notícias da liga inteira', () => {
-  test('a rodada dos OUTROS clubes vira manchete; máximo de 5 notícias', () => {
+  test('a rodada dos OUTROS clubes vira manchete; máximo respeita MAX_NEWS', () => {
     // Arrange: três rodadas jogadas
     let save = baseSave()
     for (let i = 0; i < 3; i++) save = playRound(save, 1, 2)
@@ -145,7 +145,7 @@ describe('notícias da liga inteira', () => {
     const ids = news.map((item) => item.id)
 
     // Assert
-    expect(news.length).toBeLessThanOrEqual(5)
+    expect(news.length).toBeLessThanOrEqual(MAX_NEWS)
     expect(ids).toContain('rodada-destaque')
     // perdendo todas, o líder é outro clube — e vira notícia
     expect(ids).toContain('lider-rival')

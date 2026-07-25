@@ -39,7 +39,8 @@ export const MarketTab = ({ save, onSaveChange }: MarketTabProps) => {
   const [nationality, setNationality] = useState('all')
   const [ageFilter, setAgeFilter] = useState<(typeof AGE_FILTERS)[number]['id']>('all')
   const [priceFilter, setPriceFilter] = useState<(typeof PRICE_FILTERS)[number]['id']>('all')
-  const [isWithinBudgetOnly, setIsWithinBudgetOnly] = useState(true)
+  // o mercado abre mostrando TUDO: dá para namorar o craque caro
+  const [isWithinBudgetOnly, setIsWithinBudgetOnly] = useState(false)
   const [selected, setSelected] = useState<MarketPlayer | null>(null)
   const [confirming, setConfirming] = useState<MarketPlayer | null>(null)
   const [hiredNote, setHiredNote] = useState<string | null>(null)
@@ -67,7 +68,7 @@ export const MarketTab = ({ save, onSaveChange }: MarketTabProps) => {
       .filter((player) => player.age >= age.min && player.age <= age.max)
       .filter((player) => player.price >= price.min && player.price <= price.max)
       .filter((player) => !isWithinBudgetOnly || player.price <= save.budget)
-      .sort((a, b) => b.overall - a.overall)
+      .sort((a, b) => b.price - a.price || b.overall - a.overall)
   }, [pool, signedIds, position, nationality, ageFilter, priceFilter, isWithinBudgetOnly, save.budget])
 
   const PAGE_SIZE = 15

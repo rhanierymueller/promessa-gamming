@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Trophy } from 'lucide-react'
 import { useState } from 'react'
 import { clubById } from '../data/clubs'
 import { nationById } from '../data/nations'
-import { roundDate, seasonYearFor, tournamentDate } from '../engine/career/calendar'
+import { matchDaysFor, roundDate, seasonYearFor, tournamentDate } from '../engine/career/calendar'
 import { fixturesForRound } from '../engine/season/season'
 import { SEASON_ROUNDS } from '../engine/season/types'
 import { TOURNAMENT_NAMES, tournamentKindForYear } from '../engine/tournament/tournament'
@@ -53,8 +53,13 @@ const buildSchedule = (save: PlayerSave): ReadonlyMap<string, DayMatch> => {
   return schedule
 }
 
+const WEEKDAY_NAMES = ['domingos', 'segundas', 'terças', 'quartas', 'quintas', 'sextas', 'sábados']
+
 export const SeasonCalendar = ({ save }: SeasonCalendarProps) => {
   const year = seasonYearFor(save.careerYear)
+  const matchDayLabel = matchDaysFor(save.careerYear)
+    .map((weekday) => WEEKDAY_NAMES[weekday])
+    .join(' e ')
   const schedule = buildSchedule(save)
   const nextRound = Math.min(save.season.currentRound, SEASON_ROUNDS - 1)
   const initialMonth = save.season.currentRound >= SEASON_ROUNDS
@@ -63,9 +68,12 @@ export const SeasonCalendar = ({ save }: SeasonCalendarProps) => {
   const [month, setMonth] = useState(initialMonth)
 
   const cup = tournamentDate(save.careerYear)
-  const cupName = TOURNAMENT_NAMES[
-    tournamentKindForYear(save.careerYear, nationById(save.nationalityId)?.confederation ?? 'america')
-  ]
+  // ano sem competição de seleção: o calendário não marca nada em dezembro
+  const cupKind = tournamentKindForYear(
+    save.careerYear,
+    nationById(save.nationalityId)?.confederation ?? 'america',
+  )
+  const cupName = cupKind ? TOURNAMENT_NAMES[cupKind] : null
 
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
   const firstWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay()
@@ -107,7 +115,7 @@ export const SeasonCalendar = ({ save }: SeasonCalendarProps) => {
         {Array.from({ length: daysInMonth }, (_, i) => {
           const day = i + 1
           const match = schedule.get(`${month}-${day}`)
-          const isCupDay = month === cup.month && day === cup.day
+          const isCupDay = cupName !== null && month === cup.month && day === cup.day
           if (match) {
             const opponent = clubById(match.opponentId)
             const outcome = match.result
@@ -158,7 +166,10 @@ export const SeasonCalendar = ({ save }: SeasonCalendarProps) => {
           )
         })}
       </div>
-      <p className="muted table-note">Rodadas aos domingos · {cupName} em dezembro.</p>
+      <p className="muted table-note">
+        Rodadas às {matchDayLabel}
+        {cupName ? ` · ${cupName} em dezembro.` : ' · sem competição de seleção neste ano.'}
+      </p>
     </div>
   )
 }

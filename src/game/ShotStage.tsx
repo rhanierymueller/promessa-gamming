@@ -15,7 +15,8 @@ import {
   tick,
   TOTAL_SHOTS,
   TRAINING_KEEPER_QUALITY,
-  tryDive,
+  steerDefense,
+  steerDefenseByKeys,
   tryStartShot,
   type Phase,
   type StageState,
@@ -53,6 +54,8 @@ interface ShotStageProps {
   readonly keeperQuality?: number
   /** Aparência do craque (pele/cabelo) — só se aplica ao SEU atacante. */
   readonly appearance?: PlayerAppearance
+  /** Cor do time em campo — o uniforme segue o clube ou a seleção. */
+  readonly kitColor?: string
   /** Perks de RPG do craque — camada extra sobre os atributos. */
   readonly perks?: readonly PerkId[]
   /** Contexto do lance para perks situacionais (matador, craque de copa). */
@@ -91,6 +94,7 @@ export const ShotStage = ({
   celebrationId = 0,
   keeperQuality = TRAINING_KEEPER_QUALITY,
   appearance = DEFAULT_APPEARANCE,
+  kitColor,
   perks = [],
   perkContext,
   onRoundEnd,
@@ -102,6 +106,11 @@ export const ShotStage = ({
       : createStage(Date.now() & 0xffffffff, shots, freeKick, attrs, keeperQuality, perks, perkContext),
   )
   const dragRef = useRef<Vec2[] | null>(null)
+  // defesa no teclado (desktop): A/D correm, espaço cobre o alto
+  const keysRef = useRef({ left: false, right: false, high: false })
+  // lembra se o teclado estava comandando: só assim dá para emitir o "parar"
+  // uma vez ao soltar, sem atropelar o arrasto do celular todo quadro
+  const keyboardActiveRef = useRef(false)
   // na defesa o atacante é o RIVAL — o gênero do usuário não se aplica a ele
   const spritesRef = useRef(loadGameSprites(defense ? 'masculino' : appearance.gender))
   const wallSpritesRef = useRef<WallSprites | null>(null)
@@ -126,6 +135,34 @@ export const ShotStage = ({
   }, [])
 
   useEffect(() => {
+    if (!defense) return
+    const KEYS: Record<string, 'left' | 'right' | 'high'> = {
+      a: 'left', A: 'left', ArrowLeft: 'left',
+      d: 'right', D: 'right', ArrowRight: 'right',
+      ' ': 'high', ArrowUp: 'high', w: 'high', W: 'high',
+    }
+    const set = (event: KeyboardEvent, pressed: boolean): void => {
+      const slot = KEYS[event.key]
+      if (!slot) return
+      // espaço rolaria a página no meio da defesa
+      event.preventDefault()
+      keysRef.current = { ...keysRef.current, [slot]: pressed }
+    }
+    const down = (event: KeyboardEvent): void => set(event, true)
+    const up = (event: KeyboardEvent): void => set(event, false)
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    // perder o foco com a tecla presa deixaria o goleiro correndo sozinho
+    const clear = (): void => { keysRef.current = { left: false, right: false, high: false } }
+    window.addEventListener('blur', clear)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', clear)
+    }
+  }, [defense])
+
+  useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     canvas.width = LOGICAL_WIDTH * RENDER_SCALE
@@ -139,6 +176,18 @@ export const ShotStage = ({
     const loop = (ts: number): void => {
       const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0.016)
       lastTs = ts
+      // teclado manda antes do tick: o goleiro anda enquanto a tecla está presa
+      const fase = stateRef.current.phase
+      if (defense && (fase === 'ready' || fase === 'runup' || fase === 'flying')) {
+        const { left, right, high } = keysRef.current
+        const pressed = left || right || high
+        // enquanto segura, comanda; ao soltar, um único comando de parar
+        if (pressed || keyboardActiveRef.current) {
+          const direction = left === right ? 0 : right ? 1 : -1
+          stateRef.current = steerDefenseByKeys(stateRef.current, direction, high)
+          keyboardActiveRef.current = pressed
+        }
+      }
       const [next, events] = tick(stateRef.current, dt)
       const phaseChanged = next.phase !== stateRef.current.phase
       stateRef.current = next
@@ -189,11 +238,11 @@ export const ShotStage = ({
             striker: Object.fromEntries(
               Object.entries(sprites.striker).map(([pose, holder]) => [
                 pose,
-                applyAppearance(holder, appearance) ?? holder,
+                applyAppearance(holder, appearance, kitColor) ?? holder,
               ]),
             ) as GameSprites['striker'],
             celebrations: sprites.celebrations.map(
-              (holder) => applyAppearance(holder, appearance) ?? holder,
+              (holder) => applyAppearance(holder, appearance, kitColor) ?? holder,
             ),
           }
         }
@@ -239,14 +288,12 @@ export const ShotStage = ({
     const last = drag[drag.length - 1]
     if (Math.hypot(point.x - last.x, point.y - last.y) > 1.5) drag.push(point)
     if (drag.length > 40) drag.shift()
-    // defesa: o mergulho dispara NO GESTO, sem esperar soltar o dedo
+    // defesa: o dedo PILOTA o goleiro — cada movimento reposiciona o alvo,
+    // sem comprometer o mergulho de uma vez
     if (defense && drag.length >= 2) {
       const dx = drag[drag.length - 1].x - drag[0].x
       const dy = drag[drag.length - 1].y - drag[0].y
-      if (Math.abs(dx) > 14 || dy < -18) {
-        stateRef.current = tryDive(stateRef.current, dx, dy)
-        dragRef.current = null
-      }
+      stateRef.current = steerDefense(stateRef.current, dx, dy)
     }
   }
 
@@ -255,9 +302,10 @@ export const ShotStage = ({
     dragRef.current = null
     if (!drag || drag.length < 2) return
     if (defense) {
+      // soltar o dedo mantém o goleiro onde parou (não volta ao centro)
       const dx = drag[drag.length - 1].x - drag[0].x
       const dy = drag[drag.length - 1].y - drag[0].y
-      stateRef.current = tryDive(stateRef.current, dx, dy)
+      stateRef.current = steerDefense(stateRef.current, dx, dy)
     } else if (drag.length >= 3) {
       stateRef.current = tryStartShot(stateRef.current, drag)
     }
@@ -293,8 +341,13 @@ export const ShotStage = ({
           <h2>Agora você defende!</h2>
           <div className="defense-steps">
             <p><strong>1.</strong> O rival vai correr e cobrar sozinho.</p>
-            <p><strong>2.</strong> Quando a bola sair, <strong>ARRASTE PRO LADO</strong> — o mergulho sai na hora do gesto.</p>
-            <p><strong>3.</strong> Bola no ângulo? Arraste em <strong>DIAGONAL PRA CIMA</strong> para voar alto. Rasteira pede mergulho rasteiro.</p>
+            <p className="defense-keys">
+              <strong>2.</strong> No computador:{' '}
+              <kbd>A</kbd> e <kbd>D</kbd> movem o goleiro, <kbd>espaço</kbd> pula.
+              Junte os dois (<kbd>D</kbd>+<kbd>espaço</kbd>) para voar alto pra direita.
+            </p>
+            <p><strong>3.</strong> No celular: <strong>segure e arraste</strong> pro lado; arraste pra cima para cobrir o alto.</p>
+            <p className="defense-warn">A bola é rápida — saia cedo. Não dá tempo de cruzar o gol inteiro.</p>
           </div>
           <button className="btn" onClick={startRound}>Defender ▸</button>
         </div>

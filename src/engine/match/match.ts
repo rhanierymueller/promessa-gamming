@@ -48,6 +48,10 @@ const buildPlan = (rng: RngState, config: MatchConfig): RngResult<readonly Match
   addMoments(config.playerFreeKicks, (minute, templateId) => ({ kind: 'playerFreeKick', minute, templateId }))
   addMoments(config.playerPasses, (minute, templateId) => ({ kind: 'playerPass', minute, templateId }))
   addMoments(config.opponentFreeKicks, (minute, templateId) => ({ kind: 'opponentFreeKick', minute, templateId }))
+  // no máximo um por partida, e só quando o sorteio manda
+  const dice = rollCount(draft.rng, config.diceDuelChance, 1)
+  draft = { ...draft, rng: dice.next }
+  addMoments(dice.value, (minute, templateId) => ({ kind: 'diceDuel', minute, templateId }))
 
   const teamGoals = rollCount(draft.rng, config.teamGoalChance, config.maxTeamGoals)
   draft = { ...draft, rng: teamGoals.next }
@@ -88,7 +92,8 @@ export const isPlayerMoment = (moment: MatchMoment): moment is MatchMoment & { k
   moment.kind === 'playerShot' ||
   moment.kind === 'playerFreeKick' ||
   moment.kind === 'playerPass' ||
-  moment.kind === 'opponentFreeKick'
+  moment.kind === 'opponentFreeKick' ||
+  moment.kind === 'diceDuel'
 
 /** Avança momentos NÃO jogáveis, aplicando o efeito no placar. */
 export const advance = (state: MatchState): MatchState => {
@@ -155,6 +160,52 @@ const DEFENSE_SAVE_RATING = 0.8
 const DEFENSE_CONCEDE_RATING = -0.2
 
 /** Falta do adversário: defesa sobe a nota; gol sofrido conta no placar deles. */
+/** Nota do lance de dados: ganhar a dividida rende, perder cobra. */
+const DICE_WIN_RATING = 0.5
+const DICE_LOSS_RATING = -0.3
+
+/**
+ * Fecha o lance decisivo no dado: quem venceu marca. Diferente do chute, a
+ * nota mexe pouco — foi a sorte que decidiu, não o pé do craque.
+ */
+export const applyDiceResult = (
+  state: MatchState,
+  playerWon: boolean,
+  config: MatchConfig,
+): MatchState => {
+  const moment = currentMoment(state)
+  if (moment.kind !== 'diceDuel') {
+    throw new Error(`applyDiceResult fora de hora: momento atual é ${moment.kind}`)
+  }
+  return {
+    ...state,
+    cursor: state.cursor + 1,
+    score: playerWon
+      ? { ...state.score, team: state.score.team + 1 }
+      : { ...state.score, opponent: state.score.opponent + 1 },
+    stats: playerWon ? { ...state.stats, goals: state.stats.goals + 1 } : state.stats,
+    rating: clampRating(state.rating + (playerWon ? DICE_WIN_RATING : DICE_LOSS_RATING), config),
+  }
+}
+
+/**
+ * Desempate do mata-mata no lance dos dados, DEPOIS do apito final. Não é um
+ * momento do plano: entra quando o jogo eliminatório termina igual e alguém
+ * precisa avançar. O gol entra no placar como um gol de prorrogação, então o
+ * resto do sistema (torneio, histórico, tabela) lê o resultado já decidido,
+ * sem precisar saber que houve desempate.
+ */
+export const applyDecider = (state: MatchState, playerWon: boolean): MatchState => ({
+  ...state,
+  score: playerWon
+    ? { ...state.score, team: state.score.team + 1 }
+    : { ...state.score, opponent: state.score.opponent + 1 },
+})
+
+/** O jogo acabou empatado e a competição exige um vencedor? */
+export const needsDecider = (state: MatchState, decisive: boolean): boolean =>
+  decisive && isFinished(state) && state.score.team === state.score.opponent
+
 export const applyDefenseResult = (
   state: MatchState,
   saved: boolean,

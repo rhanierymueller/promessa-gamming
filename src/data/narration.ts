@@ -110,6 +110,14 @@ export const GOLACO_LINE = 'GOLAÇO ABSURDO DE {name}! Isso vai rodar a cidade i
 export const withName = (text: string, name: string): string =>
   text.replaceAll('{name}', name)
 
+/** A dividida que a sorte resolve — abertura do lance de dados. */
+export const DICE_DUEL_TEMPLATES: readonly string[] = [
+  'Dividida na área! Ninguém quer sair de perto — isso aqui vai no grito.',
+  'Bate-rebate na pequena área! É pura sorte agora.',
+  'Confusão danada na área: sobra pra quem quiser mais.',
+  'A bola fica solta no meio da zona! Quem tiver mais sangue leva.',
+]
+
 export const PASS_RESULT_LINES = {
   completed: ['Passe perfeito! O time cresce e a jogada segue viva.'],
   failed: ['A bola foi interceptada… você prometeu demais nessa.'],
@@ -129,6 +137,8 @@ export const narrationForMoment = (moment: MatchMoment): string => {
       return pick(TEAM_GOAL_TEMPLATES, moment.templateId)
     case 'opponentGoal':
       return pick(OPPONENT_GOAL_TEMPLATES, moment.templateId)
+    case 'diceDuel':
+      return pick(DICE_DUEL_TEMPLATES, moment.templateId)
     case 'playerShot':
       return pick(PLAYER_SHOT_INTROS, moment.templateId)
     case 'playerFreeKick':

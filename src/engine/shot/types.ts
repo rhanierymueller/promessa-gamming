@@ -100,6 +100,14 @@ export interface ShotConfig {
   readonly wrongSideBase: number
   /** Quanto da curva o goleiro consegue ler (multiplicado pela habilidade). */
   readonly curveReadFactor: number
+  /** Piso da extensão do mergulho (varia por lance, suaviza o limite). */
+  readonly diveExtentMin: number
+  /** Chance de o goleiro FALHAR mesmo com a bola no alcance (cai com a habilidade). */
+  readonly fumbleChance: number
+  /** Quanto além do alcance ainda dá pra esticar, em frações do alcance. */
+  readonly stretchWindow: number
+  /** Chance de alcançar nessa faixa extra (sobe com a habilidade). */
+  readonly stretchChance: number
   /** Chance de a bola que bate na trave ENTRAR. */
   readonly postInChance: number
   /** Espalmada: fração do alcance a partir da qual a defesa vira rebote. */

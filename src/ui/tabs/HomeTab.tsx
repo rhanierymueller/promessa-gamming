@@ -1,12 +1,14 @@
 import { Flame, PartyPopper, Play, Sparkles, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
 import type { Club } from '../../data/clubs'
 import { nationById } from '../../data/nations'
+import { isTournamentRunning, seasonEndAction } from '../../engine/career/seasonEnd'
 import { eventById } from '../../engine/career/events'
-import { milestoneLabel, perkById, type PerkId } from '../../engine/career/perks'
+import { PERK_OFFER_REASON, perkById, type PerkId } from '../../engine/career/perks'
 import { DIVISION_NAMES, divisionOf } from '../../engine/pyramid/pyramid'
 import { isSeasonOver, playerFixture, tablePosition } from '../../engine/season/season'
 import {
   playerTournamentOpponentId,
+  STAGE_NAMES,
   TOURNAMENT_NAMES,
   tournamentKindForYear,
   type TournamentKind,
@@ -20,6 +22,7 @@ import { titlePrizeFor, formatMoney } from '../../engine/market/market'
 import { myTeamRating, opponentTeamRating } from '../../engine/squad/myTeam'
 import type { PlayerSave } from '../../state/save'
 import { ClubCrest } from '../ClubCrest'
+import { usePlayerPortrait } from '../usePlayerPortrait'
 import { NewsCarousel } from '../NewsCarousel'
 
 interface HomeTabProps {
@@ -35,6 +38,7 @@ interface HomeTabProps {
   readonly onDismissMovement: () => void
   readonly onTraining: () => void
   readonly onGkTraining: () => void
+  readonly onDiceTraining: () => void
   readonly onChoosePerk: (perkId: PerkId) => void
   readonly onResolveEvent: (optionIndex: number) => void
   readonly onDismissEventNote: () => void
@@ -42,11 +46,9 @@ interface HomeTabProps {
 
 const ordinal = (position: number): string => `${position}º`
 
-const STAGE_LABEL: Record<string, string> = {
-  groups: 'Fase de grupos',
-  semi: 'SEMIFINAL',
-  final: 'FINAL',
-}
+// STAGE_NAMES cobre todas as fases, inclusive oitavas e quartas — a lista
+// local ficava desatualizada a cada mudança de formato
+const STAGE_LABEL = STAGE_NAMES
 
 export const HomeTab = ({
   save,
@@ -61,20 +63,29 @@ export const HomeTab = ({
   onDismissMovement,
   onTraining,
   onGkTraining,
+  onDiceTraining,
   onChoosePerk,
   onResolveEvent,
   onDismissEventNote,
 }: HomeTabProps) => {
   const [isCelebrating, setCelebrating] = useState(false)
+  const avatarUrl = usePlayerPortrait(save.appearance)
   const seasonOver = isSeasonOver(save.season)
   const position = tablePosition(save.season, save.clubId)
   const divisionName = DIVISION_NAMES[divisionOf(save.divisions, save.clubId)] ?? 'Liga'
   const nation = nationById(save.nationalityId)
+  // null em ano sem competição de seleção — aí não há convocação
+  const callUpKind = nation ? tournamentKindForYear(save.careerYear, nation.confederation) : null
   const tournament = save.tournament
-  const tournamentActive =
-    tournament && (tournament.stage === 'groups' || tournament.stage === 'semi' || tournament.stage === 'final')
-  const tournamentDone =
-    tournament && (tournament.stage === 'champion' || tournament.stage === 'eliminated')
+  // isTournamentRunning cobre oitavas e quartas: a lista fixa antiga não as
+  // tinha, e o jogo da seleção sumia da tela no meio da Copa
+  const tournamentActive = tournament !== null && isTournamentRunning(tournament.stage)
+  const tournamentDone = tournament !== null && !isTournamentRunning(tournament.stage)
+  const endAction = seasonEndAction({
+    eligible: callUpAvailable,
+    hasTournamentThisYear: callUpKind !== null,
+    stage: tournament?.stage ?? null,
+  })
   const tournamentOpponent = tournamentActive
     ? nationById(playerTournamentOpponentId(tournament) ?? '')
     : null
@@ -99,14 +110,45 @@ export const HomeTab = ({
           </button>
         </div>
       )}
-      <p className="muted">
-        Fala, <strong>{save.playerName}</strong> — {club.nickname} conta com você.
-        {save.season.currentRound > 0 && <> Vocês estão em <strong>{ordinal(position)}</strong>.</>}
-        {' '}
-        <span className={`morale-tag${save.morale >= 65 ? ' morale-high' : save.morale <= 35 ? ' morale-low' : ''}`}>
-          <Flame size={12} aria-hidden="true" /> moral {save.morale}
-        </span>
-      </p>
+      <div className="hero-bar">
+        <div className="hero-avatar">
+          {avatarUrl ? (
+            <img className="hero-avatar-img" src={avatarUrl} alt="" aria-hidden="true" />
+          ) : (
+            <ClubCrest club={club} customUrl={save.customClubCrests[club.id]} size={48} />
+          )}
+        </div>
+        <div className="hero-id">
+          <h2 className="hero-name">Fala, {save.playerName}</h2>
+          <p className="muted hero-sub">
+            {club.nickname} conta com você · {DIVISION_NAMES[divisionOf(save.divisions, save.clubId)]}
+          </p>
+        </div>
+        <dl className="hero-stats">
+          {save.season.currentRound > 0 && (
+            <div className="hero-stat">
+              <dt>Na tabela</dt>
+              <dd>{ordinal(position)}</dd>
+            </div>
+          )}
+          <div className="hero-stat">
+            <dt>Moral</dt>
+            <dd className={save.morale >= 65 ? 'hero-good' : save.morale <= 35 ? 'hero-bad' : ''}>
+              <Flame size={13} aria-hidden="true" /> {save.morale}
+            </dd>
+          </div>
+          <div className="hero-stat">
+            <dt>Gols</dt>
+            <dd>{save.career.goals}</dd>
+          </div>
+          <div className="hero-stat">
+            <dt>Nota média</dt>
+            <dd>
+              {save.career.games > 0 ? (save.career.ratingSum / save.career.games).toFixed(1) : '—'}
+            </dd>
+          </div>
+        </dl>
+      </div>
 
       {save.eventNote && (
         <div className="division-banner event-note">
@@ -150,7 +192,7 @@ export const HomeTab = ({
             <Sparkles size={18} aria-hidden="true" />
             <div>
               <strong>NOVA HABILIDADE!</strong>
-              <p className="muted perk-offer-reason">{milestoneLabel(save.perkOffer.milestone)} Escolha UMA — sem volta.</p>
+              <p className="muted perk-offer-reason">{PERK_OFFER_REASON} Escolha UMA — sem volta.</p>
             </div>
           </div>
           <div className="perk-options">
@@ -167,19 +209,19 @@ export const HomeTab = ({
         </div>
       )}
 
-      {callUpAvailable && nation && !tournament && seasonOver && (
+      {endAction === 'callup' && nation && callUpKind && seasonOver && (
         <div className="card callup-card">
           <Trophy size={20} aria-hidden="true" />
           <div>
             <strong>CONVOCADO!</strong>
             <p className="muted callup-text">
               Dezembro chegou e a sua fase convenceu: {nation.name} te chamou para a{' '}
-              {TOURNAMENT_NAMES[tournamentKindForYear(save.careerYear, nation.confederation)]}.
+              {TOURNAMENT_NAMES[callUpKind]}.
             </p>
           </div>
           <button
             className="btn callup-btn"
-            onClick={() => onStartTournament(tournamentKindForYear(save.careerYear, nation.confederation))}
+            onClick={() => onStartTournament(callUpKind)}
           >
             Apresentar-se
           </button>
@@ -225,9 +267,9 @@ export const HomeTab = ({
           <p className="season-final">
             {position === 1 ? 'CAMPEÃO! Que campanha histórica!' : `Vocês terminaram em ${ordinal(position)}.`}
           </p>
-          {tournament && !tournamentDone ? (
+          {endAction === 'tournament' ? (
             <p className="muted callup-text">Termine a copa de seleções para virar o ano.</p>
-          ) : callUpAvailable ? null : (
+          ) : endAction === 'callup' ? null : (
             <button
               className="btn btn-icon"
               onClick={() => {
@@ -286,6 +328,7 @@ export const HomeTab = ({
       <div className="training-row">
         <button className="btn btn-secondary" onClick={onTraining}>Treino de finalização</button>
         <button className="btn btn-secondary" onClick={onGkTraining}>Treino de goleiro</button>
+        <button className="btn btn-secondary" onClick={onDiceTraining}>Lance decisivo</button>
       </div>
 
       <NewsCarousel save={save} club={club} />

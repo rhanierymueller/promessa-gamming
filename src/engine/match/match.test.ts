@@ -1,13 +1,22 @@
 import { describe, expect, test } from 'vitest'
-import { DEFAULT_MATCH_CONFIG as CFG } from './config'
+import { DEFAULT_MATCH_CONFIG } from './config'
+
+/*
+ * Sem o lance de dados: estes testes percorrem o plano medindo chute, passe
+ * e placar. O dado é um lance jogável que interrompe esse caminho e tem
+ * cobertura própria em engine/dice/duel.test.ts.
+ */
+const CFG = { ...DEFAULT_MATCH_CONFIG, diceDuelChance: 0 }
 import {
   advance,
+  applyDecider,
   applyDefenseResult,
   applyPassResult,
   applyShotResult,
   currentMoment,
   isFinished,
   isPlayerMoment,
+  needsDecider,
   startMatch,
 } from './match'
 import { displayRating } from './rating'
@@ -246,5 +255,99 @@ describe('displayRating', () => {
   test('arredonda para uma casa decimal', () => {
     expect(displayRating(7.6499999)).toBe(7.6)
     expect(displayRating(6.85)).toBe(6.9)
+  })
+})
+
+describe('lance de dados na partida', () => {
+  /** Em quantas partidas de 400 o dado apareceu. */
+  const frequenciaDoDado = (): number => {
+    let comDado = 0
+    for (let seed = 0; seed < 400; seed++) {
+      const match = startMatch(seed, DEFAULT_MATCH_CONFIG)
+      if (match.plan.some((m) => m.kind === 'diceDuel')) comDado++
+    }
+    return comDado / 400
+  }
+
+  test('aparece às vezes, não em toda partida', () => {
+    // Assert: nem raro demais nem em todo jogo — é uma variação, não uma regra
+    const freq = frequenciaDoDado()
+    expect(freq).toBeGreaterThan(0.15)
+    expect(freq).toBeLessThan(0.6)
+  })
+
+  test('a frequência segue a chance configurada', () => {
+    expect(Math.abs(frequenciaDoDado() - DEFAULT_MATCH_CONFIG.diceDuelChance)).toBeLessThan(0.08)
+  })
+
+  test('nunca cai mais de um lance de dados na mesma partida', () => {
+    for (let seed = 0; seed < 200; seed++) {
+      const match = startMatch(seed, DEFAULT_MATCH_CONFIG)
+      expect(match.plan.filter((m) => m.kind === 'diceDuel').length).toBeLessThanOrEqual(1)
+    }
+  })
+
+  test('com chance 0 o dado nunca aparece', () => {
+    const semDado = { ...DEFAULT_MATCH_CONFIG, diceDuelChance: 0 }
+    for (let seed = 0; seed < 50; seed++) {
+      expect(startMatch(seed, semDado).plan.some((m) => m.kind === 'diceDuel')).toBe(false)
+    }
+  })
+})
+
+describe('desempate no lance dos dados', () => {
+  /** Leva a partida até o fim com o placar que o teste pedir. */
+  const finishedTied = (): MatchState => {
+    let state = startMatch(11, CFG)
+    while (!isFinished(state)) {
+      const moment = currentMoment(state)
+      if (moment.kind === 'playerShot' || moment.kind === 'playerFreeKick') {
+        state = applyShotResult(state, 'miss', false, CFG)
+      } else if (moment.kind === 'playerPass') {
+        state = applyPassResult(state, false, 0, CFG)
+      } else if (moment.kind === 'opponentFreeKick') {
+        state = applyDefenseResult(state, true, CFG)
+      } else {
+        state = advance(state)
+      }
+    }
+    return { ...state, score: { team: 1, opponent: 1 } }
+  }
+
+  test('só pede desempate em jogo eliminatório empatado e encerrado', () => {
+    // Arrange
+    const empatado = finishedTied()
+
+    // Assert
+    expect(needsDecider(empatado, true)).toBe(true)
+    expect(needsDecider(empatado, false)).toBe(false)
+    expect(needsDecider({ ...empatado, score: { team: 2, opponent: 1 } }, true)).toBe(false)
+    expect(needsDecider(startMatch(11, CFG), true)).toBe(false)
+  })
+
+  test('ganhar nos dados desempata a seu favor', () => {
+    const decidido = applyDecider(finishedTied(), true)
+    expect(decidido.score).toEqual({ team: 2, opponent: 1 })
+  })
+
+  test('perder nos dados dá a vaga ao adversário', () => {
+    const decidido = applyDecider(finishedTied(), false)
+    expect(decidido.score).toEqual({ team: 1, opponent: 2 })
+  })
+
+  test('o desempate não mexe na sua nota nem nas suas estatísticas', () => {
+    // o gol é da decisão, não uma atuação sua — inflar a nota seria injusto
+    const antes = finishedTied()
+    const depois = applyDecider(antes, true)
+    expect(depois.rating).toBe(antes.rating)
+    expect(depois.stats).toEqual(antes.stats)
+  })
+
+  test('depois do desempate o jogo nunca mais está empatado', () => {
+    for (const won of [true, false]) {
+      const decidido = applyDecider(finishedTied(), won)
+      expect(decidido.score.team).not.toBe(decidido.score.opponent)
+      expect(needsDecider(decidido, true)).toBe(false)
+    }
   })
 })

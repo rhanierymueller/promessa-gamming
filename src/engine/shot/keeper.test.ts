@@ -46,8 +46,9 @@ describe('planKeeper', () => {
     // Act
     const { value } = planKeeper(flight, weakSkill, createRng(5), CFG)
 
-    // Assert
-    expect(value.diveX).toBeGreaterThanOrEqual(goalCenter(CFG) - CFG.maxDiveBase)
+    // Assert: a extensão varia por lance, mas nunca vira teletransporte
+    const maxExtent = (CFG.maxDiveBase + weakSkill * CFG.maxDiveSkillFactor) * (2 - CFG.diveExtentMin)
+    expect(value.diveX).toBeGreaterThanOrEqual(goalCenter(CFG) - maxExtent)
   })
 
   test('nunca reage antes do tempo mínimo humano', () => {

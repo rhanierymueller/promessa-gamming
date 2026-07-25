@@ -15,9 +15,16 @@ export type MatchMoment =
   | { readonly kind: 'playerFreeKick'; readonly minute: number; readonly templateId: number }
   | { readonly kind: 'playerPass'; readonly minute: number; readonly templateId: number }
   | { readonly kind: 'opponentFreeKick'; readonly minute: number; readonly templateId: number }
+  /** Lance decisivo no dado: dividida na área, e a sorte resolve. */
+  | { readonly kind: 'diceDuel'; readonly minute: number; readonly templateId: number }
   | { readonly kind: 'fulltime'; readonly minute: number }
 
-export type PlayerMomentKind = 'playerShot' | 'playerFreeKick' | 'playerPass' | 'opponentFreeKick'
+export type PlayerMomentKind =
+  | 'playerShot'
+  | 'playerFreeKick'
+  | 'playerPass'
+  | 'opponentFreeKick'
+  | 'diceDuel'
 
 export interface MatchScore {
   readonly team: number
@@ -48,6 +55,12 @@ export interface MatchConfig {
   readonly playerPasses: number
   /** Faltas DO adversário que você defende no gol. */
   readonly opponentFreeKicks: number
+  /**
+   * Chance de a partida ter o lance de dado — a dividida que a sorte decide.
+   * É sorteado, não fixo: o dado tem que ser uma variação entre as outras
+   * interações, não mais um passo obrigatório de toda partida.
+   */
+  readonly diceDuelChance: number
   /** Chance de cada time marcar em lances que não envolvem o jogador. */
   readonly teamGoalChance: number
   readonly opponentGoalChance: number

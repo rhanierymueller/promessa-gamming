@@ -1,3 +1,4 @@
+import { NATIONAL_NAMES } from './nationalNames'
 /**
  * Elencos com nomes realistas — determinísticos por semente (mesmo clube +
  * mesma partida = mesmos nomes). Mistura "Nome Sobrenome" com apelidos de
@@ -48,6 +49,42 @@ const nextRoll = (state: number): [number, number] => {
  * Sorteia `count` nomes únicos, determinístico pela semente. Primeiros nomes
  * não se repetem no elenco (o campo mostra só o primeiro nome).
  */
+/**
+ * Nomes de um elenco ESTRANGEIRO, da lista da própria nacionalidade. A
+ * seleção da Austrália não escala Zeca nem Serrote — o gerador padrão é
+ * brasileiro de propósito, para os clubes da liga.
+ */
+export const foreignSquadFor = (
+  seedText: string,
+  count: number,
+  nationId: string,
+): readonly string[] => {
+  const pool = NATIONAL_NAMES[nationId]
+  if (!pool) return squadFor(seedText, count)
+  let state = hashSeed(seedText)
+  let firsts = [...pool.firsts]
+  const squad: string[] = []
+  const usados = new Set<string>()
+  let tentativas = 0
+  // primeiro nome não se repete enquanto houver lista: o campo mostra só ele.
+  // Esgotada, ela é reabastecida e o sobrenome passa a distinguir os xarás —
+  // são 16 nomes para 18 vagas de elenco.
+  while (squad.length < count && tentativas < count * 20) {
+    tentativas++
+    if (firsts.length === 0) firsts = [...pool.firsts]
+    const [firstRoll, s1] = nextRoll(state)
+    const [lastRoll, s2] = nextRoll(s1)
+    state = s2
+    const first = firsts.splice(Math.floor(firstRoll * firsts.length) % firsts.length, 1)[0]
+    const last = pool.lasts[Math.floor(lastRoll * pool.lasts.length) % pool.lasts.length]
+    const full = `${first} ${last}`
+    if (usados.has(full)) continue
+    usados.add(full)
+    squad.push(full)
+  }
+  return squad
+}
+
 export const squadFor = (seedText: string, count: number): readonly string[] => {
   let state = hashSeed(seedText)
   const firsts = [...FIRST_NAMES]

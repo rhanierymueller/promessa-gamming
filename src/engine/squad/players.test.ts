@@ -128,8 +128,13 @@ describe('userAsSquadPlayer', () => {
     expect(user.attrs.fin).toBe(95)
     expect(user.attrs.pas).toBe(60)
     expect(user.overall).toBeGreaterThan(0)
-    // físico/ritmo herdam do jogador base do clube
-    expect(user.attrs.pac).toBe(base.attrs.pac)
+    /*
+     * Ritmo/drible/físico NÃO herdam do jogador do clube: eles seguem a sua
+     * própria curva de idade. Herdando, o seu overall caía quando aquele NPC
+     * envelhecia — mesmo com você novo e treinando.
+     */
+    expect(user.attrs.pac).toBeGreaterThan(0)
+    expect(user.age).toBe(base.age)
   })
 
   test('mais treino = overall maior', () => {

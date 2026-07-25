@@ -16,6 +16,7 @@ import { applyAppearance, HAIR_COLORS, KIT_COLORS, SKIN_TONES } from '../../game
 import { celebrationUrlsFor } from '../../game/assets'
 import { CELEBRATION_NAMES } from '../../game/assets'
 import {
+  currentPlayerAge,
   setAppearance,
   setCelebration,
   setShirtNumber,
@@ -75,6 +76,11 @@ const ATTRIBUTE_HINTS: Record<string, string> = {
 }
 
 export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout, onDeleteAccount }: ProfileTabProps) => {
+  const { games, goals, wins, draws, ratingSum } = save.career
+  const averageRating = games > 0 ? (ratingSum / games).toFixed(1) : '—'
+  const goalsPerGame = games > 0 ? (goals / games).toFixed(2) : '—'
+  // aproveitamento de pontos: 3 por vitória, 1 por empate (como na tabela)
+  const winRate = games > 0 ? `${Math.round(((wins * 3 + draws) / (games * 3)) * 100)}%` : '—'
   const [isDeleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [isBusy, setBusy] = useState(false)
@@ -88,10 +94,11 @@ export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout, 
   return (
     <div className="tab-panel">
       <div className="card profile-card">
+        <div className="profile-identity">
         <AppearancePortrait appearance={save.appearance} />
         <div className="profile-info">
           <h2 className="profile-name">{save.playerName}</h2>
-          <p className="muted">{save.playerPosition} · {save.playerAge} anos · {club.name}</p>
+          <p className="muted">{save.playerPosition} · {currentPlayerAge(save)} anos · {club.name}</p>
           <label className="profile-shirt">
             <span className="create-label">Camisa</span>
             <input
@@ -107,6 +114,18 @@ export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout, 
             />
           </label>
         </div>
+        </div>
+
+        <dl className="profile-career">
+          <div className="stat"><dt className="stat-label">Gols na carreira</dt><dd className="stat-value">{save.career.goals}</dd></div>
+          <div className="stat"><dt className="stat-label">Jogos</dt><dd className="stat-value">{save.career.games}</dd></div>
+          <div className="stat"><dt className="stat-label">Gols por jogo</dt><dd className="stat-value">{goalsPerGame}</dd></div>
+          <div className="stat"><dt className="stat-label">Nota média</dt><dd className="stat-value">{averageRating}</dd></div>
+          <div className="stat"><dt className="stat-label">Vitórias</dt><dd className="stat-value">{save.career.wins}</dd></div>
+          <div className="stat"><dt className="stat-label">Aproveitamento</dt><dd className="stat-value">{winRate}</dd></div>
+          <div className="stat"><dt className="stat-label">Títulos</dt><dd className="stat-value">{save.trophies.length}</dd></div>
+          <div className="stat"><dt className="stat-label">Temporadas</dt><dd className="stat-value">{save.careerYear}</dd></div>
+        </dl>
       </div>
 
       <div className="card">

@@ -1,3 +1,5 @@
+import { hairMaskOf } from '../engine/appearance/hairMask'
+import { rgbFromHex } from '../engine/appearance/kitColor'
 import type { PlayerAppearance } from '../state/save'
 import type { SpriteHolder } from './assets'
 
@@ -34,8 +36,17 @@ export const KIT_COLORS: readonly { name: string; rgb: [number, number, number] 
 
 /** Luminâncias de referência da arte (calibradas pixel a pixel na arte real). */
 const SKIN_REFERENCE_LUM = 96
-const HAIR_REFERENCE_LUM = 34
 const KIT_REFERENCE_LUM = 170
+
+/**
+ * O cabelo da arte é quase preto, então dividir pela luminância de referência
+ * jogaria tudo no piso da escala e o loiro sairia igual ao castanho. Aqui o
+ * brilho é SOMADO à base: mesmo o fio mais escuro assume a cor nova, e o que
+ * já era claro na arte vira o reflexo.
+ */
+const HAIR_SHADE_BASE = 0.6
+const HAIR_SHADE_SPAN = 30
+const HAIR_SHADE_MAX = 1.55
 
 /**
  * Na arte, pele e uniforme são tons quentes SEM azul — a separação confiável
@@ -51,13 +62,6 @@ const isSkinPixel = (r: number, g: number, b: number): boolean => {
     g < r * 0.65 &&
     b < g * 0.6
   )
-}
-
-const isHairPixel = (r: number, g: number, b: number): boolean => {
-  const lum = (r + g + b) / 3
-  // cabelo: marrom bem escuro — contorno neutro (r≈g≈b) e sombras do kit
-  // (r fraco) ficam de fora
-  return lum >= 16 && lum < 48 && r >= 40 && r >= g && g >= b && r - b >= 10
 }
 
 /**
@@ -86,7 +90,7 @@ type PixelLabel = 0 | 1 | 2 | 3 // none | kit | skin | hair
 const labelOf = (r: number, g: number, b: number): PixelLabel => {
   if (isKitPixel(r, g, b)) return 1
   if (isSkinPixel(r, g, b)) return 2
-  if (isHairPixel(r, g, b)) return 3
+  // cabelo não sai por cor (é preto, igual ao traço) — vem de hairMaskOf
   return 0
 }
 
@@ -126,10 +130,16 @@ const resolveAmbiguous = (
 export const applyAppearance = (
   holder: SpriteHolder,
   appearance: PlayerAppearance,
+  /**
+   * Cor do time em campo (hex). Manda na camisa: dentro da partida o uniforme
+   * é o do clube ou da seleção, não o escolhido em Configurações.
+   */
+  teamColor?: string,
 ): SpriteHolder | null => {
   const skinTone = SKIN_TONES[appearance.skin]?.rgb ?? null
   const hairColor = HAIR_COLORS[appearance.hair]?.rgb ?? null
-  const kitColor = KIT_COLORS[appearance.kit]?.rgb ?? null
+  const kitColor =
+    (teamColor ? rgbFromHex(teamColor) : null) ?? KIT_COLORS[appearance.kit]?.rgb ?? null
   if (!holder.img || (!skinTone && !hairColor && !kitColor)) return null
 
   const canvas = document.createElement('canvas')
@@ -141,13 +151,24 @@ export const applyAppearance = (
   const image = ctx.getImageData(0, 0, holder.w, holder.h)
   const data = image.data
 
-  // 1º passe: rótulos fortes; 2º: amarelo ambíguo herda a região vizinha
+  // 1º passe: pele e uniforme por cor; 2º: cabelo por forma (massa escura);
+  // 3º: amarelo ambíguo herda a região vizinha
   const labels = new Uint8Array(holder.w * holder.h)
   for (let i = 0; i < labels.length; i++) {
     const p = i * 4
     if (data[p + 3] >= 40) labels[i] = labelOf(data[p], data[p + 1], data[p + 2])
   }
+  const hairMask = hairMaskOf(data, holder.w, holder.h)
+  for (let i = 0; i < labels.length; i++) {
+    if (hairMask[i] === 1) labels[i] = 3
+  }
   resolveAmbiguous(labels, data, holder.w, holder.h)
+
+  const recolor = (p: number, tone: readonly [number, number, number], shade: number): void => {
+    data[p] = Math.min(255, tone[0] * shade)
+    data[p + 1] = Math.min(255, tone[1] * shade)
+    data[p + 2] = Math.min(255, tone[2] * shade)
+  }
 
   const paint = (
     p: number,
@@ -157,17 +178,19 @@ export const applyAppearance = (
     maxShade: number,
   ): void => {
     const lum = (data[p] + data[p + 1] + data[p + 2]) / 3
-    const shade = Math.max(minShade, Math.min(maxShade, lum / refLum))
-    data[p] = Math.min(255, tone[0] * shade)
-    data[p + 1] = Math.min(255, tone[1] * shade)
-    data[p + 2] = Math.min(255, tone[2] * shade)
+    recolor(p, tone, Math.max(minShade, Math.min(maxShade, lum / refLum)))
+  }
+
+  const paintHair = (p: number, tone: readonly [number, number, number]): void => {
+    const lum = (data[p] + data[p + 1] + data[p + 2]) / 3
+    recolor(p, tone, Math.min(HAIR_SHADE_MAX, HAIR_SHADE_BASE + lum / HAIR_SHADE_SPAN))
   }
 
   for (let i = 0; i < labels.length; i++) {
     const p = i * 4
     if (labels[i] === 1 && kitColor) paint(p, kitColor, KIT_REFERENCE_LUM, 0.2, 1.4)
     else if (labels[i] === 2 && skinTone) paint(p, skinTone, SKIN_REFERENCE_LUM, 0.3, 1.6)
-    else if (labels[i] === 3 && hairColor) paint(p, hairColor, HAIR_REFERENCE_LUM, 0.5, 1.6)
+    else if (labels[i] === 3 && hairColor) paintHair(p, hairColor)
   }
   ctx.putImageData(image, 0, 0)
   return { img: canvas, w: holder.w, h: holder.h }

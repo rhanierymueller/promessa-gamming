@@ -1,5 +1,5 @@
-import { BadgeDollarSign, CalendarDays, House, Shield, User, Volume2, VolumeX, type LucideIcon } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { BadgeDollarSign, CalendarDays, House, Shield, Trophy, User, Volume1, Volume2, VolumeX, type LucideIcon } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { clubById, type Club } from '../data/clubs'
 import { nationAsClub, nationById } from '../data/nations'
 import { isCallUpEligible } from '../engine/career/callup'
@@ -7,20 +7,32 @@ import { stadiumTierFor } from '../engine/career/stadium'
 import { divisionOf } from '../engine/pyramid/pyramid'
 import { createRng } from '../engine/rng'
 import { advanceSeason, isSeasonOver, playerOpponentId } from '../engine/season/season'
+import { shootoutFor } from '../engine/tournament/shootout'
 import {
   advanceTournament,
   createTournament,
   playerTournamentOpponentId,
   type TournamentKind,
 } from '../engine/tournament/tournament'
-import { initAudio, setMuted } from '../game/audio'
+import { initAudio, setVolume, startAmbience, stopMatchAudio } from '../game/audio'
+import { setMusicVolume } from '../game/music'
+import {
+  DEFAULT_VOLUME,
+  isMuted,
+  MAX_VOLUME,
+  parseStoredVolume,
+  VOLUME_STEP,
+  volumeLabel,
+} from '../engine/audio/volume'
 import { stadiumBackgroundUrl } from '../game/assets'
 import { submitLeagueMatch } from '../online/leagues'
 import { MatchScreen } from '../game/MatchScreen'
 import { ShotStage } from '../game/ShotStage'
+import { DiceDuelStage } from '../game/DiceDuelStage'
 import {
   applySeason,
   applyTournament,
+  currentPlayerAge,
   choosePerk,
   dismissEventNote,
   displayClub,
@@ -49,11 +61,13 @@ import { PasswordReset } from './PasswordReset'
 import { HomeTab } from './tabs/HomeTab'
 import { MarketTab } from './tabs/MarketTab'
 import { MatchesTab } from './tabs/MatchesTab'
+import { NationalTab } from './tabs/NationalTab'
+import { isTournamentRunning } from '../engine/career/seasonEnd'
 import { ProfileTab } from './tabs/ProfileTab'
 import { TeamTab } from './tabs/TeamTab'
 
-type Tab = 'home' | 'matches' | 'team' | 'market' | 'profile'
-type Screen = 'tabs' | 'match' | 'training' | 'gk-training'
+type Tab = 'home' | 'matches' | 'selecao' | 'team' | 'market' | 'profile'
+type Screen = 'tabs' | 'match' | 'training' | 'gk-training' | 'dice-training'
 
 interface MatchSetup {
   readonly seed: number
@@ -84,6 +98,8 @@ const applyMatchOutcome = (
       record.teamGoals,
       record.opponentGoals,
       createRng((seed ^ 0x51ed2701) >>> 0),
+      // só entra se a partida escapar empatada de um mata-mata
+      shootoutFor(seed).playerWon,
     )
     updated = withTournamentState(updated, advanced.value.state)
   }
@@ -102,9 +118,12 @@ const loadSaveChargingForfeit = (): PlayerSave | null => {
   return updated
 }
 
-const MUTE_KEY = 'promessa.muted'
+const VOLUME_KEY = 'promessa.volume'
+/** Chave do botão antigo (mudo/não-mudo) — ainda lida para não perder a escolha. */
+const LEGACY_MUTE_KEY = 'promessa.muted'
 
-const loadMuted = (): boolean => localStorage.getItem(MUTE_KEY) === '1'
+const loadVolume = (): number =>
+  parseStoredVolume(localStorage.getItem(VOLUME_KEY), localStorage.getItem(LEGACY_MUTE_KEY))
 
 /**
  * Tira o token da barra de endereços. No fluxo implícito o SDK deixa
@@ -116,25 +135,57 @@ const clearAuthFragment = (): void => {
   history.replaceState(null, '', window.location.pathname + window.location.search)
 }
 
-interface MuteButtonProps {
-  readonly muted: boolean
-  readonly onToggle: () => void
+/** Metade do controle já é volume alto para este jogo. */
+const LOUD_FROM = MAX_VOLUME / 2
+
+const volumeIcon = (volume: number): LucideIcon => {
+  if (isMuted(volume)) return VolumeX
+  return volume < LOUD_FROM ? Volume1 : Volume2
 }
 
-const MuteButton = ({ muted, onToggle }: MuteButtonProps) => (
-  <button
-    className="mute-btn"
-    onClick={onToggle}
-    aria-label={muted ? 'Ativar som' : 'Silenciar som'}
-    title={muted ? 'Ativar som' : 'Silenciar som'}
-  >
-    {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-  </button>
-)
+interface VolumeControlProps {
+  readonly volume: number
+  readonly onChange: (value: number) => void
+  readonly onToggleMute: () => void
+}
+
+/**
+ * Som da aplicação: o ícone liga/desliga e a barra ao lado ajusta o quanto
+ * quiser. A barra só aparece quando o controle recebe atenção — no canto da
+ * tela ela ficaria no caminho o tempo todo.
+ */
+const VolumeControl = ({ volume, onChange, onToggleMute }: VolumeControlProps) => {
+  const Icon = volumeIcon(volume)
+  return (
+    <div className="volume-control">
+      <button
+        className="mute-btn"
+        onClick={onToggleMute}
+        aria-label={isMuted(volume) ? 'Ligar o som' : 'Desligar o som'}
+        title={volumeLabel(volume)}
+      >
+        <Icon size={18} />
+      </button>
+      <input
+        className="volume-slider"
+        type="range"
+        min={0}
+        max={MAX_VOLUME}
+        step={VOLUME_STEP}
+        value={volume}
+        onChange={(event) => onChange(Number(event.target.value))}
+        aria-label="Volume"
+        title={volumeLabel(volume)}
+      />
+    </div>
+  )
+}
 
 const TAB_ITEMS: readonly { id: Tab; icon: LucideIcon; label: string }[] = [
   { id: 'home', icon: House, label: 'Início' },
   { id: 'matches', icon: CalendarDays, label: 'Liga' },
+  // a aba da seleção só entra na barra quando há convocação em andamento
+  { id: 'selecao', icon: Trophy, label: 'Seleção' },
   { id: 'team', icon: Shield, label: 'Time' },
   { id: 'market', icon: BadgeDollarSign, label: 'Mercado' },
   { id: 'profile', icon: User, label: 'Perfil' },
@@ -155,9 +206,12 @@ export const App = () => {
   const [screen, setScreen] = useState<Screen>('tabs')
   const [tab, setTab] = useState<Tab>('home')
   const [matchSetup, setMatchSetup] = useState<MatchSetup | null>(null)
-  const [muted, setMutedState] = useState<boolean>(() => {
-    const stored = loadMuted()
-    setMuted(stored)
+  // semente do duelo de dados no treino: muda a cada lance resolvido
+  const [diceSeed, setDiceSeed] = useState(() => Date.now() & 0xffffffff)
+  const [volume, setVolumeState] = useState<number>(() => {
+    const stored = loadVolume()
+    setVolume(stored)
+    setMusicVolume(stored)
     return stored
   })
 
@@ -188,18 +242,54 @@ export const App = () => {
     return () => data.subscription.unsubscribe()
   }, [])
 
-  const toggleMute = (): void => {
-    const next = !muted
-    setMutedState(next)
-    setMuted(next)
-    localStorage.setItem(MUTE_KEY, next ? '1' : '0')
+  useEffect(() => {
+    // a torcida só existe com o gramado na tela. Fica no App (e não no
+    // ShotStage) porque o ShotStage remonta a cada cobrança — ali o som
+    // reiniciaria a todo lance e cortaria o grito do gol.
+    const onPitch = screen === 'match' || screen === 'training' || screen === 'gk-training'
+    if (!onPitch) return
+    startAmbience()
+    return stopMatchAudio
+  }, [screen])
+
+  const applyVolume = (next: number): void => {
+    setVolumeState(next)
+    setVolume(next)
+    setMusicVolume(next)
+    localStorage.setItem(VOLUME_KEY, String(next))
   }
+
+  /** Guarda o volume de antes do mudo para o som voltar como estava. */
+  const lastAudibleRef = useRef(volume > 0 ? volume : DEFAULT_VOLUME)
+
+  const toggleMute = (): void => {
+    if (isMuted(volume)) {
+      applyVolume(lastAudibleRef.current)
+      return
+    }
+    lastAudibleRef.current = volume
+    applyVolume(0)
+  }
+
+  // a Seleção só ocupa lugar na barra durante a convocação
+  const visibleTabs = useMemo(
+    () => TAB_ITEMS.filter((item) => item.id !== 'selecao' || save?.tournament),
+    [save?.tournament],
+  )
 
   const club = useMemo(() => {
     if (!save) return null
     const base = clubById(save.clubId)
     return base ? displayClub(save, base) : null
   }, [save])
+  // o treino acontece no estádio da divisão atual — subir de série muda o palco
+  const homeStadiumUrl = useMemo(
+    () =>
+      save
+        ? stadiumBackgroundUrl(stadiumTierFor(divisionOf(save.divisions, save.clubId), 'liga'))
+        : undefined,
+    [save],
+  )
   const nextOpponent = useMemo(() => {
     if (!save || isSeasonOver(save.season)) return null
     const base = clubById(playerOpponentId(save.season))
@@ -354,7 +444,7 @@ export const App = () => {
   if (gate === 'signup' || !save || !club) {
     return (
       <main className="shell">
-        <MuteButton muted={muted} onToggle={toggleMute} />
+        <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
         <header className="header">
           <p className="eyebrow">Promessa</p>
           <h1>Promessa</h1>
@@ -373,7 +463,7 @@ export const App = () => {
   if (screen === 'match' && matchSetup) {
     return (
       <main className="shell">
-        <MuteButton muted={muted} onToggle={toggleMute} />
+        <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
         <header className="header">
           <p className="eyebrow">
             {matchSetup.kind === 'torneio'
@@ -389,6 +479,13 @@ export const App = () => {
           club={matchSetup.club}
           opponent={matchSetup.opponent}
           competition={matchSetup.kind === 'torneio' ? 'selecao' : 'liga'}
+          /* mata-mata não aceita empate: o lance dos dados decide a vaga */
+          decisive={
+            matchSetup.kind === 'torneio' &&
+            save.tournament !== null &&
+            save.tournament.stage !== 'groups' &&
+            isTournamentRunning(save.tournament.stage)
+          }
           attributes={save.attributes}
           perks={save.perks}
           morale={save.morale}
@@ -398,6 +495,7 @@ export const App = () => {
           formation={save.formation}
           playerPosition={save.playerPosition}
           careerYear={save.careerYear}
+          playerAge={currentPlayerAge(save)}
           playerNames={save.customPlayerNames}
           stadiumUrl={stadiumBackgroundUrl(
             stadiumTierFor(
@@ -418,13 +516,46 @@ export const App = () => {
   if (screen === 'training') {
     return (
       <main className="shell">
-        <MuteButton muted={muted} onToggle={toggleMute} />
+        <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
         <header className="header">
           <p className="eyebrow">Promessa · Treino</p>
           <h1>O Chute</h1>
         </header>
         <button className="btn btn-secondary btn-back" onClick={() => setScreen('tabs')}>← Voltar</button>
-        <ShotStage attrs={save.attributes} celebrationId={save.celebrationId} appearance={save.appearance} />
+        <ShotStage
+          backgroundUrl={homeStadiumUrl}
+          attrs={save.attributes}
+          celebrationId={save.celebrationId}
+          appearance={save.appearance}
+        />
+        <footer className="footer">PROMESSA · em desenvolvimento</footer>
+      </main>
+    )
+  }
+
+  if (screen === 'dice-training') {
+    return (
+      <main className="shell">
+        <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
+        <header className="header">
+          <p className="eyebrow">Promessa · Treino</p>
+          <h1>Lance decisivo</h1>
+        </header>
+        <button className="btn btn-secondary btn-back" onClick={() => setScreen('tabs')}>← Voltar</button>
+        <div className="card card-wide">
+          <span className="card-label">Duelo de dados · melhor soma leva o gol</span>
+          <DiceDuelStage
+            key={diceSeed}
+            seed={diceSeed}
+            teamName={club.name}
+            opponentName={nextOpponent?.name ?? 'Rival'}
+            onResolved={() => setDiceSeed(Date.now() & 0xffffffff)}
+          />
+          <p className="muted table-note">
+            Três dados para cada lado. Empatou, vai para a morte súbita. No fim
+            do duelo, um novo lance começa sozinho.
+          </p>
+        </div>
         <footer className="footer">PROMESSA · em desenvolvimento</footer>
       </main>
     )
@@ -433,13 +564,14 @@ export const App = () => {
   if (screen === 'gk-training') {
     return (
       <main className="shell">
-        <MuteButton muted={muted} onToggle={toggleMute} />
+        <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
         <header className="header">
           <p className="eyebrow">Promessa · Treino</p>
           <h1>O Paredão</h1>
         </header>
         <button className="btn btn-secondary btn-back" onClick={() => setScreen('tabs')}>← Voltar</button>
         <ShotStage
+          backgroundUrl={homeStadiumUrl}
           shots={10}
           defense={{ skill: 0.3, kitColor: '#8A8F98' }}
           attrs={save.attributes}
@@ -451,7 +583,7 @@ export const App = () => {
 
   return (
     <main className="shell shell-tabs">
-        <MuteButton muted={muted} onToggle={toggleMute} />
+        <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
       <header className="header">
         <p className="eyebrow">Promessa</p>
         <h1>{TAB_ITEMS.find((item) => item.id === tab)!.label}</h1>
@@ -471,12 +603,16 @@ export const App = () => {
           onNewSeason={onNewSeason}
           onTraining={() => setScreen('training')}
           onGkTraining={() => setScreen('gk-training')}
+          onDiceTraining={() => setScreen('dice-training')}
           onChoosePerk={(perkId) => save && updateSave(choosePerk(save, perkId))}
           onResolveEvent={(optionIndex) => save && updateSave(resolvePendingEvent(save, optionIndex))}
           onDismissEventNote={() => save && updateSave(dismissEventNote(save))}
         />
       )}
       {tab === 'matches' && <MatchesTab save={save} />}
+      {tab === 'selecao' && save.tournament && (
+        <NationalTab save={save} onSaveChange={updateSave} />
+      )}
       {tab === 'team' && <TeamTab save={save} club={club} onSaveChange={updateSave} />}
       {tab === 'market' && <MarketTab save={save} onSaveChange={updateSave} />}
       {tab === 'profile' && (
@@ -491,7 +627,7 @@ export const App = () => {
       )}
 
       <nav className="tabbar" aria-label="Navegação principal">
-        {TAB_ITEMS.map((item) => (
+        {visibleTabs.map((item) => (
           <button
             key={item.id}
             className={`tabbar-item${tab === item.id ? ' tabbar-active' : ''}`}

@@ -9,22 +9,16 @@ import {
   applyPerksToShot,
   applyPerksToWall,
   captainMomentum,
-  dueMilestone,
-  offerForMilestone,
+  isPerfectRating,
+  perkOptionsFor,
+  PERFECT_GAMES_FOR_PERK,
+  PERFECT_RATING,
   perkById,
   perkDecisionSeconds,
   perkPassChance,
   perkTrainingBonus,
-  type MilestoneSnapshot,
 } from './perks'
 
-const SNAPSHOT_ZERO: MilestoneSnapshot = {
-  games: 0,
-  goals: 0,
-  lastRating: 0,
-  trophiesCount: 0,
-  promoted: false,
-}
 
 describe('catálogo de perks', () => {
   test('todos os perks têm nome e descrição', () => {
@@ -40,62 +34,38 @@ describe('catálogo de perks', () => {
   })
 })
 
-describe('marcos de desbloqueio', () => {
-  test('sem feitos não há marco devido', () => {
-    expect(dueMilestone(SNAPSHOT_ZERO, [])).toBeNull()
+describe('gatilho da habilidade: cinco atuações nota 10', () => {
+  test('só nota 10 conta como atuação perfeita', () => {
+    expect(isPerfectRating(10)).toBe(true)
+    expect(isPerfectRating(9.9)).toBe(false)
+    expect(isPerfectRating(8)).toBe(false)
   })
 
-  test('nota 8+ libera o primeiro marco', () => {
-    const due = dueMilestone({ ...SNAPSHOT_ZERO, games: 1, lastRating: 8.2 }, [])
-    expect(due).toBe('jogao-de-gala')
-  })
-
-  test('marco já reivindicado não repete', () => {
-    const due = dueMilestone({ ...SNAPSHOT_ZERO, games: 1, lastRating: 9 }, ['jogao-de-gala'])
-    expect(due).toBeNull()
-  })
-
-  test('10 gols na carreira liberam o marco de artilheiro', () => {
-    const due = dueMilestone({ ...SNAPSHOT_ZERO, games: 8, goals: 10 }, ['jogao-de-gala'])
-    expect(due).toBe('artilheiro-10')
-  })
-
-  test('promoção e título têm marcos próprios', () => {
-    expect(dueMilestone({ ...SNAPSHOT_ZERO, promoted: true }, [])).toBe('promovido')
-    expect(dueMilestone({ ...SNAPSHOT_ZERO, trophiesCount: 1 }, ['promovido'])).toBe('campeao')
-  })
-
-  test('um marco por vez: o mais antigo pendente vem primeiro', () => {
-    const due = dueMilestone(
-      { games: 60, goals: 40, lastRating: 9, trophiesCount: 2, promoted: true },
-      [],
-    )
-    expect(due).toBe('jogao-de-gala')
+  test('o preço da habilidade é alto de propósito', () => {
+    expect(PERFECT_GAMES_FOR_PERK).toBe(5)
+    expect(PERFECT_RATING).toBe(10)
   })
 })
 
 describe('oferta de perks', () => {
   test('oferece 3 opções para quem não tem nenhum', () => {
-    const offer = offerForMilestone('jogao-de-gala', [])
+    const offer = perkOptionsFor([])
     expect(offer).toHaveLength(3)
     expect(new Set(offer).size).toBe(3)
   })
 
   test('não oferece perk já adquirido', () => {
-    const first = offerForMilestone('jogao-de-gala', [])
-    const owned = [first[0]]
-    const second = offerForMilestone('artilheiro-10', owned)
-    expect(second).not.toContain(owned[0])
+    const owned = [perkOptionsFor([])[0]]
+    expect(perkOptionsFor(owned)).not.toContain(owned[0])
   })
 
   test('com quase tudo adquirido, oferece o que resta', () => {
     const owned = PERK_IDS.slice(0, PERK_IDS.length - 1)
-    const offer = offerForMilestone('campeao', owned)
-    expect(offer).toEqual([PERK_IDS[PERK_IDS.length - 1]])
+    expect(perkOptionsFor(owned)).toEqual([PERK_IDS[PERK_IDS.length - 1]])
   })
 
   test('com tudo adquirido, oferta vazia', () => {
-    expect(offerForMilestone('campeao', PERK_IDS)).toHaveLength(0)
+    expect(perkOptionsFor(PERK_IDS)).toHaveLength(0)
   })
 })
 

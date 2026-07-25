@@ -377,18 +377,23 @@ h1 {
 /* ---------- resumo ---------- */
 
 .match-summary {
-  position: absolute;
+  /* fixo na viewport, não preso ao palco: assim existe UM scroll só nesta
+     tela. Antes o resumo rolava por dentro E a página rolava por fora. */
+  position: fixed;
   inset: 0;
-  z-index: 3;
-  background: rgba(16, 12, 26, 0.95);
-  border-radius: 6px;
+  z-index: 40;
+  /* opaco: o gramado aparecendo por trás tirava o peso do apito final */
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(255, 210, 63, 0.07), transparent 60%),
+    #100c1a;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 12px;
-  padding: 24px;
+  padding: 24px 16px;
   text-align: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .match-summary h2 {
@@ -669,13 +674,6 @@ h1 {
 }
 
 .fixture-row,
-.history-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-
 .fixture-round {
   font-size: 10.5px;
   color: var(--muted);
@@ -732,14 +730,16 @@ h1 {
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 8px;
 }
 
-.campaign-label {
-  display: block;
+/* campanha dentro do card do clube, separada por uma linha */
+.team-campaign {
   width: 100%;
-  text-align: center;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 
 .stat {
@@ -764,9 +764,49 @@ h1 {
 }
 
 .profile-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+}
+
+/* retrato + nome ficam lado a lado; os números da carreira vêm embaixo,
+   preenchendo o espaço que sobrava no card */
+.profile-identity {
+  display: flex;
   flex-direction: row;
   align-items: center;
   gap: 16px;
+  /* no celular o nome + posição + clube não cabem ao lado do retrato: sem
+     permitir a quebra, a linha estoura o card e leva o grid junto */
+  flex-wrap: wrap;
+}
+
+.profile-career {
+  display: grid;
+  /*
+   * Colunas fixas com mínimo ZERO, como em .stat-grid. O auto-fit com mínimo
+   * em pixels quebrava dos dois lados no celular: sem largura definida caía
+   * numa coluna só, e com ela os rótulos longos ("APROVEITAMENTO") estouravam
+   * a faixa. Com minmax(0, 1fr) a coluna encolhe e o texto quebra.
+   */
+  width: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 10px;
+  margin: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.profile-career .stat {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.profile-career dd {
+  margin: 0;
 }
 
 .profile-portrait {
@@ -782,6 +822,9 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* min-width: 0 libera o texto longo a quebrar em vez de empurrar o card */
+  min-width: 0;
+  flex: 1 1 180px;
 }
 
 .profile-name {
@@ -1081,11 +1124,58 @@ h1 {
 
 /* ---------- botão de volume ---------- */
 
-.mute-btn {
+/*
+ * Controle de som: ícone (liga/desliga) + barra de volume. A barra fica
+ * recolhida e abre ao passar o mouse, focar ou tocar — no canto da tela ela
+ * atrapalharia o resto da interface o tempo todo.
+ */
+.volume-control {
   position: fixed;
   top: 12px;
   right: max(12px, calc(50% - 280px + 12px));
   z-index: 30;
+  display: flex;
+  align-items: center;
+  flex-direction: row-reverse;
+  gap: 8px;
+}
+
+.volume-slider {
+  width: 0;
+  opacity: 0;
+  padding: 0;
+  margin: 0;
+  height: 24px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  transition: width 160ms ease, opacity 160ms ease;
+}
+
+.volume-control:hover .volume-slider,
+.volume-control:focus-within .volume-slider {
+  width: clamp(90px, 22vw, 130px);
+  opacity: 1;
+}
+
+/*
+ * Sem mouse não há hover, e abrir a barra pelo ícone silenciaria o jogo: a
+ * barra fica sempre à vista, mas EMBAIXO do ícone — lado a lado ela invadia
+ * o cabeçalho no celular.
+ */
+@media (hover: none) {
+  .volume-control {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
+  .volume-slider {
+    width: 96px;
+    opacity: 1;
+  }
+}
+
+.mute-btn {
   width: 38px;
   height: 38px;
   display: flex;
@@ -1098,7 +1188,8 @@ h1 {
   cursor: pointer;
 }
 
-.mute-btn:hover {
+.mute-btn:hover,
+.volume-control:focus-within .mute-btn {
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -1117,15 +1208,40 @@ h1 {
   display: block;
 }
 
+/*
+ * Controles do banco: rótulo EM CIMA do grupo e todos os grupos com a mesma
+ * largura. Lado a lado eles ficavam desalinhados — cada rótulo tinha um
+ * comprimento, "Postura do time" quebrava em duas linhas e empurrava o grupo
+ * para outra altura que os demais.
+ */
 .live-panel {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
-  flex-wrap: wrap;
+}
+
+/* rótulo e grupo andam juntos: soltos, a quebra de linha separava os dois */
+.live-control {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+}
+
+.live-panel-label {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .live-group {
-  display: flex;
+  /* colunas iguais: os botões dividem a faixa e ficam do mesmo tamanho */
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: stretch;
   gap: 4px;
   background: var(--card);
   border: 1px solid var(--line);
@@ -1134,14 +1250,21 @@ h1 {
 }
 
 .live-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  /* encolhe só quando a tela é estreita: assim "Contra-ataque" cabe numa
+     linha e o grupo não fica mais alto que os outros */
+  font-size: clamp(9.5px, 2.6vw, 11px);
+  letter-spacing: 0.05em;
+  line-height: 1.25;
+  text-align: center;
   background: transparent;
   color: var(--muted);
   border: 1px solid transparent;
   border-radius: 4px;
-  padding: 7px 10px;
+  padding: 8px 6px;
   cursor: pointer;
 }
 
@@ -1159,6 +1282,28 @@ h1 {
 .match-log-live {
   min-height: 110px;
   max-height: 130px;
+}
+
+.match-log-title {
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  background: inherit;
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* o painel nasce vazio e um retângulo em branco parece defeito */
+.match-log-empty {
+  margin: 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--muted);
 }
 
 /* No celular, o lance (chute/defesa) toma a tela sozinho, como sempre foi. */
@@ -1336,12 +1481,17 @@ h1 {
 }
 
 .training-row {
-  display: flex;
+  display: grid;
+  /* três botões de nomes longos: em grade eles dividem a largura por igual e
+     o texto quebra, em vez de o último vazar para fora da tela no celular */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
 .training-row .btn {
-  flex: 1;
+  width: 100%;
+  padding-inline: 6px;
+  hyphens: auto;
 }
 
 .stage-score-label {
@@ -1433,31 +1583,78 @@ h1 {
   color: #1a1428;
 }
 
+/* cada clube é um cartão: escudo, nome editável e cores lado a lado */
 .club-edit-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
 }
 
+.club-edit-fields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* nome de origem/cidade: contexto discreto sob o campo de renomear */
 .club-edit-original {
-  min-width: 128px;
-  font-size: 0.74rem;
-  color: var(--ink-soft, #b9b3c9);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .club-edit-input {
-  flex: 1;
+  width: 100%;
   min-width: 0;
-  padding: 6px 10px;
-  font-size: 0.8rem;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+}
+
+/* filtro de divisão como abas, no lugar de um select escondido */
+.editor-divisions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.editor-division {
+  flex: 1 1 auto;
+  padding: 7px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.editor-division:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.editor-division-active {
+  color: #1a1428;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 700;
 }
 
 .btn-back {
-  align-self: flex-start;
+  align-self: center;
   padding: 8px 14px;
   font-size: 0.78rem;
   margin-bottom: 4px;
@@ -1520,16 +1717,96 @@ h1 {
   font-size: 0.78rem;
 }
 
+/*
+ * Números do jogo em COMPARAÇÃO: seu valor, a fatia visual e o do adversário.
+ * Antes era uma linha corrida ("67 força 70 46% posse 54%") em que valor e
+ * rótulo se misturavam e nada dizia quem estava por cima.
+ */
 .live-stats {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 10px 12px 12px;
   background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
   border-radius: 10px;
   font-size: 0.72rem;
   color: var(--ink-soft, #b9b3c9);
+}
+
+.live-stats-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.live-stats-title {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.live-stat {
+  display: grid;
+  grid-template-columns: minmax(48px, auto) minmax(0, 1fr) minmax(48px, auto);
+  align-items: center;
+  gap: 10px;
+}
+
+.live-stat-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 13px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.live-stat-value-opp {
+  justify-content: flex-end;
+  color: #f5f0e6;
+}
+
+.live-stat-value em {
+  font-style: normal;
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.live-stat-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.live-stat-label {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.live-stat-bar {
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  /* o trecho não preenchido é a fatia do adversário */
+  background: rgba(245, 240, 230, 0.22);
+  overflow: hidden;
+}
+
+.live-stat-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 320ms ease;
 }
 
 .live-stats-team {
@@ -1662,9 +1939,11 @@ h1 {
 }
 
 .club-edit-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  /* uma coluna no celular; no computador quantas couberem */
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
   gap: 10px;
+  margin-top: 4px;
 }
 
 /* ---------- desktop (≥1024px): layout próprio; mobile fica intacto ---------- */
@@ -1680,9 +1959,9 @@ h1 {
     width: min(100%, 1060px);
   }
 
-  /* o botão de som acompanha a borda do shell largo (metade de 1060 = 530);
+  /* o controle de som acompanha a borda do shell largo (metade de 1060 = 530);
      sem isso ele fica ancorado no shell estreito e flutua no meio da tela */
-  .mute-btn {
+  .volume-control {
     right: max(12px, calc(50% - 530px + 12px));
   }
 
@@ -1746,6 +2025,7 @@ h1 {
     gap: 16px;
   }
 
+  .tab-panel > .hero-bar,
   .tab-panel > .subtabs,
   .tab-panel > .division-banner,
   .tab-panel > .menu-note,
@@ -3345,14 +3625,30 @@ h1 {
   min-width: 0;
 }
 
+/* Prateleira que arrasta de lado: com muitos títulos a estante cresce na
+   horizontal em vez de empurrar o resto da aba para baixo. */
 .trophy-shelf {
-  justify-items: center;
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
-.trophy-shelf {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 14px;
+.trophy-shelf > * {
+  flex: 0 0 132px;
+  scroll-snap-align: start;
+}
+
+.trophy-shelf::-webkit-scrollbar {
+  height: 6px;
+}
+
+.trophy-shelf::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 3px;
 }
 
 .trophy-item {
@@ -3444,8 +3740,8 @@ h1 {
   align-items: center;
   gap: 12px;
   width: min(100%, 560px);
-  max-height: 100%;
-  overflow-y: auto;
+  /* o scroll agora é do overlay; margin auto centra quando o conteúdo cabe */
+  margin: auto 0;
   padding: 4px;
 }
 
@@ -3887,4 +4183,947 @@ h1 {
   .champion-trophy {
     height: 112px;
   }
+}
+
+/* ---------- faixa de status da Home ---------- */
+/* No celular vira uma coluna; no desktop as estatísticas ocupam a largura
+   que antes ficava vazia ao lado de uma única linha de texto. */
+
+.hero-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(255, 210, 63, 0.07), var(--card));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.hero-id {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+.hero-name {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: 0.01em;
+}
+
+.hero-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+}
+
+.hero-stats {
+  display: flex;
+  gap: 18px;
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.hero-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 58px;
+}
+
+.hero-stat dt {
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.hero-stat dd {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hero-good { color: #7acc6e; }
+.hero-bad { color: var(--hot); }
+
+@media (max-width: 559px) {
+  .hero-stats {
+    gap: 14px;
+    width: 100%;
+  }
+  .hero-stat dd {
+    font-size: 16px;
+  }
+}
+
+/* avatar do craque na faixa de status (pixel art: sem suavizar) */
+.hero-avatar {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: linear-gradient(160deg, #241b3c, #171126);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.hero-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 3px;
+  image-rendering: pixelated;
+}
+
+/* ---------- artilharia da divisão ---------- */
+
+.scorer-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scorer-row {
+  display: grid;
+  grid-template-columns: 22px 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 6px;
+  border-radius: 8px;
+}
+
+.scorer-row-user {
+  background: rgba(255, 210, 63, 0.1);
+  outline: 1px solid rgba(255, 210, 63, 0.28);
+}
+
+.scorer-pos {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.scorer-face {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: linear-gradient(160deg, #241b3c, #171126);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scorer-face-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.scorer-face-pixel {
+  object-fit: contain;
+  padding: 2px;
+  image-rendering: pixelated;
+}
+
+.scorer-id {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.scorer-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scorer-club {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scorer-goals {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  padding-left: 6px;
+}
+
+/* ---------- tabela + artilharia lado a lado ---------- */
+/* Celular: uma coluna, pontos em cima e artilharia embaixo (ordem do DOM).
+   Desktop: classificação larga à esquerda, artilharia à direita, mesma
+   altura — a lista de artilheiros rola por dentro quando sobra gente. */
+
+.league-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .tab-panel > .league-layout {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  /* sem artilheiros ainda (início de temporada), a classificação ocupa tudo
+     em vez de ficar espremida com meia tela vazia ao lado */
+  .tab-panel > .league-layout-solo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* os dois cards esticam até a altura da linha do grid */
+  .league-layout > .league-standings,
+  .league-layout > .league-scorers {
+    height: 100%;
+    margin: 0;
+  }
+
+  .league-scorers {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  /* a classificação respira: no desktop sobrava espaço no rodapé do card */
+  .league-standings .table-row {
+    padding: 9px 8px;
+    font-size: 13.5px;
+    gap: 6px;
+  }
+
+  .league-standings .table-club-name {
+    font-size: 14px;
+  }
+
+  .league-standings .table-points {
+    font-size: 15px;
+  }
+
+  .league-standings .club-crest {
+    width: 22px;
+    height: 22px;
+  }
+
+  /* a classificação tem 14 linhas e a artilharia 10: as linhas de artilheiro
+     crescem para as duas colunas terminarem juntas. Se um dia a lista passar
+     da altura da tabela, o overflow abaixo resolve com rolagem. */
+  .league-scorers .scorer-list {
+    gap: 5px;
+  }
+
+  .league-scorers .scorer-row {
+    grid-template-columns: 26px 44px minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 6px 8px;
+  }
+
+  .league-scorers .scorer-face {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .league-scorers .scorer-name {
+    font-size: 15px;
+  }
+
+  .league-scorers .scorer-club {
+    font-size: 12px;
+  }
+
+  .league-scorers .scorer-pos {
+    font-size: 13px;
+  }
+
+  .league-scorers .scorer-goals {
+    font-size: 20px;
+  }
+
+  /* min-height:0 é o que permite o filho encolher e ativar o scroll */
+  .league-scorers .scorer-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .league-scorers .scorer-list::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .league-scorers .scorer-list::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: 3px;
+  }
+}
+
+/* teclas na explicação da defesa */
+.defense-keys kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 0 1px;
+  font-family: var(--mono);
+  font-size: 0.85em;
+  color: var(--accent);
+  background: rgba(255, 210, 63, 0.12);
+  border: 1px solid rgba(255, 210, 63, 0.4);
+  border-radius: 4px;
+}
+
+.defense-warn {
+  color: var(--hot);
+  font-size: 0.92em;
+}
+
+/* sigla da posição quando não há rosto — cabe na moldura, sem transbordar */
+.scorer-face-pos {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* ---------- tela de partidas disputadas ---------- */
+
+.history-summary {
+  border-top: none;
+  padding-top: 4px;
+}
+
+.history-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: 22px 22px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 8px;
+}
+
+.history-row:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.history-crest {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.history-id {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.history-opponent {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-comp {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.history-score {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.history-x {
+  color: var(--muted);
+  font-weight: 400;
+  margin: 0 1px;
+}
+
+.history-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  min-width: 92px;
+}
+
+.history-goals {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.history-rating {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 34px;
+  text-align: right;
+}
+
+.history-gala {
+  color: var(--accent);
+}
+
+@media (max-width: 559px) {
+  .history-row {
+    grid-template-columns: 20px 20px minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  .history-meta {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding-left: 60px;
+    min-width: 0;
+  }
+}
+
+/* ---------- filtros do elenco no celular ---------- */
+/* No computador cabem lado a lado; abaixo de 560px o rótulo e os dois
+   seletores disputavam a mesma linha e o clube saía da tela. */
+
+@media (max-width: 559px) {
+  .squad-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .squad-club-pick {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .squad-club-pick .squad-select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* divisão numa linha; escudo + clube na seguinte, sem espremer os dois.
+     Precisa vir DEPOIS da regra acima: mesma especificidade, ganha a última. */
+  .squad-club-pick .squad-division-select {
+    flex: 1 1 100%;
+  }
+
+  .squad-select {
+    max-width: none;
+    width: 100%;
+  }
+
+  .squad-coach-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .squad-formation-pick {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .squad-formation-pick .squad-select {
+    flex: 1;
+    min-width: 0;
+    margin-left: 10px;
+  }
+}
+
+/* ---------- lance decisivo nos dados ---------- */
+
+.dice-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.dice-scoreboard {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: clamp(14px, 5vw, 40px);
+  width: 100%;
+}
+
+.dice-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  min-width: 108px;
+}
+
+/* de quem é a vez fica evidente: sem isso ninguém sabe quando jogar */
+.dice-side-active {
+  border-color: var(--accent);
+  background: rgba(255, 210, 63, 0.09);
+}
+
+.dice-side-name {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  max-width: 13ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dice-total {
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.dice-rolls {
+  display: flex;
+  gap: 4px;
+}
+
+.dice-chip {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dice-chip-empty {
+  opacity: 0.35;
+  background: none;
+}
+
+.dice-versus {
+  font-size: 20px;
+  color: var(--muted);
+  align-self: center;
+}
+
+.dice-sudden {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--hot);
+}
+
+.dice-table {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 34px 34px 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: radial-gradient(circle at 50% 30%, #1f6b3a, #10381c);
+  box-shadow: inset 0 8px 26px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dice-table:disabled {
+  cursor: default;
+}
+
+/* vez do rival: a mesa continua visível, mas sinaliza que não é sua */
+.dice-table-ai {
+  opacity: 0.9;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.dice-energy {
+  width: 120px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.dice-energy-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 90ms linear;
+}
+
+.dice-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+  min-height: 1.2em;
+}
+
+.dice-hint-final {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* ---------- o dado 3D ---------- */
+
+.die-scene {
+  --die-size: 78px;
+  --die-half: 39px;
+  --die-shake: 2px;
+  --die-spin-x: 0deg;
+  --die-spin-y: 0deg;
+  position: relative;
+  width: var(--die-size);
+  height: var(--die-size);
+  perspective: 700px;
+}
+
+/* sombra no feltro: dá peso ao dado e marca onde ele encosta */
+.die-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -12px;
+  width: 62%;
+  height: 12px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  filter: blur(4px);
+}
+
+.die-rolling .die-shadow {
+  animation: die-shadow-drop 1s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.die {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform: rotateX(var(--die-spin-x)) rotateY(var(--die-spin-y));
+}
+
+/* segurando: o dado treme na mão, esperando a hora de sair */
+.die-shaking .die {
+  animation: die-shake 100ms infinite;
+}
+
+/*
+ * Lançamento: cai de cima, quica na mesa e vai virando até assentar. A queda
+ * (translateY) e o giro (rotate) vivem em animações separadas para o dado
+ * bater no feltro enquanto ainda está rodando — como na mesa de verdade.
+ */
+.die-rolling .die {
+  animation:
+    die-fall 1s cubic-bezier(0.2, 0.7, 0.3, 1) both,
+    die-tumble 1s cubic-bezier(0.15, 0.6, 0.25, 1) both;
+}
+
+.die-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 9px;
+  gap: 3px;
+  border-radius: 11px;
+  background: linear-gradient(150deg, #fbfaf6, #d5d0c2);
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.14);
+  backface-visibility: hidden;
+}
+
+.die-pip {
+  border-radius: 50%;
+  background: transparent;
+}
+
+.die-pip-on {
+  background: radial-gradient(circle at 35% 30%, #4a4550, #16121f);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35);
+}
+
+@keyframes die-shake {
+  0% { transform: translate3d(calc(var(--die-shake) * -1), 0, 0) rotate(-4deg); }
+  50% { transform: translate3d(var(--die-shake), calc(var(--die-shake) * -1), 0) rotate(4deg); }
+  100% { transform: translate3d(calc(var(--die-shake) * -1), 0, 0) rotate(-4deg); }
+}
+
+/* queda com dois quiques, cada um menor que o anterior */
+@keyframes die-fall {
+  0% { translate: 0 -120%; }
+  38% { translate: 0 0; }
+  52% { translate: 0 -26%; }
+  70% { translate: 0 0; }
+  82% { translate: 0 -9%; }
+  100% { translate: 0 0; }
+}
+
+@keyframes die-tumble {
+  0% { transform: rotateX(0deg) rotateY(0deg); }
+  100% { transform: rotateX(var(--die-spin-x)) rotateY(var(--die-spin-y)); }
+}
+
+@keyframes die-shadow-drop {
+  0% { opacity: 0.1; transform: translateX(-50%) scale(0.5); }
+  38% { opacity: 0.5; transform: translateX(-50%) scale(1.05); }
+  52% { opacity: 0.3; transform: translateX(-50%) scale(0.8); }
+  100% { opacity: 0.45; transform: translateX(-50%) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .die-shaking .die,
+  .die-rolling .die,
+  .die-rolling .die-shadow {
+    animation: none;
+  }
+}
+
+/* desfecho do lance decisivo: o grito de gol, como nas outras telas */
+.dice-final {
+  padding: 26px 12px;
+  gap: 10px;
+}
+
+.dice-goal {
+  margin: 0;
+  font-size: clamp(24px, 7vw, 38px);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.dice-goal-against {
+  color: var(--hot);
+  font-size: clamp(19px, 5vw, 28px);
+}
+
+.dice-final-score {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Lance de dado DENTRO da partida: assume o lugar do campo ao vivo, do mesmo
+ * jeito que a cobrança e a defesa. Antes ficava pendurado como card abaixo do
+ * gramado e o jogador nem via que o lance tinha começado.
+ */
+.dice-lance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 18px 14px 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(46, 122, 74, 0.18), transparent 70%), var(--panel);
+}
+
+.dice-lance .card-label {
+  align-self: center;
+  text-align: center;
+}
+
+/* ---------- fim de jogo ---------- */
+
+/* o placar sozinho faz o jogador contar de cabeça quem venceu */
+.summary-result {
+  align-self: center;
+  padding: 4px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.summary-result-win {
+  color: #7ee08a;
+  border-color: rgba(126, 224, 138, 0.5);
+  background: rgba(126, 224, 138, 0.1);
+}
+
+.summary-result-draw {
+  color: var(--muted);
+}
+
+.summary-result-loss {
+  color: #ff8a8a;
+  border-color: rgba(255, 138, 138, 0.4);
+  background: rgba(255, 138, 138, 0.08);
+}
+
+/*
+ * Continuar fecha a tela: fica por último, na ordem de leitura, mas grudado
+ * na base para nunca sair do alcance. Antes vinha ANTES do placar, roubando
+ * a atenção do resultado.
+ */
+.summary-continue {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  width: min(100%, 320px);
+  margin-top: 6px;
+  box-shadow: 0 -14px 22px 10px #100c1a;
+}
+
+/* ---------- aba da seleção ---------- */
+
+.national-head {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.national-switch {
+  align-self: stretch;
+}
+
+/* oito grupos: em grade no web, empilhados no celular */
+.national-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 12px;
+}
+
+.national-row {
+  display: grid;
+  grid-template-columns: 18px 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 4px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--line);
+}
+
+.national-row:last-child {
+  border-bottom: none;
+}
+
+/* os dois primeiros passam de fase — a barra à esquerda mostra isso */
+.national-row-through {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.national-row-mine {
+  background: rgba(255, 210, 63, 0.08);
+  font-weight: 700;
+}
+
+.national-pos {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.national-team {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.national-pts {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.national-tie {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.national-tie:last-child {
+  border-bottom: none;
+}
+
+.national-tie-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.national-tie-side:last-child {
+  justify-content: flex-end;
+}
+
+.national-tie-score {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.squad-hint {
+  margin: 0 0 4px;
+  font-size: 11.5px;
+}
+
+.squad-row-picked {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }

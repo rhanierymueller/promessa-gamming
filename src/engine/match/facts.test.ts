@@ -16,7 +16,7 @@ describe('pickBestPlayer', () => {
     expect(pickBestPlayer(baseInput)).toEqual(pickBestPlayer(baseInput))
   })
 
-  test('nota de gala faz o USUÁRIO ser o craque do jogo', () => {
+  test('nota de gala VENCENDO faz o usuário ser o craque do jogo', () => {
     // Arrange
     const gala = { ...baseInput, playerRating: MOTM_MIN_RATING + 0.5 }
 
@@ -26,6 +26,35 @@ describe('pickBestPlayer', () => {
     // Assert
     expect(best.isUser).toBe(true)
     expect(best.name).toBe('Rhany')
+  })
+
+  test('DERROTA nunca elege o usuário — nem com nota 10', () => {
+    // Arrange: o craque do jogo sai do lado que ganhou
+    const derrota = { ...baseInput, teamGoals: 2, opponentGoals: 3, playerRating: 10 }
+
+    // Act
+    const best = pickBestPlayer(derrota)
+
+    // Assert
+    expect(best.isUser).toBe(false)
+    expect(baseInput.opponentSquad).toContain(best.name)
+  })
+
+  test('derrota não elege NINGUÉM do time perdedor', () => {
+    // Arrange
+    for (const rating of [3, 5, 7, 8.5, 10]) {
+      const best = pickBestPlayer({ ...baseInput, teamGoals: 0, opponentGoals: 1, playerRating: rating })
+      expect(baseInput.teamSquad).not.toContain(best.name)
+      expect(best.isUser).toBe(false)
+    }
+  })
+
+  test('empate com nota de gala ainda pode eleger o usuário', () => {
+    // Arrange: empate não é derrota
+    const empate = { ...baseInput, teamGoals: 1, opponentGoals: 1, playerRating: MOTM_MIN_RATING + 1 }
+
+    // Act + Assert
+    expect(pickBestPlayer(empate).isUser).toBe(true)
   })
 
   test('derrota com nota baixa dá o craque ao adversário', () => {

@@ -42,98 +42,25 @@ export const perkById = (id: PerkId): Perk => PERKS.find((perk) => perk.id === i
 export const isPerkId = (value: unknown): value is PerkId =>
   typeof value === 'string' && (PERK_IDS as readonly string[]).includes(value)
 
-/** Marcos da carreira que destravam a escolha de um perk (um de cada). */
-export type PerkMilestoneId =
-  | 'jogao-de-gala'
-  | 'artilheiro-10'
-  | 'promovido'
-  | 'campeao'
-  | 'artilheiro-30'
-  | 'veterano-50'
+/**
+ * A habilidade é a recompensa mais rara da carreira: só sai depois de CINCO
+ * atuações NOTA 10. Escolher zera a contagem. Antes eram seis marcos soltos
+ * (nota 8+, 10 gols, acesso, título...) e a escolha pipocava toda hora.
+ */
+export const PERFECT_RATING = 10
+export const PERFECT_GAMES_FOR_PERK = 5
 
-export interface MilestoneSnapshot {
-  readonly games: number
-  readonly goals: number
-  /** Nota da última partida (0 quando o gatilho não é partida). */
-  readonly lastRating: number
-  readonly trophiesCount: number
-  /** Acabou de subir de divisão. */
-  readonly promoted: boolean
-}
+export const PERK_OFFER_REASON =
+  `${PERFECT_GAMES_FOR_PERK} atuações nota ${PERFECT_RATING} — o estrelato cobra o preço dele.`
 
-interface Milestone {
-  readonly id: PerkMilestoneId
-  readonly label: string
-  readonly isDue: (snapshot: MilestoneSnapshot) => boolean
-  /** Trio temático oferecido — completado do catálogo se algum já foi pego. */
-  readonly themed: readonly PerkId[]
-}
-
-/** Ordem importa: o primeiro marco pendente é o oferecido. */
-const MILESTONES: readonly Milestone[] = [
-  {
-    id: 'jogao-de-gala',
-    label: 'Atuação de gala — nota 8+ em uma partida!',
-    isDue: (s) => s.lastRating >= 8,
-    themed: ['matador', 'frieza', 'maestro'],
-  },
-  {
-    id: 'artilheiro-10',
-    label: '10 gols na carreira!',
-    isDue: (s) => s.goals >= 10,
-    themed: ['matador', 'folha-seca', 'craque-de-copa'],
-  },
-  {
-    id: 'promovido',
-    label: 'Acesso conquistado — subiu de divisão!',
-    isDue: (s) => s.promoted,
-    themed: ['capitao', 'idolo-da-torcida', 'frieza'],
-  },
-  {
-    id: 'campeao',
-    label: 'Primeiro título da carreira!',
-    isDue: (s) => s.trophiesCount >= 1,
-    themed: ['idolo-da-torcida', 'capitao', 'craque-de-copa'],
-  },
-  {
-    id: 'artilheiro-30',
-    label: '30 gols na carreira!',
-    isDue: (s) => s.goals >= 30,
-    themed: ['folha-seca', 'matador', 'maestro'],
-  },
-  {
-    id: 'veterano-50',
-    label: '50 jogos na carreira!',
-    isDue: (s) => s.games >= 50,
-    themed: ['muralha', 'capitao', 'idolo-da-torcida'],
-  },
-]
-
-export const milestoneLabel = (id: PerkMilestoneId): string =>
-  MILESTONES.find((milestone) => milestone.id === id)?.label ?? ''
-
-export const isMilestoneId = (value: unknown): value is PerkMilestoneId =>
-  typeof value === 'string' && MILESTONES.some((milestone) => milestone.id === value)
-
-/** O marco pendente mais antigo que a carreira já cumpriu (ou null). */
-export const dueMilestone = (
-  snapshot: MilestoneSnapshot,
-  claimed: readonly string[],
-): PerkMilestoneId | null =>
-  MILESTONES.find((milestone) => !claimed.includes(milestone.id) && milestone.isDue(snapshot))?.id ??
-  null
+/** A partida entra na conta de atuações perfeitas? */
+export const isPerfectRating = (rating: number): boolean => rating >= PERFECT_RATING
 
 const OFFER_SIZE = 3
 
-/** Trio de escolha do marco: o tema primeiro, completado pelo catálogo. */
-export const offerForMilestone = (
-  milestone: PerkMilestoneId,
-  owned: readonly PerkId[],
-): readonly PerkId[] => {
-  const themed = MILESTONES.find((entry) => entry.id === milestone)?.themed ?? []
-  const pool = [...themed, ...PERK_IDS.filter((id) => !themed.includes(id))]
-  return pool.filter((id) => !owned.includes(id)).slice(0, OFFER_SIZE)
-}
+/** Trio oferecido: as habilidades que o craque ainda não tem. */
+export const perkOptionsFor = (owned: readonly PerkId[]): readonly PerkId[] =>
+  PERK_IDS.filter((id) => !owned.includes(id)).slice(0, OFFER_SIZE)
 
 /** Contexto do lance — decide quais perks de chute se aplicam. */
 export interface ShotPerkContext {

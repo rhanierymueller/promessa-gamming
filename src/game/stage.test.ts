@@ -8,7 +8,7 @@ import {
   createStage,
   tick,
   TOTAL_SHOTS,
-  tryDive,
+  steerDefense,
   tryStartShot,
   type StageEvent,
   type StageState,
@@ -220,14 +220,15 @@ describe('modo defesa', () => {
     const round = beginRound(createDefenseStage(42, 1))
     const finalX = round.sim!.outcome.finalX
 
-    // Act: entra no voo e mergulha exatamente no destino da bola
+    // Act: entra no voo e pilota o goleiro rumo ao destino da bola. Agora
+    // ele PRECISA do tempo de voo para chegar lá — não teleporta.
     const [running] = tickUntilPhaseChanges(round)
     const [flying] = tickUntilPhaseChanges(running)
-    const dived = tryDive(flying, (finalX - 90) / 1.6)
-    const [resolved, events] = tickUntilPhaseChanges(dived)
+    const steered = steerDefense(flying, (finalX - 90) / 1.6)
+    const [resolved, events] = tickUntilPhaseChanges(steered)
 
     // Assert
-    expect(dived.diveX).not.toBeNull()
+    expect(steered.keeperTargetX).not.toBeNull()
     expect(events).toEqual(['defenseSave'])
     expect(resolved.results).toEqual(['save'])
     expect(resolved.msg?.text).toBe('DEFESAÇA!')
@@ -241,8 +242,8 @@ describe('modo defesa', () => {
     expect(flying.phase).toBe('flying')
 
     // Act
-    const low = tryDive(flying, -30, 0)
-    const high = tryDive(flying, -30, -40)
+    const low = steerDefense(flying, -30, 0)
+    const high = steerDefense(flying, -30, -40)
 
     // Assert
     expect(low.diveHigh).toBe(false)

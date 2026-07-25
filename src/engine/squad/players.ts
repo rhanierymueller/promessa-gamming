@@ -1,5 +1,5 @@
 import type { Club } from '../../data/clubs'
-import { squadFor } from '../../data/squadNames'
+import { foreignSquadFor, squadFor } from '../../data/squadNames'
 import type { PlayerAttributes } from '../career/attributes'
 import { ageFactor, RETIRE_AGE, type Potential } from './aging'
 import { FORMATIONS, formationIdFor } from './formation'
@@ -110,6 +110,21 @@ const MAX_ATTR = 92
 /** Escala dos atributos treináveis do craque (1-10) para a régua FIFA. */
 const USER_ATTR_BASE = 45
 const USER_ATTR_PER_LEVEL = 5
+
+/**
+ * Seu físico no auge (27-31 anos). Ritmo, drible e físico não são treináveis:
+ * seguem a SUA curva de carreira, crescendo até o pico e caindo só depois dos
+ * 32 — como a de qualquer jogador.
+ *
+ * Antes eram emprestados do jogador gerado que ocupava a sua vaga no elenco.
+ * Como aquele NPC envelhecia por conta, seu overall despencava aos 26 quando
+ * ele chegava aos 33, e dava saltos quando o clube o substituía por um garoto.
+ */
+const USER_PEAK_PHYSICAL: Pick<FifaAttributes, 'pac' | 'dri' | 'fis'> = {
+  pac: 82,
+  dri: 78,
+  fis: 76,
+}
 
 const hashSeed = (input: string): number => {
   let hash = 2166136261
@@ -222,8 +237,27 @@ export const clubBaseQuality = (club: Club): number =>
     : DIVISION_QUALITY[club.division] ?? DIVISION_QUALITY[3]) +
   club.strength * CLUB_PER_STAR
 
+/** Prefixo que nationAsClub usa — seleção estrangeira tem nomes próprios. */
+const NATION_PREFIX = 'nation-'
+
+/** Id da nacionalidade quando o "clube" é uma seleção; null para clube de liga. */
+const nationalityOf = (clubId: string): string | null =>
+  clubId.startsWith(NATION_PREFIX) ? clubId.slice(NATION_PREFIX.length) : null
+
+/**
+ * Nomes do elenco. O gerador padrão é brasileiro (apelidos de várzea inclusos)
+ * e serve aos clubes da liga e à seleção brasileira; as outras seleções puxam
+ * da lista da própria nacionalidade.
+ */
+const squadNamesFor = (clubId: string, seedText: string): readonly string[] => {
+  const nationality = nationalityOf(clubId)
+  return nationality !== null && nationality !== 'brasil'
+    ? foreignSquadFor(seedText, SQUAD_SIZE, nationality)
+    : squadFor(seedText, SQUAD_SIZE)
+}
+
 export const squadPlayersFor = (club: Club, careerYear = 1): readonly SquadPlayer[] => {
-  const names = squadFor(`${club.id}-elenco`, SQUAD_SIZE)
+  const names = squadNamesFor(club.id, `${club.id}-elenco`)
   // cada clube monta o elenco para o PRÓPRIO esquema — no seu time você é o
   // técnico e pode mudar a forma por cima dos jogadores que herdou
   const positions = [...FORMATIONS[formationIdFor(club.id)].slots, ...BENCH_POSITIONS]
@@ -244,7 +278,7 @@ export const squadPlayersFor = (club: Club, careerYear = 1): readonly SquadPlaye
       generation++
       const regenState = hashSeed(`${club.id}-${index}-gen${generation}`)
       peak = rollPeakPlayer(regenState, position, clubBase, REGEN_MIN_AGE, REGEN_MAX_AGE)
-      name = squadFor(`${club.id}-elenco-gen${generation}`, SQUAD_SIZE)[index] ?? name
+      name = squadNamesFor(club.id, `${club.id}-elenco-gen${generation}`)[index] ?? name
       age = peak.baseAge + (yearsPastRetire - 1)
     }
 
@@ -266,19 +300,23 @@ export const squadPlayersFor = (club: Club, careerYear = 1): readonly SquadPlaye
 
 /**
  * O craque do jogador dentro do elenco: FIN/PAS/DEF vêm dos atributos REAIS
- * treinados no jogo; ritmo, drible e físico herdam do atacante-base do clube.
+ * treinados no jogo; ritmo, drible e físico saem da SUA curva de idade.
  */
 export const userAsSquadPlayer = (
   base: SquadPlayer,
   name: string,
   attributes: PlayerAttributes,
   position: SquadPosition = base.position,
+  /** Sua idade real. Sem ela, herda a do jogador gerado no slot — que é outro. */
+  age: number = base.age,
 ): SquadPlayer => {
   const scale = (level: number): number => USER_ATTR_BASE + level * USER_ATTR_PER_LEVEL
+  // potencial 'alto': o protagonista da carreira tem o teto dos craques
+  const physical = ageFactor(age, 'alto')
   const attrs: FifaAttributes = {
-    pac: base.attrs.pac,
-    dri: base.attrs.dri,
-    fis: base.attrs.fis,
+    pac: clampAttr(USER_PEAK_PHYSICAL.pac * physical),
+    dri: clampAttr(USER_PEAK_PHYSICAL.dri * physical),
+    fis: clampAttr(USER_PEAK_PHYSICAL.fis * physical),
     fin: scale(attributes.finalizacao),
     pas: scale(attributes.passe),
     def: scale(attributes.defesa),
@@ -288,6 +326,7 @@ export const userAsSquadPlayer = (
     id: USER_PLAYER_ID,
     name,
     position,
+    age,
     altPositions: ALT_CANDIDATES[position],
     potential: 'alto',
     attrs,

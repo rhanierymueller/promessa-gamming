@@ -129,8 +129,12 @@ export const eventById = (id: string): LifeEvent | undefined =>
 export const isEventId = (value: unknown): value is string =>
   typeof value === 'string' && LIFE_EVENTS.some((event) => event.id === value)
 
-/** Chance de pintar um evento entre uma rodada e outra. */
-const EVENT_CHANCE = 0.45
+/**
+ * Chance de pintar um evento entre uma rodada e outra. Baixa de propósito:
+ * a 45% aparecia quase todo jogo e virava burocracia. A ~8% dá 3 por
+ * temporada de 38 rodadas — raro o bastante para ser um acontecimento.
+ */
+export const EVENT_CHANCE = 0.08
 
 export interface PendingLifeEvent {
   readonly templateId: string

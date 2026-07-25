@@ -1,13 +1,20 @@
 import { describe, expect, test } from 'vitest'
-import { nationById } from '../../data/nations'
+import { NATIONAL_NAMES } from '../../data/nationalNames'
+import { NATIONS, nationById } from '../../data/nations'
 import { createRng } from '../rng'
 import {
   advanceTournament,
   continentalKindFor,
   createTournament,
+  firstKnockoutStage,
+  GROUP_COUNT,
   GROUP_ROUNDS,
+  GROUP_SIZE,
+  KNOCKOUT_ORDER,
+  knockoutPairs,
   playerTournamentOpponentId,
   tournamentKindForYear,
+
   type TournamentState,
 } from './tournament'
 
@@ -31,15 +38,6 @@ describe('continentalKindFor', () => {
   })
 })
 
-describe('tournamentKindForYear (calendário)', () => {
-  test('anos ímpares têm o continental; pares, a Copa do Mundo', () => {
-    expect(tournamentKindForYear(1, 'america')).toBe('copa-america')
-    expect(tournamentKindForYear(1, 'europa')).toBe('liga-nacoes')
-    expect(tournamentKindForYear(2, 'america')).toBe('copa-mundo')
-    expect(tournamentKindForYear(3, 'america')).toBe('copa-america')
-    expect(tournamentKindForYear(4, 'europa')).toBe('copa-mundo')
-  })
-})
 
 describe('createTournament', () => {
   test('monta 2 grupos de 4 com o jogador no grupo A', () => {
@@ -47,10 +45,10 @@ describe('createTournament', () => {
     const cup = createTournament('copa-america', 'brasil', 42)
 
     // Assert
-    expect(cup.groupA).toHaveLength(4)
-    expect(cup.groupB).toHaveLength(4)
-    expect(cup.groupA[0]).toBe('brasil')
-    expect(new Set([...cup.groupA, ...cup.groupB]).size).toBe(8)
+    expect(cup.groups[0]).toHaveLength(4)
+    expect(cup.groups[1]).toHaveLength(4)
+    expect(cup.groups[0][0]).toBe('brasil')
+    expect(new Set([...cup.groups[0], ...cup.groups[1]]).size).toBe(8)
   })
 
   test('torneio continental só convoca seleções da mesma confederação', () => {
@@ -59,10 +57,10 @@ describe('createTournament', () => {
     const nations = createTournament('liga-nacoes', 'franca', 42)
 
     // Assert
-    for (const id of [...copa.groupA, ...copa.groupB]) {
+    for (const id of [...copa.groups[0], ...copa.groups[1]]) {
       expect(nationById(id)!.confederation).toBe('america')
     }
-    for (const id of [...nations.groupA, ...nations.groupB]) {
+    for (const id of [...nations.groups[0], ...nations.groups[1]]) {
       expect(nationById(id)!.confederation).toBe('europa')
     }
   })
@@ -71,11 +69,12 @@ describe('createTournament', () => {
     // Act
     const cup = createTournament('copa-mundo', 'brasil', 42)
     const confederations = new Set(
-      [...cup.groupA, ...cup.groupB].map((id) => nationById(id)!.confederation),
+      [...cup.groups[0], ...cup.groups[1]].map((id) => nationById(id)!.confederation),
     )
 
     // Assert
-    expect(confederations.size).toBe(2)
+    // com 32 seleções a Copa cruza vários continentes, não só dois
+    expect(confederations.size).toBeGreaterThanOrEqual(2)
     expect(createTournament('copa-mundo', 'brasil', 42)).toEqual(cup)
   })
 })
@@ -126,11 +125,11 @@ describe('mata-mata', () => {
     // Assert
     expect(finished.stage).toBe('champion')
     expect(finished.championId).toBe('brasil')
-    // grupos (3) + semi (1) + final (1) jogos do jogador registrados
+    // 3 rodadas de grupo + a chave inteira (oitavas, quartas, semi e final)
     const playerGames = finished.results.filter(
       (r) => r.homeId === 'brasil' || r.awayId === 'brasil',
     )
-    expect(playerGames).toHaveLength(5)
+    expect(playerGames).toHaveLength(GROUP_ROUNDS + KNOCKOUT_ORDER.length)
   })
 
   test('empate no mata-mata decide nos pênaltis, para qualquer lado', () => {
@@ -169,5 +168,130 @@ describe('mata-mata', () => {
     // Assert
     expect(finished.stage).toBe('eliminated')
     expect(finished.championId).toBe(rival)
+  })
+})
+
+describe('empate: onde vale e onde não vale', () => {
+  test('fase de grupos PODE terminar empatada, inclusive na Copa', () => {
+    // Arrange: primeira rodada de grupos da Copa
+    const state = createTournament('copa-mundo', 'brasil', 7)
+    expect(state.stage).toBe('groups')
+
+    // Act: 1 a 1
+    const { value } = advanceTournament(state, 1, 1, createRng(11))
+
+    // Assert: ninguém foi para a decisão — o ponto ficou dividido
+    expect(value.playerPenaltyWon).toBeNull()
+    const meu = value.state.results.find(
+      (r) => r.homeId === 'brasil' || r.awayId === 'brasil',
+    )!
+    expect(meu.homeGoals).toBe(meu.awayGoals)
+    expect(meu.penaltyWinnerId).toBeUndefined()
+  })
+
+  test('mata-mata NUNCA fica empatado — alguém avança', () => {
+    // Arrange: passa a fase de grupos empatando tudo e chega ao mata-mata
+    let state = createTournament('copa-mundo', 'brasil', 5)
+    let rng = createRng(99)
+    for (let i = 0; i < GROUP_ROUNDS; i++) {
+      const step = advanceTournament(state, 3, 0, rng)
+      state = step.value.state
+      rng = step.next
+    }
+    expect(state.stage).toBe('r16')
+
+    // Act: empata no mata-mata
+    const { value } = advanceTournament(state, 1, 1, rng)
+
+    // Assert
+    expect(value.playerPenaltyWon).not.toBeNull()
+    for (const match of value.state.results.filter((r) => r.stage === 'r16')) {
+      const decidido = match.homeGoals !== match.awayGoals || match.penaltyWinnerId !== undefined
+      expect(decidido).toBe(true)
+    }
+  })
+})
+
+describe('calendário das competições de seleção', () => {
+  test('Copa do Mundo só de quatro em quatro anos', () => {
+    for (let year = 1; year <= 24; year++) {
+      const kind = tournamentKindForYear(year, 'america')
+      expect(kind === 'copa-mundo').toBe(year % 4 === 0)
+    }
+  })
+
+  test('Copa América nos anos pares que não são de Copa', () => {
+    expect(tournamentKindForYear(2, 'america')).toBe('copa-america')
+    expect(tournamentKindForYear(6, 'america')).toBe('copa-america')
+    expect(tournamentKindForYear(4, 'america')).toBe('copa-mundo')
+  })
+
+  test('europeu joga a Liga das Nações no lugar da Copa América', () => {
+    expect(tournamentKindForYear(2, 'europa')).toBe('liga-nacoes')
+    expect(tournamentKindForYear(4, 'europa')).toBe('copa-mundo')
+  })
+
+  test('ano ímpar é temporada só de clube', () => {
+    for (const year of [1, 3, 5, 7, 9]) {
+      expect(tournamentKindForYear(year, 'america')).toBeNull()
+    }
+  })
+})
+
+describe('nomes por nacionalidade', () => {
+  test('toda seleção tem nomes próprios — um norueguês não se chama João Silva', () => {
+    for (const nation of NATIONS) {
+      const pool = NATIONAL_NAMES[nation.id]
+      expect(pool, `faltam nomes para ${nation.name}`).toBeDefined()
+      expect(pool.firsts.length).toBeGreaterThanOrEqual(12)
+      expect(pool.lasts.length).toBeGreaterThanOrEqual(12)
+    }
+  })
+})
+
+
+describe('Copa do Mundo com 32 seleções', () => {
+  const cup = createTournament('copa-mundo', 'brasil', 7)
+
+  test('são oito grupos de quatro', () => {
+    expect(cup.groups).toHaveLength(GROUP_COUNT['copa-mundo'])
+    for (const group of cup.groups) expect(group).toHaveLength(GROUP_SIZE)
+  })
+
+  test('nenhuma seleção aparece em dois grupos', () => {
+    const todas = cup.groups.flat()
+    expect(new Set(todas).size).toBe(todas.length)
+  })
+
+  test('você abre o grupo A', () => {
+    expect(cup.groups[0][0]).toBe('brasil')
+  })
+
+  test('a Copa América continua com dois grupos', () => {
+    expect(createTournament('copa-america', 'brasil', 7).groups).toHaveLength(2)
+  })
+
+  test('a chave vai das oitavas à final', () => {
+    expect(firstKnockoutStage(cup)).toBe('r16')
+    expect(firstKnockoutStage(createTournament('copa-america', 'brasil', 7))).toBe('semi')
+  })
+
+  test('as oitavas têm oito confrontos e ninguém joga duas vezes', () => {
+    // Arrange: joga a fase de grupos inteira
+    let state = cup
+    let rng = createRng(5)
+    for (let i = 0; i < GROUP_ROUNDS; i++) {
+      const step = advanceTournament(state, 2, 0, rng)
+      state = step.value.state
+      rng = step.next
+    }
+
+    // Act
+    const pares = knockoutPairs(state, 'r16')
+
+    // Assert
+    expect(pares).toHaveLength(8)
+    const times = pares.flat()
+    expect(new Set(times).size).toBe(16)
   })
 })

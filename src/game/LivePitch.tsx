@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import gramadoUrl from '../assets/backgrounds/gramado.jpg'
 import { fieldName } from '../data/squadNames'
 import type { Tactic } from '../engine/match/tactics'
+import { canDribble, canReceivePass, isKeeperIndex } from '../engine/match/pitchRoles'
 
 /** Estatísticas VIVAS da mesa — contadas dos eventos reais da simulação. */
 export interface LivePitchStats {
@@ -192,7 +193,7 @@ export const LivePitch = ({
     simRef.current = sim
 
     const teammatesOf = (side: 'team' | 'opponent'): number[] =>
-      sim.players.map((p, i) => (p.side === side ? i : -1)).filter((i) => i > 0) // exclui goleiros de receber (índices 0 e 11)
+      sim.players.map((p, i) => (p.side === side ? i : -1)).filter((i) => i >= 0 && canReceivePass(i))
 
     const attackX = (side: 'team' | 'opponent'): number => (side === 'team' ? 1 : 0)
 
@@ -342,7 +343,7 @@ export const LivePitch = ({
         passTo(nearestOpponent(side, holder.pos))
         return
       }
-      if (roll < 0.28) {
+      if (roll < 0.28 && canDribble(sim.holder)) {
         // condução: avança com a bola
         const dir = side === 'team' ? 1 : -1
         holder.base = {
@@ -418,7 +419,7 @@ export const LivePitch = ({
       })
 
       sim.players.forEach((p, i) => {
-        const isKeeper = i === 0 || i === 11
+        const isKeeper = isKeeperIndex(i)
         const dir = p.side === 'team' ? 1 : -1
         const hasBall = p.side === possessSide
         // profundidade da bola no campo de ataque deste time (0-1)

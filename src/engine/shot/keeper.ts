@@ -43,9 +43,17 @@ export const planKeeper = (
   const wrongSideChance = config.wrongSideBase * (1 - skill * 0.5)
   const committed = sideRoll.value < wrongSideChance ? center - (guess - center) : guess
 
-  const maxDive = config.maxDiveBase + skill * config.maxDiveSkillFactor
+  /*
+   * A extensão do mergulho varia por lance. Sem isso o alcance máximo é uma
+   * lâmina: um centímetro além e o gol vira 100% garantido, o que criava
+   * degraus entre goleiros de habilidade parecida.
+   */
+  const stretchRoll = nextFloat(sideRoll.next)
+  const maxDive =
+    (config.maxDiveBase + skill * config.maxDiveSkillFactor) *
+    (config.diveExtentMin + stretchRoll.value * (1 - config.diveExtentMin) * 2)
   return {
     value: { reactT, diveX: clamp(committed, center - maxDive, center + maxDive) },
-    next: sideRoll.next,
+    next: stretchRoll.next,
   }
 }

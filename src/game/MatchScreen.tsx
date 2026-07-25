@@ -22,6 +22,7 @@ import { FORMATIONS, type FormationId, type PlayerFieldPosition } from '../engin
 import { squadWithSignings, type Signing } from '../engine/market/market'
 import { rivalSquadFor } from '../engine/market/aiTransfers'
 import { lineupRating, squadPlayersFor, userAsSquadPlayer, USER_SQUAD_INDEX } from '../engine/squad/players'
+import { DiceDuelStage } from './DiceDuelStage'
 import { createRng, type RngState } from '../engine/rng'
 import { DEFAULT_MATCH_CONFIG } from '../engine/match/config'
 import { matchConfigForRatings, ratingEdgeFor } from '../engine/match/difficulty'
@@ -29,12 +30,15 @@ import {
   advance,
   advanceAuto,
   applyDefenseResult,
+  applyDecider,
+  applyDiceResult,
   applyExtraGoal,
   applyPassResult,
   applyShotResult,
   currentMoment,
   isFinished,
   isPlayerMoment,
+  needsDecider,
   startMatch,
 } from '../engine/match/match'
 import { pickBestPlayer } from '../engine/match/facts'
@@ -44,6 +48,8 @@ import { captainMomentum, type PerkId } from '../engine/career/perks'
 import { momentumFor, rollAutoGoal, rollMicroGoal, TACTIC_LABELS, type Tactic } from '../engine/match/tactics'
 import type { MatchState } from '../engine/match/types'
 import type { PassResolution } from '../engine/pass/pass'
+import { stopMatchAudio } from './audio'
+import { startResultsMusic, stopResultsMusic } from './music'
 import { DEFAULT_APPEARANCE, type Competition, type MatchRecord, type PlayerAppearance } from '../state/save'
 import { ClubCrest } from '../ui/ClubCrest'
 import { createLiveStats, LivePitch, type PitchDirective } from './LivePitch'
@@ -71,7 +77,7 @@ const autoProbsFor = (attrs: PlayerAttributes): AutoPlayProbs => ({
   defenseSave: AUTO_SAVE_BASE + attrs.defesa * AUTO_SAVE_PER_LEVEL,
 })
 
-type MatchMode = 'live' | 'handoff' | 'shot' | 'pass' | 'defense' | 'summary'
+type MatchMode = 'live' | 'handoff' | 'shot' | 'pass' | 'defense' | 'dice' | 'summary'
 
 interface LogLine {
   readonly minute: number
@@ -87,6 +93,11 @@ interface MatchScreenProps {
   /** Divisão do adversário (-1 = seleção/sem mercado da IA). */
   readonly opponentDivision?: number
   readonly competition?: Competition
+  /**
+   * Jogo que não pode terminar empatado (mata-mata de seleção). Empatou no
+   * apito final, o lance dos dados decide quem avança.
+   */
+  readonly decisive?: boolean
   readonly attributes?: PlayerAttributes
   /** Perks de RPG do craque — afetam lances, passes e momentum. */
   readonly perks?: readonly PerkId[]
@@ -106,6 +117,8 @@ interface MatchScreenProps {
   readonly lineup?: readonly number[]
   /** Temporada atual — elencos envelhecem a cada ano. */
   readonly careerYear?: number
+  /** Idade ATUAL do craque — sem ela o elenco herda a do jogador gerado. */
+  readonly playerAge?: number
   /** Batismos locais dos SEUS jogadores (playerId → nome). */
   readonly playerNames?: Readonly<Record<string, string>>
   /** Cenário dos lances — o palco cresce com a divisão. */
@@ -119,6 +132,49 @@ interface MatchScreenProps {
 const KEEPER_QUALITY_LIGA = 0.55
 const KEEPER_QUALITY_COPA = 0.65
 const KEEPER_QUALITY_PER_STAR = 0.03
+
+type MatchOutcome = 'win' | 'draw' | 'loss'
+
+const OUTCOME_LABEL: Record<MatchOutcome, string> = {
+  win: 'Vitória',
+  draw: 'Empate',
+  loss: 'Derrota',
+}
+
+interface LiveStatProps {
+  readonly label: string
+  readonly mine: number
+  readonly theirs: number
+  readonly suffix?: string
+  /** Detalhe entre parênteses, tipo quantos chutes foram no gol. */
+  readonly mineNote?: string
+  readonly theirsNote?: string
+}
+
+/** Uma linha de comparação: seu número, a fatia visual e o do adversário. */
+const LiveStat = ({ label, mine, theirs, suffix = '', mineNote, theirsNote }: LiveStatProps) => {
+  const total = mine + theirs
+  // sem nada acontecendo ainda, a barra fica no meio em vez de zerada
+  const share = total === 0 ? 50 : Math.round((mine / total) * 100)
+  return (
+    <div className="live-stat">
+      <strong className="live-stat-value">
+        {mine}{suffix}
+        {mineNote && <em>({mineNote})</em>}
+      </strong>
+      <span className="live-stat-mid">
+        <span className="live-stat-label">{label}</span>
+        <span className="live-stat-bar">
+          <span className="live-stat-fill" style={{ width: `${share}%` }} />
+        </span>
+      </span>
+      <strong className="live-stat-value live-stat-value-opp">
+        {theirsNote && <em>({theirsNote})</em>}
+        {theirs}{suffix}
+      </strong>
+    </div>
+  )
+}
 
 const keeperQualityFor = (competition: Competition, opponentStrength: number): number =>
   (competition === 'selecao' ? KEEPER_QUALITY_COPA : KEEPER_QUALITY_LIGA) +
@@ -137,6 +193,7 @@ export const MatchScreen = ({
   club,
   opponent,
   competition = 'liga',
+  decisive = false,
   attributes = DEFAULT_ATTRIBUTES,
   perks = [],
   morale = DEFAULT_MORALE,
@@ -147,6 +204,7 @@ export const MatchScreen = ({
   playerPosition = 'ATA',
   lineup,
   careerYear = 1,
+  playerAge,
   playerNames = {},
   stadiumUrl,
   signings = [],
@@ -158,12 +216,12 @@ export const MatchScreen = ({
     const squad = squadWithSignings(squadPlayersFor(club, careerYear), signings, careerYear)
     return squad.map((player, index) =>
       index === USER_SQUAD_INDEX
-        ? userAsSquadPlayer(player, playerName, attributes, playerPosition)
+        ? userAsSquadPlayer(player, playerName, attributes, playerPosition, playerAge)
         : playerNames[player.id]
           ? { ...player, name: playerNames[player.id] }
           : player,
     )
-  }, [club, careerYear, playerName, attributes, playerPosition, playerNames, signings])
+  }, [club, careerYear, playerAge, playerName, attributes, playerPosition, playerNames, signings])
 
   const effectiveLineup = useMemo(
     () => lineup ?? Array.from({ length: 11 }, (_, index) => index),
@@ -253,6 +311,7 @@ export const MatchScreen = ({
     pushLine({ minute: moment.minute, text: narrationForMoment(moment), tone: 'you' })
     if (moment.kind === 'playerPass') setMode('pass')
     else if (moment.kind === 'opponentFreeKick') setMode('defense')
+    else if (moment.kind === 'diceDuel') setMode('dice')
     else setMode('shot')
   }
 
@@ -263,6 +322,15 @@ export const MatchScreen = ({
     }, TICK_MS)
     return () => clearInterval(interval)
   }, [mode, speed, isSimConfirmOpen])
+
+  // a música entra com o resultado na tela e para assim que ele sai
+  useEffect(() => {
+    if (mode !== 'summary') return
+    // a torcida sai de cena: no fim de jogo quem fica é só a música
+    stopMatchAudio()
+    startResultsMusic()
+    return stopResultsMusic
+  }, [mode])
 
   useEffect(() => {
     if (mode !== 'handoff') return
@@ -277,7 +345,8 @@ export const MatchScreen = ({
     if (mode !== 'live') return
 
     if (isFinished(match)) {
-      setMode('summary')
+      // empatou num mata-mata: o dado decide antes de fechar a partida
+      setMode(needsDecider(match, decisive) ? 'dice' : 'summary')
       return
     }
 
@@ -443,6 +512,42 @@ export const MatchScreen = ({
     setMode('live')
   }
 
+  /** Fecha a dividida no dado: quem ganhou marca e o jogo segue. */
+  const onDiceResolved = (winner: 'player' | 'ai'): void => {
+    const mine = winner === 'player'
+    if (isFinished(match)) {
+      // desempate do mata-mata: entra como gol de decisão e fecha o jogo
+      pushLine({
+        minute: FULLTIME_MINUTE,
+        text: mine
+          ? `NOS DADOS! O ${club.name} leva a vaga na decisão.`
+          : `Nos dados, a vaga fica com o ${opponent.name}.`,
+        tone: mine ? 'good' : 'bad',
+      })
+      setMatch(applyDecider(match, mine))
+      setMode('summary')
+      return
+    }
+    const moment = currentMoment(match)
+    if (mine) {
+      liveStatsRef.current.teamShots += 1
+      liveStatsRef.current.teamOnTarget += 1
+    }
+    else {
+      liveStatsRef.current.oppShots += 1
+      liveStatsRef.current.oppOnTarget += 1
+    }
+    pushLine({
+      minute: moment.minute,
+      text: mine
+        ? `Sobrou pra você na confusão e é GOL do ${club.name}!`
+        : `A bola sobrou pra eles e é gol do ${opponent.name}.`,
+      tone: mine ? 'good' : 'bad',
+    })
+    setMatch(applyDiceResult(match, mine, config))
+    setMode('live')
+  }
+
   const onDefenseResolved = (summary: RoundSummary): void => {
     // a falta deles é uma finalização do adversário, sempre na direção do gol
     liveStatsRef.current.oppShots += 1
@@ -472,7 +577,16 @@ export const MatchScreen = ({
 
   const displayMinute = Math.min(90, Math.floor(clock))
   // No desktop, campo/lance à esquerda e comando (placar, stats, narração) à direita.
-  const isLance = mode === 'shot' || mode === 'defense'
+  // lance decisivo: o mini-game TOMA a tela no lugar do campo ao vivo
+  /** O que valeu no fim: nas copas quem decide é a disputa de pênaltis. */
+  const outcome: MatchOutcome =
+    match.score.team > match.score.opponent
+      ? 'win'
+      : match.score.team < match.score.opponent
+        ? 'loss'
+        : 'draw'
+
+  const isLance = mode === 'shot' || mode === 'defense' || mode === 'dice'
 
   return (
     <div className={`match match-live-layout${isLance ? ' match-in-lance' : ''}`}>
@@ -489,7 +603,23 @@ export const MatchScreen = ({
         <span className="match-minute">{displayMinute}&prime;</span>
       </div>
 
-      {isLance ? (
+      {mode === 'dice' ? (
+        <div className="dice-lance">
+          <span className="card-label">
+            {isFinished(match)
+              ? 'Empatou no tempo normal · os dados dão a vaga'
+              : 'Lance decisivo · a sorte decide'}
+          </span>
+          <DiceDuelStage
+            key={`dado-${match.cursor}`}
+            seed={(seed ^ Math.imul(match.cursor + 1, 0x9e3779b9)) >>> 0}
+            teamName={club.name}
+            opponentName={opponent.name}
+            onResolved={onDiceResolved}
+            forQualification={isFinished(match)}
+          />
+        </div>
+      ) : isLance ? (
         <ShotStage
           key={`lance-${match.cursor}`}
           backgroundUrl={stadiumUrl}
@@ -507,6 +637,7 @@ export const MatchScreen = ({
           }}
           celebrationId={celebrationId}
           appearance={appearance}
+          kitColor={club.colors.primary}
           keeperQuality={keeperQualityFor(competition, opponent.strength)}
           onRoundEnd={mode === 'defense' ? onDefenseResolved : onShotResolved}
         />
@@ -528,6 +659,8 @@ export const MatchScreen = ({
           />
 
           <div className="live-panel">
+            <div className="live-control">
+            <span className="live-panel-label">Velocidade</span>
             <div className="live-group" role="group" aria-label="Velocidade do jogo">
               {SPEEDS.map((option) => (
                 <button
@@ -539,6 +672,9 @@ export const MatchScreen = ({
                 </button>
               ))}
             </div>
+            </div>
+            <div className="live-control">
+            <span className="live-panel-label">Postura do time</span>
             <div className="live-group" role="group" aria-label="Instrução tática">
               {(Object.keys(TACTIC_LABELS) as Tactic[]).map((option) => (
                 <button
@@ -549,6 +685,7 @@ export const MatchScreen = ({
                   {TACTIC_LABELS[option]}
                 </button>
               ))}
+            </div>
             </div>
             <div className="live-group">
               <button
@@ -570,23 +707,25 @@ export const MatchScreen = ({
       )}
 
       <div className="live-stats" aria-label="Estatísticas ao vivo">
-        <span className="live-stats-team">{club.abbr}</span>
-        <span className="live-stats-cell">
-          <strong>{teamRating}</strong> força <strong>{opponentRating}</strong>
-        </span>
-        <span className="live-stats-cell">
-          <strong>{possessionPct}%</strong> posse <strong>{100 - possessionPct}%</strong>
-        </span>
-        <span className="live-stats-cell">
-          <strong>{liveStatsRef.current.teamShots}</strong>
-          <em>({liveStatsRef.current.teamOnTarget})</em> chutes{' '}
-          <strong>{liveStatsRef.current.oppShots}</strong>
-          <em>({liveStatsRef.current.oppOnTarget})</em>
-        </span>
-        <span className="live-stats-team">{opponent.abbr}</span>
+        <div className="live-stats-head">
+          <span className="live-stats-team">{club.abbr}</span>
+          <span className="live-stats-title">Números do jogo</span>
+          <span className="live-stats-team">{opponent.abbr}</span>
+        </div>
+        <LiveStat label="Força" mine={teamRating} theirs={opponentRating} />
+        <LiveStat label="Posse" mine={possessionPct} theirs={100 - possessionPct} suffix="%" />
+        <LiveStat
+          label="Chutes (no gol)"
+          mine={liveStatsRef.current.teamShots}
+          theirs={liveStatsRef.current.oppShots}
+          mineNote={`${liveStatsRef.current.teamOnTarget}`}
+          theirsNote={`${liveStatsRef.current.oppOnTarget}`}
+        />
       </div>
 
       <div className="match-log match-log-live" role="log">
+        <span className="match-log-title">Narração</span>
+        {log.length === 0 && <p className="match-log-empty">A bola vai rolar…</p>}
         {log
           .map((line, index) => (
             <p key={`${line.minute}-${index}`} className={`log-line log-${line.tone}`}>
@@ -633,7 +772,6 @@ export const MatchScreen = ({
           <div className="summary-header">
             <h2>Fim de jogo</h2>
           </div>
-          <button className="btn summary-continue" onClick={finishMatch}>Continuar ▸</button>
 
           <div className="summary-scoreline">
             <span className="summary-side">
@@ -650,6 +788,9 @@ export const MatchScreen = ({
               <span className="summary-team">{opponent.abbr}</span>
             </span>
           </div>
+
+          <span className={`summary-result summary-result-${outcome}`}>{OUTCOME_LABEL[outcome]}</span>
+
 
           <div className="match-rating">
             <span className="match-rating-value">{displayRating(match.rating).toFixed(1)}</span>
@@ -728,6 +869,8 @@ export const MatchScreen = ({
               +{trainingPointsForRating(displayRating(match.rating))} pontos de treino
             </p>
           )}
+
+          <button className="btn summary-continue" onClick={finishMatch}>Continuar ▸</button>
           </div>
         </div>
       )}

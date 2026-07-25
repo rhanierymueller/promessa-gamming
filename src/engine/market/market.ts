@@ -1,6 +1,7 @@
 import { nationalName } from '../../data/nationalNames'
 import { NATIONS } from '../../data/nations'
 import { FIRST_NAMES, SURNAMES } from '../../data/squadNames'
+import { ageValueMultiplier } from './valuation'
 import { ageFactor, RETIRE_AGE, type Potential } from '../squad/aging'
 import type { FifaAttributes, SquadPlayer, SquadPosition } from '../squad/players'
 
@@ -44,6 +45,22 @@ const PRICE_TIERS: readonly { readonly maxOverall: number; readonly range: Price
   { maxOverall: 81, range: { min: 15_000_000, max: 25_000_000 } },
   { maxOverall: 99, range: { min: 30_000_000, max: 150_000_000 } },
 ]
+
+/** Piso de mercado: nem o veterano mais desvalorizado sai de graça. */
+const MIN_PRICE = 120_000
+
+/**
+ * Variação aleatória em torno do meio da faixa. Estreita de propósito: com o
+ * sorteio na faixa inteira (até 1,9× entre extremos), o acaso engolia o efeito
+ * da idade e um veterano saía mais caro que um garoto do mesmo overall.
+ */
+const PRICE_JITTER = 0.18
+
+/** Preço base do overall, com uma variação pequena para não ficar tabelado. */
+const basePriceFor = (range: PriceRange, roll: number): number => {
+  const middle = (range.min + range.max) / 2
+  return middle * (1 - PRICE_JITTER + roll * PRICE_JITTER * 2)
+}
 
 export const priceRangeFor = (overall: number): PriceRange =>
   (PRICE_TIERS.find((tier) => overall <= tier.maxOverall) ?? PRICE_TIERS[PRICE_TIERS.length - 1]).range
@@ -226,7 +243,12 @@ export const marketPoolFor = (seasonSeed: number, careerYear: number): readonly 
     const overall = overallFor(legend.position, currentAttrs)
     const [priceRoll] = nextRoll(roll)
     const range = priceRangeFor(Math.max(overall, 82))
-    const price = Math.round((range.min + priceRoll * (range.max - range.min)) / 100_000) * 100_000
+    const price = Math.max(
+      MIN_PRICE,
+      Math.round(
+        (basePriceFor(range, priceRoll) * ageValueMultiplier(legend.age, 'alto')) / 100_000,
+      ) * 100_000,
+    )
     pool.push({
       id: `mkt-lenda-${index}`,
       name: legend.name,
@@ -299,7 +321,10 @@ export const marketPoolFor = (seasonSeed: number, careerYear: number): readonly 
     const [priceRoll, s10] = nextRoll(state)
     state = s10
     const range = priceRangeFor(overall)
-    const price = Math.round((range.min + priceRoll * (range.max - range.min)) / 10_000) * 10_000
+    // overall diz o que ele é hoje; idade e potencial dizem o que ainda rende
+    const price =
+      Math.round((basePriceFor(range, priceRoll) * ageValueMultiplier(age, potential)) / 10_000) *
+      10_000
 
     pool.push({
       id: `mkt-${seasonSeed}-${careerYear}-${index}`,
@@ -312,7 +337,7 @@ export const marketPoolFor = (seasonSeed: number, careerYear: number): readonly 
       attrs: currentAttrs,
       overall,
       nationality,
-      price: Math.max(range.min, Math.min(range.max, price)),
+      price: Math.max(MIN_PRICE, price),
       peakAttrs,
       baseAge: age,
     })
@@ -325,6 +350,43 @@ export const marketPoolFor = (seasonSeed: number, careerYear: number): readonly 
  * jogador mais fraco da mesma posição (nunca você). Reforços envelhecem
  * temporada a temporada e penduram as chuteiras aos 38.
  */
+/**
+ * A vaga que cada reforço ocupa no elenco, por índice do array.
+ *
+ * Depende SÓ do desenho do elenco (as posições dos slots, fixas por clube) e
+ * da ordem de chegada — nunca do overall de quem está lá. Escolher "o mais
+ * fraco da posição" fazia o reforço trocar de índice de uma temporada para a
+ * outra, porque todo mundo envelhece; e como a escalação guarda índices, o
+ * titular que você comprou aparecia no banco na virada do ano.
+ *
+ * A conta ignora aposentadorias de propósito: o reforço que pendura as
+ * chuteiras não pode empurrar a vaga dos outros.
+ */
+const slotsForSignings = (
+  base: readonly SquadPlayer[],
+  signings: readonly Signing[],
+  userIndex: number,
+): readonly number[] => {
+  const free = base.map((_, index) => index).filter((index) => index !== userIndex)
+  const taken = new Set<number>()
+  const rank = new Map<SquadPosition, number>()
+
+  return signings.map((signing) => {
+    const order = rank.get(signing.position) ?? 0
+    rank.set(signing.position, order + 1)
+    // vagas da posição, da mais funda do banco para a mais alta
+    const samePosition = free.filter((index) => base[index].position === signing.position).reverse()
+    const wanted = samePosition[order]
+    const slot =
+      wanted !== undefined && !taken.has(wanted)
+        ? wanted
+        : // sem vaga da posição: a mais funda ainda livre
+          free.filter((index) => !taken.has(index)).pop() ?? -1
+    if (slot >= 0) taken.add(slot)
+    return slot
+  })
+}
+
 export const squadWithSignings = (
   base: readonly SquadPlayer[],
   signings: readonly Signing[],
@@ -332,9 +394,10 @@ export const squadWithSignings = (
   userIndex = 9,
 ): readonly SquadPlayer[] => {
   const squad = [...base]
-  for (const signing of signings) {
+  const slots = slotsForSignings(base, signings, userIndex)
+  signings.forEach((signing, signingIndex) => {
     const age = signing.baseAge + (careerYear - signing.boughtYear)
-    if (age > RETIRE_AGE) continue
+    if (age > RETIRE_AGE) return
     const factor = ageFactor(age, signing.potential)
     const attrs = scaleAttrs(signing.peakAttrs, factor)
     const player: SquadPlayer = {
@@ -348,20 +411,8 @@ export const squadWithSignings = (
       attrs,
       overall: overallFor(signing.position, attrs),
     }
-    // vaga: o mais fraco da mesma posição; sem posição igual, o mais fraco geral
-    let slot = -1
-    for (let index = 0; index < squad.length; index++) {
-      if (index === userIndex || squad[index].id.startsWith('mkt-')) continue
-      if (squad[index].position !== signing.position) continue
-      if (slot === -1 || squad[index].overall < squad[slot].overall) slot = index
-    }
-    if (slot === -1) {
-      for (let index = 0; index < squad.length; index++) {
-        if (index === userIndex || squad[index].id.startsWith('mkt-')) continue
-        if (slot === -1 || squad[index].overall < squad[slot].overall) slot = index
-      }
-    }
+    const slot = slots[signingIndex]
     if (slot >= 0) squad[slot] = { ...player, shirt: base[slot].shirt }
-  }
+  })
   return squad
 }

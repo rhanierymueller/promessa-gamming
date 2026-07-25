@@ -53,6 +53,12 @@ export const DEFAULT_SHOT_CONFIG: ShotConfig = {
   wrongSideBase: 0.2,
   curveReadFactor: 0.9,
 
+  // margem do goleiro: o que transforma o alcance em curva em vez de degrau
+  diveExtentMin: 0.86,
+  fumbleChance: 0.45,
+  stretchWindow: 0.25,
+  stretchChance: 0.45,
+
   postInChance: 0.22,
   deflectEdgeFrac: 0.55,
   deflectPower: 0.9,

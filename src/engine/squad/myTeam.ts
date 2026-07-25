@@ -2,6 +2,7 @@ import type { Club } from '../../data/clubs'
 import type { PlayerSave } from '../../state/save'
 import { rivalSquadFor } from '../market/aiTransfers'
 import { squadWithSignings } from '../market/market'
+import { playerAgeInSeason } from './aging'
 import { FORMATIONS } from './formation'
 import { lineupRating, squadPlayersFor, userAsSquadPlayer, USER_SQUAD_INDEX, type SquadPlayer } from './players'
 
@@ -15,7 +16,7 @@ export const myTeamPlayers = (save: PlayerSave, club: Club): readonly SquadPlaye
   squadWithSignings(squadPlayersFor(club, save.careerYear), save.signings, save.careerYear).map(
     (player, index) =>
       index === USER_SQUAD_INDEX
-        ? userAsSquadPlayer(player, save.playerName, save.attributes, save.playerPosition)
+        ? userAsSquadPlayer(player, save.playerName, save.attributes, save.playerPosition, playerAgeInSeason(save.playerAge, save.careerYear))
         : player,
   )
 

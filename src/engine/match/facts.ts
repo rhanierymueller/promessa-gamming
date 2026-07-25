@@ -42,13 +42,17 @@ const pickName = (
 }
 
 export const pickBestPlayer = (input: BestPlayerInput): BestPlayer => {
-  if (input.playerRating >= MOTM_MIN_RATING) {
+  const goalDiff = input.teamGoals - input.opponentGoals
+  const lost = goalDiff < 0
+  // Perdeu, ninguém do time é craque do jogo — nem você com nota 10. Quem
+  // decidiu a partida está do outro lado, e a nota alta numa derrota é
+  // consolo, não protagonismo.
+  if (!lost && input.playerRating >= MOTM_MIN_RATING) {
     return { name: input.playerName, isUser: true }
   }
   const rng = createRng((input.seed ^ MOTM_SEED_SALT) >>> 0)
-  const goalDiff = input.teamGoals - input.opponentGoals
   const sideRoll = nextFloat(rng)
-  const fromOpponent = goalDiff < 0 || (goalDiff === 0 && sideRoll.value < 0.5)
+  const fromOpponent = lost || (goalDiff === 0 && sideRoll.value < 0.5)
   const squad = fromOpponent ? input.opponentSquad : input.teamSquad
   return { name: pickName(sideRoll.next, squad, input.playerName), isUser: false }
 }

@@ -2,6 +2,7 @@ import { nextFloat, type RngResult, type RngState } from '../rng'
 import {
   advance,
   applyDefenseResult,
+  applyDiceResult,
   applyPassResult,
   applyShotResult,
   currentMoment,
@@ -78,6 +79,15 @@ export const simulateToEnd = (
         const saved = roll.value < probs.defenseSave
         current = applyDefenseResult(current, saved, config)
         events.push({ kind: moment.kind, minute: moment.minute, success: saved })
+        break
+      }
+      case 'diceDuel': {
+        // simular a dividida é moeda ao ar: os dois lados têm o mesmo dado
+        const roll = nextFloat(dice)
+        dice = roll.next
+        const won = roll.value < 0.5
+        current = applyDiceResult(current, won, config)
+        events.push({ kind: moment.kind, minute: moment.minute, success: won })
         break
       }
       case 'teamGoal':

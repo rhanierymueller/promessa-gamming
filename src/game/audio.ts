@@ -1,6 +1,7 @@
 import ambienceUrl from '../assets/audio/ambience.m4a'
 import gaspUrl from '../assets/audio/gasp.m4a'
 import goalUrl from '../assets/audio/goal.m4a'
+import { DEFAULT_VOLUME, effectsGainFor } from '../engine/audio/volume'
 import type { StageEvent } from './stage'
 
 type SampleKey = 'goal' | 'gasp' | 'ambience'
@@ -9,23 +10,39 @@ const SAMPLE_URLS: Record<SampleKey, string> = { goal: goalUrl, gasp: gaspUrl, a
 let ac: AudioContext | null = null
 let noiseBuf: AudioBuffer | null = null
 let masterGain: GainNode | null = null
-let muted = false
+let gain = effectsGainFor(DEFAULT_VOLUME)
 
-/** Liga/desliga todo o áudio do jogo (canal mestre). */
-export const setMuted = (value: boolean): void => {
-  muted = value
+/** Volume de todo o áudio do jogo (canal mestre), de 0 a 1. */
+export const setVolume = (volume: number): void => {
+  gain = effectsGainFor(volume)
   if (masterGain && ac) {
-    masterGain.gain.setValueAtTime(value ? 0 : 1, ac.currentTime)
+    masterGain.gain.setValueAtTime(gain, ac.currentTime)
   }
 }
 
 const output = (): AudioNode => masterGain ?? ac!.destination
 const samples: Partial<Record<SampleKey, AudioBuffer>> = {}
-let ambienceOn = false
 
-const playSample = (key: SampleKey, vol: number, loop = false): boolean => {
+/**
+ * Tudo que está soando agora. Sem esse registro nada consegue ser
+ * interrompido — foi assim que a torcida em loop seguia tocando no menu
+ * depois da partida.
+ */
+const playing = new Set<AudioScheduledSourceNode>()
+
+const track = <T extends AudioScheduledSourceNode>(node: T): T => {
+  playing.add(node)
+  node.onended = () => { playing.delete(node) }
+  return node
+}
+
+/** A torcida de fundo só deve existir enquanto o gramado estiver na tela. */
+let ambienceWanted = false
+let ambienceSource: AudioBufferSourceNode | null = null
+
+const playSample = (key: SampleKey, vol: number, loop = false): AudioBufferSourceNode | null => {
   const buffer = samples[key]
-  if (!ac || !buffer) return false
+  if (!ac || !buffer) return null
   const src = ac.createBufferSource()
   src.buffer = buffer
   src.loop = loop
@@ -33,7 +50,29 @@ const playSample = (key: SampleKey, vol: number, loop = false): boolean => {
   gain.gain.value = vol
   src.connect(gain).connect(output())
   src.start()
-  return true
+  return track(src)
+}
+
+/** Entra no gramado: liga a torcida de fundo (em loop). */
+export const startAmbience = (): void => {
+  ambienceWanted = true
+  if (ambienceSource) return
+  // sem o sample carregado ainda, o loadSample liga assim que decodificar
+  ambienceSource = playSample('ambience', 0.07, true)
+}
+
+/** Sai do gramado: cala a torcida e qualquer efeito ainda soando. */
+export const stopMatchAudio = (): void => {
+  ambienceWanted = false
+  ambienceSource = null
+  for (const node of [...playing]) {
+    try {
+      node.stop()
+    } catch {
+      // já terminou sozinho — nada a fazer
+    }
+  }
+  playing.clear()
 }
 
 const loadSample = (key: SampleKey, url: string): void => {
@@ -44,9 +83,9 @@ const loadSample = (key: SampleKey, url: string): void => {
     .then((buf) => context.decodeAudioData(buf))
     .then((decoded) => {
       samples[key] = decoded
-      if (key === 'ambience' && !ambienceOn) {
-        ambienceOn = true
-        playSample('ambience', 0.07, true)
+      // o gramado pediu a torcida antes do sample ficar pronto: liga agora
+      if (key === 'ambience' && ambienceWanted && !ambienceSource) {
+        ambienceSource = playSample('ambience', 0.07, true)
       }
     })
     .catch(() => { /* síntese cobre */ })
@@ -58,7 +97,7 @@ export const initAudio = (): void => {
   try {
     ac = new AudioContext()
     masterGain = ac.createGain()
-    masterGain.gain.value = muted ? 0 : 1
+    masterGain.gain.value = gain
     masterGain.connect(ac.destination)
     const len = Math.floor(ac.sampleRate * 3)
     noiseBuf = ac.createBuffer(1, len, ac.sampleRate)
@@ -84,6 +123,7 @@ const beep = (f0: number, f1: number, dur: number, type: OscillatorType, vol: nu
   osc.connect(gain).connect(output())
   osc.start()
   osc.stop(ac.currentTime + dur)
+  track(osc)
 }
 
 const noiseBurst = (dur: number, freq: number, vol: number): void => {
@@ -99,6 +139,7 @@ const noiseBurst = (dur: number, freq: number, vol: number): void => {
   src.connect(filter).connect(gain).connect(output())
   src.start()
   src.stop(ac.currentTime + dur + 0.05)
+  track(src)
 }
 
 /** Fallback sintetizado de torcida quando o sample real não carregou. */
@@ -120,11 +161,15 @@ const crowdLayer = (dur: number, f0: number, f1: number, q: number, vol: number,
   src.connect(filter).connect(gain).connect(output())
   src.start()
   src.stop(ac.currentTime + dur + 0.05)
+  track(src)
 }
 
+/** Comemoração da torcida: alta demais atropelava o resto do áudio. */
+const GOAL_CROWD_VOLUME = 0.12
+
 const crowdRoar = (): void => {
-  crowdLayer(2.4, 380, 820, 0.8, 0.3, 0.1, 1.5)
-  crowdLayer(2.4, 1300, 1900, 1.4, 0.1, 0.14, 1.6)
+  crowdLayer(2.4, 380, 820, 0.8, 0.08, 0.1, 1.5)
+  crowdLayer(2.4, 1300, 1900, 1.4, 0.03, 0.14, 1.6)
 }
 
 const crowdGasp = (vol: number): void => {
@@ -138,7 +183,7 @@ export const playStageEvent = (event: StageEvent): void => {
       beep(140, 90, 0.08, 'sine', 0.3)
       break
     case 'goal':
-      if (!playSample('goal', 0.5)) crowdRoar()
+      if (!playSample('goal', GOAL_CROWD_VOLUME)) crowdRoar()
       beep(523, 523, 0.1, 'square', 0.12)
       setTimeout(() => beep(659, 659, 0.1, 'square', 0.12), 110)
       setTimeout(() => beep(784, 784, 0.22, 'square', 0.14), 220)
@@ -163,7 +208,7 @@ export const playStageEvent = (event: StageEvent): void => {
       break
     case 'defenseSave':
       noiseBurst(0.1, 300, 0.4)
-      if (!playSample('goal', 0.5)) crowdRoar()
+      if (!playSample('goal', GOAL_CROWD_VOLUME)) crowdRoar()
       break
     case 'defenseConcede':
       beep(220, 120, 0.35, 'sawtooth', 0.2)

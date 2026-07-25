@@ -24,6 +24,8 @@ export const resolveOutcome = (
   skill: number,
   config: ShotConfig,
   postRoll = 1,
+  /** Estado do RNG para a margem do lance — sem ele o alcance é um degrau. */
+  rng?: RngState,
 ): ShotOutcome => {
   const { goal } = config
   const finalX = flightX(flight, 1)
@@ -57,11 +59,27 @@ export const resolveOutcome = (
     Math.abs(plan.diveX - center) <= config.keeperStandingZone &&
     Math.abs(finalX - center) <= config.keeperStandingZone &&
     height <= config.standingCatchHeight
-  const saved = isTame || isBodyBlock || Math.abs(plan.diveX - finalX) <= reach
+  /*
+   * Alcance puro seria um DEGRAU: 1 unidade a mais e o gol vira 100% certo,
+   * seja qual for o goleiro. A margem abaixo transforma isso em curva —
+   * dentro do alcance o goleiro fraco ainda falha, e fora por pouco o
+   * goleiro bom ainda estica. Nada fica 0% nem 100%.
+   */
+  const gap = Math.abs(plan.diveX - finalX)
+  const margin = gap - reach
+  // sem rng, o resultado é a geometria pura (comportamento determinístico
+  // de antes): 1 nunca dispara nem a falha nem o esticão
+  const edgeRoll = rng ? nextFloat(rng).value : 1
+  const reachedIt =
+    margin <= 0
+      ? edgeRoll >= config.fumbleChance * (1 - skill) * flight.power
+      : margin <= reach * config.stretchWindow && edgeRoll < config.stretchChance * skill
+
+  const saved = isTame || isBodyBlock || reachedIt
 
   if (saved) {
     // agarra ou espalma? Ponta da luva, bola no ângulo ou bomba = rebote
-    const distFrac = reach > 0 ? Math.abs(plan.diveX - finalX) / reach : 0
+    const distFrac = reach > 0 ? gap / reach : 0
     const deflected =
       !isTame &&
       !isBodyBlock &&
@@ -103,7 +121,7 @@ export const simulateShot = (
   const skill = keeperSkillForShot(config, shotIndex, keeperQuality)
   const planned = planKeeper(flight, skill, dispersed.next, config)
   const postRoll = nextFloat(planned.next)
-  const outcome = resolveOutcome(flight, planned.value, skill, config, postRoll.value)
+  const outcome = resolveOutcome(flight, planned.value, skill, config, postRoll.value, postRoll.next)
 
   return {
     value: { command: dispersed.value, flight, keeper: planned.value, outcome },

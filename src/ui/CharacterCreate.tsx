@@ -8,7 +8,7 @@ import {
   type PlayerAttributes,
 } from '../engine/career/attributes'
 import type { PlayerFieldPosition } from '../engine/squad/formation'
-import { NATIONS } from '../data/nations'
+import { NATIONS, PLAYABLE_NATIONS } from '../data/nations'
 import { currentSessionEmail, registerAccount } from '../online/account'
 import {
   remainingCreatePoints,
@@ -172,7 +172,7 @@ export const CharacterCreate = ({ onCreated }: CharacterCreateProps) => {
 
       <span className="create-label">Nacionalidade (seleção que pode te convocar)</span>
       <div className="create-nations">
-        {NATIONS.map((nation) => (
+        {PLAYABLE_NATIONS.map((nation) => (
           <button
             key={nation.id}
             type="button"

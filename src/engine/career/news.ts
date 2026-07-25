@@ -4,6 +4,7 @@ import { DIVISION_NAMES, divisionOf } from '../pyramid/pyramid'
 import { computeTable, recentForm, tablePosition } from '../season/season'
 import { nationById } from '../../data/nations'
 import { clubDisplayName, type PlayerSave } from '../../state/save'
+import { matchQuotes, pickVariant, type QuoteSpeaker } from './quotes'
 
 /**
  * Central de notícias da Home: manchetes derivadas do que REALMENTE
@@ -11,7 +12,14 @@ import { clubDisplayName, type PlayerSave } from '../../state/save'
  * Determinístico: mesmo save, mesmas notícias.
  */
 
-export type NewsSource = 'reporter' | 'olheiro' | 'agente' | 'comentarista' | 'clube' | 'jogador'
+export type NewsSource =
+  | 'reporter'
+  | 'olheiro'
+  | 'agente'
+  | 'comentarista'
+  | 'clube'
+  | 'jogador'
+  | 'declaracao'
 
 export interface NewsItem {
   readonly id: string
@@ -22,6 +30,8 @@ export interface NewsItem {
   readonly kicker: string
   readonly headline: string
   readonly body: string
+  /** Quem falou, quando a notícia é entrevista — a foto vem do id dele. */
+  readonly speaker?: QuoteSpeaker
 }
 
 const KICKERS: Record<NewsSource, string> = {
@@ -31,9 +41,11 @@ const KICKERS: Record<NewsSource, string> = {
   comentarista: 'Mesa redonda',
   clube: 'Nota oficial',
   jogador: 'Craque em foco',
+  declaracao: 'Zona mista',
 }
 
-const MAX_NEWS = 5
+// o feed comporta mais manchetes agora que existem entrevistas do pós-jogo
+export const MAX_NEWS = 8
 const GREAT_RATING = 8
 const AWFUL_RATING = 4.5
 const STRIKER_GOALS = 2
@@ -63,6 +75,10 @@ const rivalName = (save: PlayerSave, opponentId: string): string =>
 
 export const newsFor = (save: PlayerSave): readonly NewsItem[] => {
   const news: NewsItem[] = []
+  // semente estável da rodada: as falas variam entre jogos, não a cada render
+  const lastMatch = save.history[save.history.length - 1]
+  const seed =
+    ((lastMatch?.playedAt ?? 0) ^ Math.imul(save.season.currentRound + 1, 0x9e3779b9)) >>> 0
   const team = clubDisplayName(save, save.clubId)
   const division = DIVISION_NAMES[divisionOf(save.divisions, save.clubId)] ?? 'Série D'
 
@@ -88,13 +104,23 @@ export const newsFor = (save: PlayerSave): readonly NewsItem[] => {
       news.push(item('ultimo-vitoria', 'clube', `VITÓRIA! ${lastTeam} ${score} ${rival}`,
         lastContext === 'selecao'
           ? `Vitória do ${lastTeam} e festa no país. A seleção segue firme no torneio.`
-          : `Três pontos na conta e clima leve no treino. O ${lastTeam} segue firme na temporada.`,
+          : pickVariant([
+              `Três pontos na conta e clima leve no treino. O ${lastTeam} segue firme na temporada.`,
+              `Arquibancada cantando até o fim. O ${lastTeam} não deu chance ao ${rival}.`,
+              `Vitória construída com posse e paciência. O ${lastTeam} mostrou personalidade.`,
+              `O ${rival} veio pressionar e voltou pra casa sem resposta. Noite redonda.`,
+            ], seed) ?? '',
         lastContext))
     } else if (last.teamGoals < last.opponentGoals) {
       news.push(item('ultimo-derrota', 'reporter', `${rival} vence: ${lastTeam} cai por ${score}`,
         lastContext === 'selecao'
           ? 'Resultado ruim no torneio de seleções — a resposta precisa vir já no próximo jogo.'
-          : 'Resultado ruim, mas campeonato é maratona — a resposta precisa vir já na próxima rodada.',
+          : pickVariant([
+              'Resultado ruim, mas campeonato é maratona — a resposta precisa vir já na próxima rodada.',
+              `Saída de campo sob vaias. O ${lastTeam} sabia o peso do jogo e não entregou.`,
+              `O ${rival} soube sofrer e matou no contra-ataque. Lição cara pro ${lastTeam}.`,
+              'Semana longa pela frente: o professor prometeu conversa franca no CT.',
+            ], seed) ?? '',
         lastContext))
     } else {
       news.push(item('ultimo-empate', 'reporter', `${lastTeam} ${score} ${rival}: sabor de pouco`,
@@ -104,20 +130,63 @@ export const newsFor = (save: PlayerSave): readonly NewsItem[] => {
         lastContext))
     }
 
+    const nota = last.rating.toFixed(1)
     if (last.rating >= GREAT_RATING) {
-      news.push(item('olheiro-elogio', 'olheiro', `Anotei o nome: ${save.playerName}`,
-        `Nota ${last.rating.toFixed(1)} contra o ${rival}. Decide, aparece e não se esconde. Vale o ingresso.`,
+      news.push(item('olheiro-elogio', 'olheiro',
+        pickVariant([
+          `Anotei o nome: ${save.playerName}`,
+          `Relatório entregue: ${save.playerName}`,
+          `Fui ver o jogo por causa dele`,
+          `${save.playerName} entrou no meu caderno`,
+        ], seed) ?? `Anotei o nome: ${save.playerName}`,
+        pickVariant([
+          `Nota ${nota} contra o ${rival}. Decide, aparece e não se esconde. Vale o ingresso.`,
+          `Nota ${nota}. Rodei três estados este mês e não vi ninguém dessa idade jogar assim.`,
+          `Contra o ${rival} ele pediu a bola quando o jogo pesou. Isso não se ensina.`,
+          `Nota ${nota} e uma leitura de jogo que assusta. Já liguei pro clube grande.`,
+          `Não é só o talento: é a cabeça. Contra o ${rival} ele nunca sumiu.`,
+        ], seed) ?? '',
         lastContext))
     }
     if (last.rating <= AWFUL_RATING) {
-      news.push(item('comentarista-critica', 'comentarista', `${save.playerName} deve mais`,
-        `Nota ${last.rating.toFixed(1)} não paga o talento que ele tem. Craque joga TODO dia, não quando quer.`,
+      news.push(item('comentarista-critica', 'comentarista',
+        pickVariant([
+          `${save.playerName} deve mais`,
+          `Cadê o ${save.playerName}?`,
+          `Noite de apagão de ${save.playerName}`,
+        ], seed) ?? `${save.playerName} deve mais`,
+        pickVariant([
+          `Nota ${nota} não paga o talento que ele tem. Craque joga TODO dia, não quando quer.`,
+          `Nota ${nota} contra o ${rival}. Sumiu do jogo e ninguém sentiu falta — isso é grave.`,
+          `Talento não é desculpa pra jogo fraco. Nota ${nota} é pouco pra quem quer ser referência.`,
+        ], seed) ?? '',
         lastContext))
     }
     if (last.playerGoals >= STRIKER_GOALS) {
-      news.push(item('artilheiro', 'jogador', `${last.playerGoals} gols: noite de artilheiro`,
-        `${save.playerName} resolveu contra o ${rival} e a torcida já grita o nome dele no alambrado.`,
+      news.push(item('artilheiro', 'jogador',
+        pickVariant([
+          `${last.playerGoals} gols: noite de artilheiro`,
+          `${save.playerName} faz ${last.playerGoals} e cala o ${rival}`,
+          `Show de ${last.playerGoals}: a bola era dele`,
+        ], seed) ?? `${last.playerGoals} gols: noite de artilheiro`,
+        pickVariant([
+          `${save.playerName} resolveu contra o ${rival} e a torcida já grita o nome dele no alambrado.`,
+          `Faltou combinar com ${save.playerName}: o ${rival} montou o plano e ele fez ${last.playerGoals} assim mesmo.`,
+          `Bola parada, jogada trabalhada, sobra na área — ${save.playerName} fez de tudo contra o ${rival}.`,
+        ], seed) ?? '',
         lastContext))
+    }
+    // zona mista: companheiro e adversário comentam, com o rosto de cada um
+    for (const quote of matchQuotes(save)) {
+      news.push({
+        id: quote.id,
+        source: 'declaracao',
+        context: lastContext,
+        kicker: quote.headline,
+        headline: `${quote.speaker.name} · ${clubDisplayName(save, quote.speaker.clubId)}`,
+        body: quote.body,
+        speaker: quote.speaker,
+      })
     }
   } else {
     news.push(item('estreia', 'agente', `A promessa ${save.playerName} chega ao ${team}`,

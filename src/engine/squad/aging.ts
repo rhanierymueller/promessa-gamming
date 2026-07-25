@@ -6,6 +6,10 @@
 
 export type Potential = 'alto' | 'medio' | 'baixo'
 
+/** Idade atual do craque: a da criação mais uma por temporada disputada. */
+export const playerAgeInSeason = (createdAge: number, careerYear: number): number =>
+  createdAge + Math.max(0, careerYear - 1)
+
 export const PEAK_AGE = 27
 export const DECLINE_AGE = 32
 export const RETIRE_AGE = 38

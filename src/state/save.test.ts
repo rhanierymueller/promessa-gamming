@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { clubById } from '../data/clubs'
+import { CLUBS, clubById } from '../data/clubs'
 import { marketPoolFor } from '../engine/market/market'
 import { createRng } from '../engine/rng'
 import { advanceSeason } from '../engine/season/season'
@@ -19,6 +19,7 @@ import {
   CELEBRATION_COUNT,
   clubDisplayName,
   createSave,
+  currentPlayerAge,
   loadSave,
   MAX_PLAYER_NAME,
   parseSave,
@@ -177,7 +178,10 @@ describe('mutações imutáveis do save', () => {
 
     // Assert
     expect(renewed.divisionMovement).not.toBeNull()
-    expect(renewed.playerAge).toBe(save.playerAge + 1)
+    // playerAge é a idade de CRIAÇÃO e não se mexe; quem envelhece é
+    // currentPlayerAge, que soma as temporadas por cima
+    expect(renewed.playerAge).toBe(save.playerAge)
+    expect(currentPlayerAge(renewed)).toBe(currentPlayerAge(save) + 1)
     expect(renewed.divisions.flat()).toHaveLength(56)
     expect(renewed.season.participants).toContain('real-vila')
     expect(renewed.season.participants).toHaveLength(SEASON_TEAMS)
@@ -423,6 +427,37 @@ describe('verba e contratações (transfermarket)', () => {
     expect(parseSave(raw)!.budget).toBe(rich.budget)
     expect(parseSave(broken)!.signings).toHaveLength(0)
     expect(parseSave(broken)!.budget).toBe(500_000)
+  })
+})
+
+describe('clube rebatizado aparece com o nome novo em tudo', () => {
+  const base = createSave(
+    { playerName: 'Craque', teamName: 'Galáticos FC', nationalityId: 'brasil' },
+    fixedRoll(),
+  )!
+
+  test('o APELIDO também vira o nome novo (a saudação não pode citar o antigo)', () => {
+    // Arrange
+    const original = clubById(base.clubId)!
+
+    // Act
+    const shown = displayClub(base, original)
+
+    // Assert
+    expect(shown.name).toBe('Galáticos FC')
+    expect(shown.nickname).toBe('Galáticos FC')
+    expect(shown.nickname).not.toBe(original.nickname)
+  })
+
+  test('clube não rebatizado mantém o apelido original', () => {
+    // Arrange: um clube qualquer que o jogador não renomeou
+    const other = CLUBS.find((club) => club.id !== base.clubId)!
+
+    // Act
+    const shown = displayClub(base, other)
+
+    // Assert
+    expect(shown.nickname).toBe(other.nickname)
   })
 })
 
@@ -678,5 +713,84 @@ describe('persistSave e loadSave', () => {
 
     // Assert
     expect(loadSave(storage)).toEqual(save)
+  })
+})
+
+describe('torneio salvo em formato antigo', () => {
+  test('save com groupA/groupB é descartado em vez de quebrar a tela', () => {
+    // Arrange: formato anterior aos oito grupos
+    const base = createSave({ playerName: 'Mueller', clubId: 'real-vila', nationalityId: 'brasil' })!
+    const antigo = {
+      ...base,
+      tournament: {
+        kind: 'copa-america',
+        seed: 1,
+        playerNationId: 'brasil',
+        groupA: ['brasil'],
+        groupB: ['chile'],
+        stage: 'groups',
+        round: 0,
+        results: [],
+        championId: null,
+      },
+    }
+
+    // Act
+    const carregado = parseSave(JSON.stringify(antigo))
+
+    // Assert
+    expect(carregado).not.toBeNull()
+    expect(carregado!.tournament).toBeNull()
+  })
+
+  test('torneio no formato novo sobrevive ao salvar e carregar', () => {
+    // Arrange
+    const base = createSave({ playerName: 'Mueller', clubId: 'real-vila', nationalityId: 'brasil' })!
+    const save = applyTournament(base, createTournament('copa-mundo', 'brasil', 42))
+
+    // Act
+    const carregado = parseSave(JSON.stringify(save))
+
+    // Assert
+    expect(carregado!.tournament?.groups).toHaveLength(8)
+  })
+})
+
+describe('idade do craque ao longo da carreira', () => {
+  test('sobe UMA vez por temporada', () => {
+    // playerAge é a idade de CRIAÇÃO; currentPlayerAge soma as temporadas.
+    // Somar nos dois lugares envelhecia o jogador dois anos por ano.
+    let save = createSave({ playerName: 'M', clubId: 'real-vila', nationalityId: 'brasil' })!
+    const inicial = currentPlayerAge(save)
+
+    for (let temporada = 1; temporada <= 6; temporada++) {
+      save = startNewSeason(save)
+      expect(currentPlayerAge(save)).toBe(inicial + temporada)
+    }
+  })
+
+  test('a idade de criação não muda com as temporadas', () => {
+    const save = createSave({ playerName: 'M', clubId: 'real-vila', nationalityId: 'brasil' })!
+    expect(startNewSeason(startNewSeason(save)).playerAge).toBe(save.playerAge)
+  })
+
+  test('carreira antiga tem a idade inflada corrigida ao carregar', () => {
+    // save do formato com o bug: playerAge já vinha somado por temporada
+    const base = createSave({ playerName: 'M', clubId: 'real-vila', nationalityId: 'brasil' })!
+    const inflado = { ...base, version: 18, careerYear: 8, playerAge: base.playerAge + 7 }
+
+    const carregado = parseSave(JSON.stringify(inflado))!
+
+    expect(carregado.playerAge).toBe(base.playerAge)
+    expect(currentPlayerAge(carregado)).toBe(base.playerAge + 7)
+  })
+
+  test('save já corrigido não é mexido de novo ao recarregar', () => {
+    const base = createSave({ playerName: 'M', clubId: 'real-vila', nationalityId: 'brasil' })!
+    const atual = { ...base, careerYear: 8 }
+
+    const carregado = parseSave(JSON.stringify(atual))!
+
+    expect(carregado.playerAge).toBe(base.playerAge)
   })
 })

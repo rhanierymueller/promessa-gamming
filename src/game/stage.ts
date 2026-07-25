@@ -17,6 +17,7 @@ import {
   generateOpponentShot,
   resolveDive,
 } from '../engine/defense/defense'
+import { steerKeeperX } from '../engine/defense/steering'
 import { createRng, nextFloat, type RngState } from '../engine/rng'
 import { DEFAULT_SHOT_CONFIG, goalCenter } from '../engine/shot/config'
 import { flightGroundY, flightHeight, flightX } from '../engine/shot/flight'
@@ -27,11 +28,17 @@ import { resolveWall, wallForShot, type WallConfig } from '../engine/shot/wall'
 export const CFG = DEFAULT_SHOT_CONFIG
 export const TOTAL_SHOTS = 10
 const START_OFFSETS = [0, -18, 20, -30, 32, -8, 26, -38, 40, 12]
-const RUNUP_DURATION = 0.45
-const RESULT_DURATION = 1.2
+const RUNUP_DURATION = 0.62
+/* Comporta a sequência caído (0,5s) → levantando (0,4s) → cabeça baixa. */
+const RESULT_DURATION = 1.6
 /** Trave: mais tempo p/ ver a bola quicar e sair rolando. */
 const POST_RESULT_DURATION = 2.0
-const KEEPER_DIVE_SPEED = 4.2 // mais frames no ar: mergulho legível, não teleporte
+/*
+ * Velocidade do arco do mergulho. A 4.2 o salto inteiro durava 0,24s — ele
+ * subia e caía num piscar, e a queda no gramado nem dava pra ver. A 2.0 o
+ * mergulho leva ~0,5s: cabe dentro do voo da bola e fica legível.
+ */
+const KEEPER_DIVE_SPEED = 2.0
 const CONFETTI_LIFE = 1.4
 
 export type Phase = 'intro' | 'ready' | 'runup' | 'flying' | 'result' | 'end'
@@ -81,6 +88,10 @@ export interface StageState {
   /** Defesa: habilidade do cobrador rival e o mergulho do jogador. */
   readonly defenseSkill: number
   readonly diveX: number | null
+  /** Alvo lateral que o dedo pede (offset do centro) — null = sem comando. */
+  readonly keeperTargetX: number | null
+  /** Onde o goleiro ESTÁ agora (offset do centro), movendo-se rumo ao alvo. */
+  readonly keeperX: number
   /** Plano do mergulho: arrasto para cima = voa alto (bola no ângulo). */
   readonly diveHigh: boolean
   readonly diveStartT: number
@@ -142,6 +153,8 @@ export const createStage = (
   mode: 'shoot',
   defenseSkill: 0,
   diveX: null,
+  keeperTargetX: null,
+  keeperX: 0,
   diveHigh: false,
   diveStartT: 0,
   readyTimer: 0,
@@ -171,7 +184,13 @@ export const createStage = (
 })
 
 /** Defesa: o chute do rival é gerado no armar do lance — o jogador só reage. */
-const DEFENSE_FLIGHT_SLOWDOWN = 2.2 // voo mais longo: janela humana de reação
+/*
+ * Agora que você PILOTA o goleiro (segura e arrasta), o voo precisa ser
+ * curto: com bola lenta bastaria esperar e colar o goleiro nela no fim.
+ * A 1.45 dá ~0,79s de bola no ar. Com o goleiro a 70/s (0,63s do centro ao
+ * poste), sair tarde ainda é gol — mas o lance fica legível.
+ */
+const DEFENSE_FLIGHT_SLOWDOWN = 1.45
 
 const armDefense = (state: StageState): StageState => {
   // treino: o cobrador endurece a cada chute da rodada
@@ -202,6 +221,8 @@ const freshShot = (state: StageState, shotIndex: number): StageState => {
     wallJumped: false,
     blockedByWall: false,
     diveX: null,
+    keeperTargetX: null,
+    keeperX: 0,
     diveHigh: false,
     diveStartT: 0,
     readyTimer: 0,
@@ -237,24 +258,44 @@ export const beginRound = (state: StageState): StageState =>
 const DIVE_HIGH_DRAG = 16
 
 /**
- * Defesa: o arrasto define o mergulho — lateral escolhe o canto, para CIMA
- * voa alto. Só vale durante o voo, uma vez.
+ * Defesa: enquanto o dedo está na tela, ele PILOTA o goleiro. Cada movimento
+ * atualiza o alvo; o tick desloca o goleiro rumo a ele com velocidade
+ * limitada (ver engine/defense/steering). Arrastar para cima cobre o alto.
  */
-export const tryDive = (state: StageState, dragDx: number, dragDy = 0): StageState => {
-  if (state.mode !== 'defend' || state.phase !== 'flying' || state.diveX !== null || !state.sim) {
-    return state
-  }
-  const center = goalCenter(CFG)
-  const diveX = Math.min(
-    center + MAX_DIVE_REACH,
-    Math.max(center - MAX_DIVE_REACH, center + dragDx * DIVE_DRAG_SCALE),
-  )
+/**
+ * Defesa no teclado: A/D seguram a direção e o goleiro corre para lá até
+ * soltar; espaço levanta para cobrir a bola alta. Soltar as teclas o deixa
+ * parado onde está (alvo = posição atual), não o traz de volta ao centro.
+ */
+export const steerDefenseByKeys = (
+  state: StageState,
+  direction: -1 | 0 | 1,
+  high: boolean,
+): StageState => {
+  // vale desde o "prepara": o goleiro se posiciona ANTES da bola sair
+  const canSteer =
+    state.phase === 'flying' || state.phase === 'runup' || state.phase === 'ready'
+  if (state.mode !== 'defend' || !canSteer || !state.sim) return state
+  const target =
+    direction === 0 ? state.keeperX : direction * MAX_DIVE_REACH
   return {
     ...state,
-    diveX,
+    keeperTargetX: target,
+    diveHigh: high,
+    diveStartT: state.diveStartT > 0 ? state.diveStartT : state.flightT,
+  }
+}
+
+export const steerDefense = (state: StageState, dragDx: number, dragDy = 0): StageState => {
+  const canSteer =
+    state.phase === 'flying' || state.phase === 'runup' || state.phase === 'ready'
+  if (state.mode !== 'defend' || !canSteer || !state.sim) return state
+  return {
+    ...state,
+    keeperTargetX: Math.max(-MAX_DIVE_REACH, Math.min(MAX_DIVE_REACH, dragDx * DIVE_DRAG_SCALE)),
     diveHigh: dragDy < -DIVE_HIGH_DRAG,
-    diveStartT: state.flightT,
-    sim: { ...state.sim, keeper: { ...state.sim.keeper, diveX } },
+    // o instante do primeiro comando ainda marca quando ele saiu do lugar
+    diveStartT: state.diveStartT > 0 ? state.diveStartT : state.flightT,
   }
 }
 
@@ -460,6 +501,12 @@ const tickResult = (state: StageState, dt: number): StageState => {
   return {
     ...state,
     resultTimer,
+    /*
+     * O mergulho CONTINUA no resultado. Se o voo terminava no meio do arco, o
+     * progresso congelava e o goleiro ficava boiando na horizontal enquanto a
+     * bola já estava no chão. Aqui ele completa a queda e aterrissa.
+     */
+    keeperDiveP: state.keeperDiveP > 0 ? Math.min(1, state.keeperDiveP + dt * KEEPER_DIVE_SPEED) : 0,
     msg: state.msg ? { ...state.msg, t: state.msg.t + dt } : null,
     netBulge: state.netBulge ? { ...state.netBulge, t: state.netBulge.t + dt } : null,
     confetti: state.confetti
@@ -506,24 +553,50 @@ export const tick = (state: StageState, dt: number): [StageState, StageEvent[]] 
 
   if (base.phase === 'ready' && base.mode === 'defend') {
     const readyTimer = base.readyTimer + dt
+    const positioned =
+      base.keeperTargetX !== null ? steerKeeperX(base.keeperX, base.keeperTargetX, dt) : base.keeperX
+    const moved = { ...base, keeperX: positioned }
     return readyTimer >= DEFENSE_READY_DELAY
-      ? [{ ...base, readyTimer, phase: 'runup', runP: 0 }, []]
-      : [{ ...base, readyTimer }, []]
+      ? [{ ...moved, readyTimer, phase: 'runup', runP: 0 }, []]
+      : [{ ...moved, readyTimer }, []]
   }
 
   if (base.phase === 'runup') {
     const runP = base.runP + dt / RUNUP_DURATION
+    // o goleiro já se posiciona enquanto o rival corre para a bola
+    const positioned =
+      base.mode === 'defend' && base.keeperTargetX !== null
+        ? steerKeeperX(base.keeperX, base.keeperTargetX, dt)
+        : base.keeperX
+    const moved = { ...base, keeperX: positioned }
     return runP >= 1
-      ? [{ ...base, runP: 1, phase: 'flying', flightT: 0 }, ['kick']]
-      : [{ ...base, runP }, []]
+      ? [{ ...moved, runP: 1, phase: 'flying', flightT: 0 }, ['kick']]
+      : [{ ...moved, runP }, []]
   }
 
   if (base.phase === 'flying' && base.sim) {
     const flightT = Math.min(1, base.flightT + dt / base.sim.flight.duration)
+    // defesa: o goleiro persegue o alvo do dedo, respeitando a velocidade
+    const steered =
+      base.mode === 'defend' && base.keeperTargetX !== null
+        ? steerKeeperX(base.keeperX, base.keeperTargetX, dt)
+        : base.keeperX
     const diving =
-      base.mode === 'defend' ? base.diveX !== null : flightT >= base.sim.keeper.reactT
+      base.mode === 'defend' ? base.keeperTargetX !== null : flightT >= base.sim.keeper.reactT
     const keeperDiveP = diving ? Math.min(1, base.keeperDiveP + dt * KEEPER_DIVE_SPEED) : base.keeperDiveP
-    const advanced = { ...base, flightT, keeperDiveP }
+    const center = goalCenter(CFG)
+    const pilotado = base.mode === 'defend' && base.keeperTargetX !== null
+    const pilotX = center + steered
+    const advanced: StageState = {
+      ...base,
+      flightT,
+      keeperDiveP,
+      keeperX: steered,
+      diveX: pilotado ? pilotX : base.diveX,
+      // a animação de resultado lê de sim.keeper.diveX: sem isto o goleiro
+      // teleportava de volta ao centro no instante do apito
+      sim: pilotado ? { ...base.sim, keeper: { ...base.sim.keeper, diveX: pilotX } } : base.sim,
+    }
     if (base.blockedByWall && base.wall && flightT >= base.wall.flightT) {
       return resolveWallBlock({ ...advanced, flightT: base.wall.flightT })
     }
