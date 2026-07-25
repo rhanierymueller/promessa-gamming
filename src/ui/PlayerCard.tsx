@@ -1,10 +1,11 @@
 import { X } from 'lucide-react'
 import { useState } from 'react'
 import type { SquadPlayer } from '../engine/squad/players'
+import { faceUrlFor } from '../game/faces'
 import { MAX_SQUAD_PLAYER_NAME } from '../state/save'
 import { OverallStars } from './OverallStars'
 
-/** Carta de jogador estilo FIFA: overall + estrelas, posição e seis barras. */
+/** Carta de jogador estilo FIFA: retrato, overall + estrelas, posição e seis barras. */
 
 export const ovrClass = (overall: number): string =>
   overall >= 75 ? 'ovr-high' : overall >= 62 ? 'ovr-mid' : 'ovr-low'
@@ -18,10 +19,46 @@ const ATTR_LABELS: readonly { readonly key: keyof SquadPlayer['attrs']; readonly
   { key: 'fis', label: 'Físico' },
 ]
 
+/**
+ * Retrato da carta. O rosto vem do id do jogador, então é sempre o mesmo.
+ * Sem banco de retratos (ou no SEU craque), cai nas iniciais — a carta
+ * continua completa em vez de abrir um buraco no layout.
+ */
+const PlayerFace = ({ player, userFaceUrl }: { player: SquadPlayer; userFaceUrl?: string | null }) => {
+  // o retrato do craque é pixel art com fundo vazado: cabe inteiro e sem
+  // suavização; os do elenco são pinturas 256×256 que preenchem a moldura
+  const isUserPortrait = Boolean(userFaceUrl)
+  const url = userFaceUrl ?? faceUrlFor(player.id)
+  const initials = player.name
+    .split(' ')
+    .filter((part) => part.length > 0)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('')
+
+  return (
+    <div className="player-face">
+      {url ? (
+        <img
+          className={`player-face-img${isUserPortrait ? ' player-face-pixel' : ''}`}
+          src={url}
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+        />
+      ) : (
+        <span className="player-face-initials" aria-hidden="true">{initials}</span>
+      )}
+    </div>
+  )
+}
+
 interface PlayerCardModalProps {
   readonly player: SquadPlayer
   readonly clubName: string
   readonly isUser: boolean
+  /** Retrato configurado no Perfil — só para o SEU craque. */
+  readonly userFaceUrl?: string | null
   /** null = não pode batizar; 'livre' = pode UMA vez; 'usado' = já batizou. */
   readonly renameState: 'livre' | 'usado' | null
   readonly onRename?: (name: string) => void
@@ -30,7 +67,7 @@ interface PlayerCardModalProps {
   readonly footer?: React.ReactNode
 }
 
-export const PlayerCardModal = ({ player, clubName, isUser, renameState, onRename, onClose, footer }: PlayerCardModalProps) => {
+export const PlayerCardModal = ({ player, clubName, isUser, userFaceUrl, renameState, onRename, onClose, footer }: PlayerCardModalProps) => {
   const [draft, setDraft] = useState('')
   return (
   <div className="player-modal" role="dialog" aria-modal="true" aria-label={`Carta de ${player.name}`} onClick={onClose}>
@@ -39,18 +76,20 @@ export const PlayerCardModal = ({ player, clubName, isUser, renameState, onRenam
         <X size={16} />
       </button>
       <div className="player-card-top">
-        <div className="player-card-ovr">
+        <div className="player-card-portrait">
+          <PlayerFace player={player} userFaceUrl={userFaceUrl} />
           <span className={`player-ovr ${ovrClass(player.overall)}`}>{player.overall}</span>
-          <OverallStars overall={player.overall} />
-          <span className="player-pos">{player.position}</span>
         </div>
         <div className="player-card-id">
           <h3 className="player-card-name">{player.name}{isUser ? ' (você)' : ''}</h3>
+          {/* cada item é indivisível: a linha quebra nos "·", nunca em "19 / anos" */}
           <p className="muted player-card-meta">
-            {clubName}
-            {player.shirt > 0 && <> · camisa {player.shirt}</>} · {player.age} anos
+            <span className="player-meta-item">{clubName}</span>
+            {player.shirt > 0 && <> · <span className="player-meta-item">camisa {player.shirt}</span></>}
+            {' · '}
+            <span className="player-meta-item">{player.age} anos</span>
             {player.altPositions.length > 0 && (
-              <> · também joga: {player.altPositions.join(', ')}</>
+              <> · <span className="player-meta-item">também joga: {player.altPositions.join(', ')}</span></>
             )}
           </p>
           {player.age < 27 && (
@@ -58,6 +97,10 @@ export const PlayerCardModal = ({ player, clubName, isUser, renameState, onRenam
               potencial {player.potential === 'medio' ? 'médio' : player.potential}
             </p>
           )}
+          <div className="player-card-rank">
+            <OverallStars overall={player.overall} />
+            <span className="player-pos">{player.position}</span>
+          </div>
         </div>
       </div>
       <div className="player-attr-list">

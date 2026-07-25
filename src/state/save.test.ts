@@ -272,6 +272,23 @@ describe('formação e escalação — só do meu time', () => {
     expect(new Set(changed.lineup).size).toBe(11)
   })
 
+  test('swapLineup troca DOIS TITULARES de lugar (consertar posição sem ir pro banco)', () => {
+    // Arrange: dois titulares já escalados, em slots diferentes
+    const slotA = 5
+    const slotB = 7
+    const playerA = base.lineup[slotA]
+    const playerB = base.lineup[slotB]
+
+    // Act: colocar o titular do slot B no slot A
+    const changed = swapLineup(base, slotA, playerB)
+
+    // Assert: eles trocam de lugar, ninguém vai para o banco
+    expect(changed.lineup[slotA]).toBe(playerB)
+    expect(changed.lineup[slotB]).toBe(playerA)
+    expect(new Set(changed.lineup).size).toBe(11)
+    expect([...changed.lineup].sort()).toEqual([...base.lineup].sort())
+  })
+
   test('não deixa tirar você de campo nem duplicar jogador', () => {
     // Arrange
     const userSlot = base.lineup.indexOf(USER_SQUAD_INDEX)

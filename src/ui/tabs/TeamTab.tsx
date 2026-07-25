@@ -16,7 +16,7 @@ import {
 } from '../../engine/squad/players'
 import { squadWithSignings } from '../../engine/market/market'
 import { myTeamRating } from '../../engine/squad/myTeam'
-import { FORMATION_IDS, FORMATIONS } from '../../engine/squad/formation'
+import { FORMATION_IDS, FORMATIONS, formationIdFor } from '../../engine/squad/formation'
 import {
   clubDisplayName,
   displayClub,
@@ -34,6 +34,7 @@ import { FormationBoard } from '../FormationBoard'
 import { TrophyRoom } from '../TrophyRoom'
 import { OverallStars } from '../OverallStars'
 import { ovrClass, PlayerCardModal } from '../PlayerCard'
+import { usePlayerPortrait } from '../usePlayerPortrait'
 
 interface TeamTabProps {
   readonly save: PlayerSave
@@ -49,6 +50,7 @@ const averageRating = (save: PlayerSave): string => {
 type TeamSection = 'clube' | 'elenco' | 'trofeus' | 'editor'
 
 export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
+  const userPortrait = usePlayerPortrait(save.appearance)
   const wins = save.career.wins
   const goals = save.career.goals
   const [section, setSection] = useState<TeamSection>('clube')
@@ -92,7 +94,8 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
     [save.signings, save.careerYear],
   )
 
-  const formation = isMyClub ? FORMATIONS[save.formation] : FORMATIONS['4-3-3']
+  // no seu time você escolhe; cada rival joga no esquema próprio dele
+  const formation = isMyClub ? FORMATIONS[save.formation] : FORMATIONS[formationIdFor(squadClub.id)]
   const starters = isMyClub ? save.lineup : squad.slice(0, 11).map((_, index) => index)
   const bench = squad
     .map((_, index) => index)
@@ -216,13 +219,21 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
             </label>
             {swapSlot !== null && (
               <p className="squad-swap-hint" role="status">
-                Escolha no banco quem entra no lugar de{' '}
+                Escolha quem fica no lugar de{' '}
                 <strong>{squad[starters[swapSlot]]?.name}</strong>
+                {' '}— outro titular (trocam de posição) ou alguém do banco
                 <button className="banner-close" onClick={() => setSwapSlot(null)} aria-label="Cancelar troca">
                   <X size={13} />
                 </button>
               </p>
             )}
+          </div>
+        )}
+        {!isMyClub && (
+          <div className="squad-coach-bar">
+            <p className="muted">
+              Esquema do adversário: <strong>{formation.label}</strong>
+            </p>
           </div>
         )}
         <div className="squad-layout">
@@ -244,14 +255,25 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
             const slotPosition = isMyClub ? formation.slots[slot] : player.position
             const fit = positionFit(player, slotPosition)
             const effective = overallAt(player, slotPosition)
+            // com uma troca aberta, os OUTROS titulares também são alvo: dá
+            // para inverter dois jogadores de posição sem passar pelo banco
+            const isSwapTarget = isMyClub && swapSlot !== null && swapSlot !== slot && !isUser
+            const pickForSwap = (): void => {
+              if (isSwapTarget && swapSlot !== null) {
+                onSaveChange(swapLineup(save, swapSlot, squadIndex))
+                setSwapSlot(null)
+                return
+              }
+              setSelectedPlayer(player)
+            }
             return (
               <div
                 key={player.id}
-                className={`squad-row${isUser ? ' squad-row-user' : ''}${isSigning ? ' squad-row-signing' : ''}${swapSlot === slot ? ' squad-row-swapping' : ''}`}
+                className={`squad-row${isUser ? ' squad-row-user' : ''}${isSigning ? ' squad-row-signing' : ''}${swapSlot === slot ? ' squad-row-swapping' : ''}${isSwapTarget ? ' squad-row-target' : ''}`}
                 role="button"
                 tabIndex={0}
-                onClick={() => setSelectedPlayer(player)}
-                onKeyDown={(event) => { if (event.key === 'Enter') setSelectedPlayer(player) }}
+                onClick={pickForSwap}
+                onKeyDown={(event) => { if (event.key === 'Enter') pickForSwap() }}
               >
                 <span className="squad-shirt">{player.shirt}</span>
                 <span className={`squad-pos${fit === 'improvisado' ? ' pos-wrong' : fit === 'secundaria' ? ' pos-alt' : ''}`}>
@@ -410,6 +432,7 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
           player={selectedPlayer}
           clubName={clubDisplayName(save, squadClub.id)}
           isUser={selectedPlayer.id === USER_PLAYER_ID}
+          userFaceUrl={selectedPlayer.id === USER_PLAYER_ID ? userPortrait : null}
           renameState={
             !isMyClub || selectedPlayer.id === USER_PLAYER_ID
               ? null

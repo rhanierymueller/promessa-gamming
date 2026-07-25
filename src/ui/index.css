@@ -1680,6 +1680,12 @@ h1 {
     width: min(100%, 1060px);
   }
 
+  /* o botão de som acompanha a borda do shell largo (metade de 1060 = 530);
+     sem isso ele fica ancorado no shell estreito e flutua no meio da tela */
+  .mute-btn {
+    right: max(12px, calc(50% - 530px + 12px));
+  }
+
   /* fluxos de coluna única continuam estreitos e centralizados */
   .create,
   .menu {
@@ -1957,21 +1963,68 @@ h1 {
 
 .player-card-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
 }
 
-.player-card-ovr {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
+/* retrato + nota: a nota fica SOBRE o canto do retrato, como carta de FIFA,
+   para o topo não virar uma coluna alta com o nome sobrando no vazio */
+.player-card-portrait {
+  position: relative;
   flex-shrink: 0;
+  padding-bottom: 10px;
 }
 
-.player-ovr {
-  font-size: 30px;
-  padding: 6px 12px;
+/* retrato da carta: moldura estilo RPG, sempre com o mesmo rosto do jogador */
+.player-face {
+  width: 96px;
+  height: 96px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: linear-gradient(160deg, #241b3c, #171126);
+  box-shadow: inset 0 0 0 1px rgba(255, 210, 63, 0.12), 0 4px 12px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.player-face-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* retrato do craque: pixel art pequena, cabe inteira e sem borrar */
+.player-face-pixel {
+  object-fit: contain;
+  padding: 4px;
+  image-rendering: pixelated;
+}
+
+.player-face-initials {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  opacity: 0.75;
+}
+
+/* nota sobreposta ao pé do retrato */
+.player-card-portrait .player-ovr {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  font-size: 20px;
+  line-height: 1;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  background-color: #1b1430;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
 }
 
 .player-pos {
@@ -1982,6 +2035,17 @@ h1 {
 
 .player-card-id {
   min-width: 0;
+  flex: 1;
+  /* o X de fechar flutua no canto: o texto não pode correr por baixo dele */
+  padding-right: 34px;
+}
+
+/* estrelas + posição embaixo do nome, ocupando a largura que sobrava */
+.player-card-rank {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .player-card-name {
@@ -1992,6 +2056,11 @@ h1 {
 .player-card-meta {
   margin: 4px 0 0;
   font-size: 12px;
+}
+
+/* nome do clube, camisa e idade não se partem no meio */
+.player-meta-item {
+  white-space: nowrap;
 }
 
 .player-attr-list {

@@ -2,12 +2,12 @@ import { describe, expect, test } from 'vitest'
 import { CLUBS } from '../../data/clubs'
 import { nationAsClub, NATIONS } from '../../data/nations'
 import { RETIRE_AGE } from './aging'
+import { FORMATIONS, formationIdFor } from './formation'
 import {
   lineupRating,
   overallAt,
   positionFit,
   SQUAD_SIZE,
-  STARTING_FORMATION,
   USER_SQUAD_INDEX,
   squadPlayersFor,
   userAsSquadPlayer,
@@ -48,15 +48,16 @@ describe('squadPlayersFor', () => {
     expect(squadPlayersFor(strongClub)).toEqual(squad)
   })
 
-  test('titulares seguem a formação e o índice do usuário é atacante', () => {
+  test('titulares seguem a formação DO CLUBE e o índice do usuário é atacante', () => {
     // Act
     const squad = squadPlayersFor(weakClub)
+    const slots = FORMATIONS[formationIdFor(weakClub.id)].slots
 
     // Assert
-    for (let i = 0; i < STARTING_FORMATION.length; i++) {
-      expect(squad[i].position).toBe(STARTING_FORMATION[i])
+    for (let i = 0; i < slots.length; i++) {
+      expect(squad[i].position).toBe(slots[i])
     }
-    expect(STARTING_FORMATION[USER_SQUAD_INDEX]).toBe('ATA')
+    expect(slots[USER_SQUAD_INDEX]).toBe('ATA')
   })
 
   test('clube forte tem elenco melhor que clube fraco', () => {
@@ -181,7 +182,7 @@ describe('posições secundárias e overall por posição', () => {
   test('lineupRating: escalação certa vale mais que zagueiro no ataque', () => {
     // Arrange
     const squad = squadPlayersFor(CLUBS[0])
-    const slots = STARTING_FORMATION
+    const slots = FORMATIONS[formationIdFor(CLUBS[0].id)].slots
     const right = slots.map((_, index) => squad[index])
     // troca o atacante (9) por um defensor do banco (13)
     const wrong = right.map((player, index) => (index === 9 ? squad[13] : player))

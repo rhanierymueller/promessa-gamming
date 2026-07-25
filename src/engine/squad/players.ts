@@ -2,6 +2,7 @@ import type { Club } from '../../data/clubs'
 import { squadFor } from '../../data/squadNames'
 import type { PlayerAttributes } from '../career/attributes'
 import { ageFactor, RETIRE_AGE, type Potential } from './aging'
+import { FORMATIONS, formationIdFor } from './formation'
 
 /**
  * Elencos completos estilo FIFA: cada clube tem 18 jogadores determinísticos
@@ -42,11 +43,10 @@ export interface SquadPlayer {
 
 export const SQUAD_SIZE = 18
 
-/** 4-3-3 clássico; o índice 9 (ATA) é o do protagonista, igual à LivePitch. */
-export const STARTING_FORMATION: readonly SquadPosition[] = [
-  'GOL', 'LD', 'ZAG', 'ZAG', 'LE', 'VOL', 'MEI', 'MEI', 'PON', 'ATA', 'PON',
-]
-
+/**
+ * Slot do protagonista no elenco, igual à LivePitch. Toda formação tem ATA
+ * nesse índice, então o craque nunca cai no gol seja qual for o esquema.
+ */
 export const USER_SQUAD_INDEX = 9
 
 /** Id fixo do SEU craque dentro de qualquer elenco. */
@@ -224,7 +224,9 @@ export const clubBaseQuality = (club: Club): number =>
 
 export const squadPlayersFor = (club: Club, careerYear = 1): readonly SquadPlayer[] => {
   const names = squadFor(`${club.id}-elenco`, SQUAD_SIZE)
-  const positions = [...STARTING_FORMATION, ...BENCH_POSITIONS]
+  // cada clube monta o elenco para o PRÓPRIO esquema — no seu time você é o
+  // técnico e pode mudar a forma por cima dos jogadores que herdou
+  const positions = [...FORMATIONS[formationIdFor(club.id)].slots, ...BENCH_POSITIONS]
   const clubBase = clubBaseQuality(club)
   let state = hashSeed(`${club.id}-atributos`)
 

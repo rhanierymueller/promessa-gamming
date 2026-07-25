@@ -1,0 +1,9 @@
+Retratos das cartas de jogador: PNG 256x256 com fundo transparente.
+
+Gerados a partir das folhas 3x3 em ../images/art-source/npcs/ (fundo magenta
+de chroma key, camisa cinza neutra) com:
+
+  node scripts/slice-faces.mjs <folha.png> 3 3 --chroma --prefix <nome>
+
+Qualquer .png/.jpg/.webp aqui entra no sorteio automaticamente — o rosto de
+cada jogador vem de um hash do id dele, então nunca muda.

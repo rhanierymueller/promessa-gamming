@@ -61,6 +61,20 @@ export const FORMATIONS: Record<FormationId, Formation> = {
 
 export const FORMATION_IDS: readonly FormationId[] = ['4-3-3', '4-4-2', '3-5-2']
 
+/**
+ * Identidade tática do clube: cada time joga do SEU jeito, e sempre o mesmo
+ * jeito (derivado do id, nada guardado). O elenco nasce montado para essa
+ * forma — no seu clube você é o técnico e pode mudar por cima dela.
+ */
+export const formationIdFor = (clubId: string): FormationId => {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < clubId.length; i++) {
+    hash ^= clubId.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return FORMATION_IDS[(hash >>> 0) % FORMATION_IDS.length]
+}
+
 const SECTOR: Record<PlayerFieldPosition, readonly SquadPosition[]> = {
   ATA: ['ATA', 'PON'],
   PON: ['PON', 'ATA'],
