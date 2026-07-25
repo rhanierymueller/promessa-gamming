@@ -23,9 +23,9 @@ export interface RegistrationForm {
 
 export type RegistrationErrors = Partial<Record<keyof RegistrationForm, string>>
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,16}$/
-export const MIN_PASSWORD = 6
+export const MIN_PASSWORD = 8
 const MIN_TEAM_NAME = 2
 const BASE_ATTR_TOTAL = 12
 

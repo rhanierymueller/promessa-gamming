@@ -9,6 +9,7 @@ import {
   type RankingRow,
 } from '../online/leagues'
 import { isValidLeagueCode } from '../online/points'
+import { isOffensiveName } from '../state/moderation'
 import type { PlayerSave } from '../state/save'
 
 interface FriendsLeaguesProps {
@@ -69,6 +70,11 @@ export const FriendsLeagues = ({ save }: FriendsLeaguesProps) => {
 
   const onCreate = async (): Promise<void> => {
     if (newName.trim().length === 0) return
+    if (isOffensiveName(newName)) {
+      setErrorMessage('esse nome de liga não pode ser usado — escolha outro')
+      setStatus('error')
+      return
+    }
     setStatus('loading')
     try {
       const league = await createFriendLeague(save, newName)

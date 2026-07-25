@@ -36,11 +36,13 @@ import {
   markPendingMatch,
   readPendingMatch,
 } from '../state/pendingMatch'
+import { isRecoveryHash, recoveryErrorMessage } from '../state/recoveryLink'
 import { currentSessionEmail, deleteAccount } from '../online/account'
 import { getClient, isOnlineAvailable } from '../online/leagues'
 import { AuthGate } from './AuthGate'
 import { CharacterCreate } from './CharacterCreate'
 import { Landing } from './Landing'
+import { PasswordReset } from './PasswordReset'
 import { HomeTab } from './tabs/HomeTab'
 import { MarketTab } from './tabs/MarketTab'
 import { MatchesTab } from './tabs/MatchesTab'
@@ -101,6 +103,16 @@ const MUTE_KEY = 'promessa.muted'
 
 const loadMuted = (): boolean => localStorage.getItem(MUTE_KEY) === '1'
 
+/**
+ * Tira o token da barra de endereços. No fluxo implícito o SDK deixa
+ * access_token/refresh_token no fragmento da URL — some do histórico,
+ * de prints e de link copiado sem perder a sessão (já está no storage).
+ */
+const clearAuthFragment = (): void => {
+  if (window.location.hash.length === 0) return
+  history.replaceState(null, '', window.location.pathname + window.location.search)
+}
+
 interface MuteButtonProps {
   readonly muted: boolean
   readonly onToggle: () => void
@@ -127,8 +139,13 @@ const TAB_ITEMS: readonly { id: Tab; icon: LucideIcon; label: string }[] = [
 
 export const App = () => {
   const [save, setSave] = useState<PlayerSave | null>(loadSaveChargingForfeit)
-  // a landing é a home; Jogar passa pelo portão de login/cadastro
-  const [gate, setGate] = useState<'landing' | 'auth' | 'signup' | 'game'>('landing')
+  // a landing é a home; Jogar passa pelo portão de login/cadastro; 'recovery'
+  // é a tela de nova senha aberta pelo link do e-mail
+  const [gate, setGate] = useState<'landing' | 'auth' | 'signup' | 'game' | 'recovery'>(() =>
+    isRecoveryHash(window.location.hash) ? 'recovery' : 'landing',
+  )
+  // aviso mostrado no login (ex.: link de recuperação expirado)
+  const [authNotice, setAuthNotice] = useState<string | null>(null)
   // sessão lembrada pelo SDK do Supabase (token em localStorage, renovado
   // automaticamente — a SENHA nunca é guardada); com ela, Jogar pula o login
   const [hasSession, setHasSession] = useState(false)
@@ -144,6 +161,29 @@ export const App = () => {
   useEffect(() => {
     void currentSessionEmail().then((email) => setHasSession(email !== null))
   }, [gate])
+
+  useEffect(() => {
+    // link de recuperação inválido/expirado: volta ao login com aviso e limpa a URL
+    const urlError = recoveryErrorMessage(window.location.hash)
+    if (urlError) {
+      setAuthNotice(urlError)
+      setGate('auth')
+      clearAuthFragment()
+    }
+    const client = getClient()
+    if (!client) return
+    // o client nasce no import e pode consumir o link antes do React montar:
+    // getSession() só resolve depois disso, então é a hora certa de limpar
+    // o token da URL (o gate já veio de isRecoveryUrl na primeira renderização)
+    void client.auth.getSession().then(clearAuthFragment)
+    // link aberto com o app já rodando: o SDK avisa por aqui
+    const { data } = client.auth.onAuthStateChange((event) => {
+      if (event !== 'PASSWORD_RECOVERY') return
+      setGate('recovery')
+      clearAuthFragment()
+    })
+    return () => data.subscription.unsubscribe()
+  }, [])
 
   const toggleMute = (): void => {
     const next = !muted
@@ -279,9 +319,31 @@ export const App = () => {
     return (
       <AuthGate
         hasSave={Boolean(save && club)}
-        onEnter={() => setGate('game')}
-        onSignup={() => setGate('signup')}
-        onBack={() => setGate('landing')}
+        onEnter={() => {
+          setAuthNotice(null)
+          setGate('game')
+        }}
+        onSignup={() => {
+          setAuthNotice(null)
+          setGate('signup')
+        }}
+        onBack={() => {
+          setAuthNotice(null)
+          setGate('landing')
+        }}
+        initialNotice={authNotice ?? undefined}
+      />
+    )
+  }
+
+  if (gate === 'recovery') {
+    return (
+      <PasswordReset
+        onDone={() => setGate('game')}
+        onCancel={() => {
+          setAuthNotice(null)
+          setGate('auth')
+        }}
       />
     )
   }

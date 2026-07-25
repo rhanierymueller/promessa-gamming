@@ -2810,6 +2810,29 @@ h1 {
   background: var(--line);
 }
 
+/* "Esqueci minha senha" e afins: botão com cara de link */
+.auth-link {
+  background: none;
+  border: none;
+  padding: 2px;
+  align-self: flex-start;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.auth-link:hover {
+  color: var(--text);
+}
+
+.auth-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 /* cores do clube no editor */
 .club-color-pick {
   display: inline-flex;

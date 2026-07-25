@@ -47,6 +47,11 @@ describe('validateRegistration', () => {
     expect(result.confirmPassword).toBeTruthy()
   })
 
+  test('senha exige o mínimo de 8 caracteres', () => {
+    expect(validateRegistration({ ...valid, password: 'sete777', confirmPassword: 'sete777' }).password).toBeTruthy()
+    expect(validateRegistration({ ...valid, password: 'oito8888', confirmPassword: 'oito8888' })).toEqual({})
+  })
+
   test('username só aceita letras, números e underline (3-16)', () => {
     expect(validateRegistration({ ...valid, username: 'craque 10' }).username).toBeTruthy()
     expect(validateRegistration({ ...valid, username: 'craque-10' }).username).toBeTruthy()
