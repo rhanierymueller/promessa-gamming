@@ -11,6 +11,25 @@ import {
   type PlayerAttributes,
 } from '../engine/career/attributes'
 import {
+  DEFAULT_MORALE,
+  clampMorale,
+  driftMorale,
+  isEventId,
+  maybeEventForRound,
+  resolveLifeEvent,
+  type PendingLifeEvent,
+} from '../engine/career/events'
+import {
+  dueMilestone,
+  isMilestoneId,
+  isPerkId,
+  offerForMilestone,
+  perkTrainingBonus,
+  type PerkId,
+  type PerkMilestoneId,
+} from '../engine/career/perks'
+import { createRival, rivalRoundGoals, type RivalState } from '../engine/career/rival'
+import {
   applyPromotionRelegation,
   divisionOf,
   initialDivisions,
@@ -30,7 +49,7 @@ import { isOffensiveName } from './moderation'
  * (nacionalidade padrão Brasil + temporada nova).
  */
 
-export const SAVE_VERSION = 17
+export const SAVE_VERSION = 18
 const SAVE_KEY = 'promessa.save'
 export const MAX_PLAYER_NAME = 16
 const DEFAULT_SHIRT_NUMBER = 10
@@ -163,6 +182,25 @@ export interface PlayerSave {
   readonly signings: readonly Signing[]
   /** Sala de troféus: títulos conquistados com o ano. */
   readonly trophies: readonly Trophy[]
+  /** Habilidades de RPG adquiridas nos marcos da carreira. */
+  readonly perks: readonly PerkId[]
+  /** Escolha de perk pendente (1 de até 3) — null sem marco aberto. */
+  readonly perkOffer: PerkOffer | null
+  /** Marcos já disparados (cada um oferece perk uma única vez). */
+  readonly claimedMilestones: readonly PerkMilestoneId[]
+  /** Moral do craque (0-100) — entra em campo na nota inicial. */
+  readonly morale: number
+  /** Evento de vida aguardando decisão (null = semana tranquila). */
+  readonly pendingEvent: PendingLifeEvent | null
+  /** Resultado do último evento — banner na Home até dispensar. */
+  readonly eventNote: string | null
+  /** O nêmesis: atacante rival que disputa a artilharia com você. */
+  readonly rival: RivalState | null
+}
+
+export interface PerkOffer {
+  readonly milestone: PerkMilestoneId
+  readonly options: readonly PerkId[]
 }
 
 export type TrophyKind = 'serie-a' | 'serie-b' | 'serie-c' | 'serie-d' | TournamentKind
@@ -283,7 +321,45 @@ export const createSave = (
     budget: allowanceFor(divisionOf(divisions, clubId)),
     signings: [],
     trophies: [],
+    perks: [],
+    perkOffer: null,
+    claimedMilestones: [],
+    morale: DEFAULT_MORALE,
+    pendingEvent: null,
+    eventNote: null,
+    rival: null,
   }
+}
+
+/** Checa marcos da carreira: dispara UMA oferta de perk por vez. */
+const withMilestoneCheck = (
+  save: PlayerSave,
+  lastRating: number,
+  promoted: boolean,
+): PlayerSave => {
+  if (save.perkOffer) return save
+  const due = dueMilestone(
+    {
+      games: save.career.games,
+      goals: save.career.goals,
+      lastRating,
+      trophiesCount: save.trophies.length,
+      promoted,
+    },
+    save.claimedMilestones,
+  )
+  if (!due) return save
+  const options = offerForMilestone(due, save.perks)
+  const claimedMilestones = [...save.claimedMilestones, due]
+  if (options.length === 0) return { ...save, claimedMilestones }
+  return { ...save, claimedMilestones, perkOffer: { milestone: due, options } }
+}
+
+/** Escolhe um perk da oferta pendente — no-op se a opção não estiver nela. */
+export const choosePerk = (save: PlayerSave, perkId: PerkId): PlayerSave => {
+  if (!save.perkOffer || !save.perkOffer.options.includes(perkId)) return save
+  if (save.perks.includes(perkId)) return { ...save, perkOffer: null }
+  return { ...save, perks: [...save.perks, perkId], perkOffer: null }
 }
 
 /** Você é o técnico: muda o desenho tático mantendo o seu craque em campo. */
@@ -385,13 +461,14 @@ export const setPlayerName = (save: PlayerSave, playerId: string, rawName: strin
 /** Aplica o estado do torneio; título de seleção dá TAÇA (sem dinheiro). */
 export const withTournamentState = (save: PlayerSave, state: TournamentState): PlayerSave => {
   const becameChampion = state.stage === 'champion' && save.tournament?.stage !== 'champion'
-  return {
+  const updated: PlayerSave = {
     ...save,
     tournament: state,
     trophies: becameChampion
       ? [...save.trophies, { kind: state.kind, year: save.careerYear }]
       : save.trophies,
   }
+  return becameChampion ? withMilestoneCheck(updated, 0, false) : updated
 }
 
 /** Contrata um jogador do mercado: desconta a verba e grava o reforço. */
@@ -487,6 +564,47 @@ const normalizeSignings = (value: unknown): readonly Signing[] =>
 const VALID_TROPHIES: readonly string[] = [
   'serie-a', 'serie-b', 'serie-c', 'serie-d', 'copa-america', 'liga-nacoes', 'copa-mundo',
 ]
+
+const normalizePerks = (value: unknown): readonly PerkId[] =>
+  Array.isArray(value) ? [...new Set(value.filter(isPerkId))] : []
+
+const normalizePerkOffer = (value: unknown, owned: readonly PerkId[]): PerkOffer | null => {
+  if (typeof value !== 'object' || value === null) return null
+  const candidate = value as Record<string, unknown>
+  if (!isMilestoneId(candidate.milestone) || !Array.isArray(candidate.options)) return null
+  const options = candidate.options.filter(isPerkId).filter((id) => !owned.includes(id))
+  return options.length > 0 ? { milestone: candidate.milestone, options } : null
+}
+
+const normalizeMilestones = (value: unknown): readonly PerkMilestoneId[] =>
+  Array.isArray(value) ? [...new Set(value.filter(isMilestoneId))] : []
+
+const normalizeRival = (value: unknown): RivalState | null => {
+  if (typeof value !== 'object' || value === null) return null
+  const candidate = value as Record<string, unknown>
+  if (typeof candidate.name !== 'string' || candidate.name.length === 0) return null
+  if (typeof candidate.clubId !== 'string' || !clubById(candidate.clubId)) return null
+  const count = (raw: unknown): number =>
+    typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 0
+  return {
+    name: candidate.name,
+    clubId: candidate.clubId,
+    seasonGoals: count(candidate.seasonGoals),
+    careerGoals: count(candidate.careerGoals),
+    mySeasonGoals: count(candidate.mySeasonGoals),
+  }
+}
+
+const normalizeMorale = (value: unknown): number =>
+  typeof value === 'number' && Number.isFinite(value) ? clampMorale(value) : DEFAULT_MORALE
+
+const normalizePendingEvent = (value: unknown): PendingLifeEvent | null => {
+  if (typeof value !== 'object' || value === null) return null
+  const candidate = value as Record<string, unknown>
+  return isEventId(candidate.templateId) && typeof candidate.seed === 'number'
+    ? { templateId: candidate.templateId, seed: Math.floor(candidate.seed) }
+    : null
+}
 
 const normalizeTrophies = (value: unknown): readonly Trophy[] =>
   Array.isArray(value)
@@ -632,12 +750,65 @@ const normalizeAppearance = (value: unknown): PlayerAppearance => {
   }
 }
 
-export const recordMatch = (save: PlayerSave, record: MatchRecord): PlayerSave => ({
-  ...save,
-  history: [...save.history, record].slice(-HISTORY_LIMIT),
-  career: addToCareer(save.career, record),
-  trainingPoints: save.trainingPoints + trainingPointsForRating(record.rating),
-})
+export const recordMatch = (save: PlayerSave, record: MatchRecord): PlayerSave => {
+  const isWin = record.teamGoals > record.opponentGoals
+  const isLoss = record.teamGoals < record.opponentGoals
+  const career = addToCareer(save.career, record)
+  // a vida de craque só bate na porta entre rodadas da liga
+  const eventSeed = (save.season.seed ^ Math.imul(career.games, 0x9e3779b9)) >>> 0
+  const pendingEvent =
+    save.pendingEvent ?? (record.competition === 'liga' ? maybeEventForRound(eventSeed) : null)
+  // o nêmesis nasce no primeiro jogo de liga e marca os dele em paralelo
+  const isLeague = record.competition === 'liga'
+  const baseRival =
+    save.rival ??
+    (isLeague
+      ? createRival(
+          (save.season.seed ^ 0xabc1234) >>> 0,
+          save.season.participants.filter((id) => id !== save.clubId),
+        )
+      : null)
+  const rival =
+    baseRival && isLeague
+      ? (() => {
+          const scored = rivalRoundGoals(save.season.seed, save.season.currentRound)
+          return {
+            ...baseRival,
+            seasonGoals: baseRival.seasonGoals + scored,
+            careerGoals: baseRival.careerGoals + scored,
+            mySeasonGoals: baseRival.mySeasonGoals + record.playerGoals,
+          }
+        })()
+      : baseRival
+  const updated: PlayerSave = {
+    ...save,
+    history: [...save.history, record].slice(-HISTORY_LIMIT),
+    career,
+    trainingPoints:
+      save.trainingPoints +
+      trainingPointsForRating(record.rating) +
+      perkTrainingBonus(save.perks, isWin),
+    morale: driftMorale(save.morale, isWin, isLoss),
+    pendingEvent,
+    rival,
+  }
+  return withMilestoneCheck(updated, record.rating, false)
+}
+
+/** Decide o evento de vida pendente: moral (e às vezes treino) reagem. */
+export const resolvePendingEvent = (save: PlayerSave, optionIndex: number): PlayerSave => {
+  if (!save.pendingEvent) return save
+  const result = resolveLifeEvent(save.pendingEvent.templateId, optionIndex, save.pendingEvent.seed)
+  return {
+    ...save,
+    morale: clampMorale(save.morale + result.moraleDelta),
+    trainingPoints: save.trainingPoints + result.trainingPoints,
+    pendingEvent: null,
+    eventNote: result.note,
+  }
+}
+
+export const dismissEventNote = (save: PlayerSave): PlayerSave => ({ ...save, eventNote: null })
 
 /** Gasta pontos de treino para subir um atributo — no-op se não puder pagar. */
 export const trainAttribute = (save: PlayerSave, key: AttributeKey): PlayerSave => {
@@ -678,7 +849,17 @@ export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random)
     createRng(shiftSeed),
   )
   const nextDivision = divisionOf(shift.value.divisions, save.clubId)
-  return {
+  const nextSeason = createSeason(save.clubId, seasonSeed(roll), shift.value.divisions[nextDivision])
+  // o nêmesis te persegue: sempre arruma clube na SUA divisão
+  const rival = save.rival
+    ? {
+        ...save.rival,
+        clubId: nextSeason.participants.find((id) => id !== save.clubId) ?? save.rival.clubId,
+        seasonGoals: 0,
+        mySeasonGoals: 0,
+      }
+    : null
+  const updated: PlayerSave = {
     ...save,
     careerYear: save.careerYear + 1,
     playerAge: save.playerAge + 1,
@@ -686,12 +867,14 @@ export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random)
     tournament: null,
     divisions: shift.value.divisions,
     divisionMovement: shift.value.movement,
-    season: createSeason(save.clubId, seasonSeed(roll), shift.value.divisions[nextDivision]),
+    season: nextSeason,
     budget: save.budget + allowanceFor(nextDivision) + (isChampion ? titlePrizeFor(playerDivision) : 0),
     trophies: isChampion
       ? [...save.trophies, { kind: DIVISION_TROPHIES[playerDivision], year: save.careerYear }]
       : save.trophies,
+    rival,
   }
+  return withMilestoneCheck(updated, 0, shift.value.movement === 'up')
 }
 
 /** Envia (ou remove, com null) o escudo local de um clube. */
@@ -855,6 +1038,15 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
     budget: normalizeBudget(candidate.budget, divisions, candidate.clubId),
     signings: normalizeSignings(candidate.signings),
     trophies: normalizeTrophies(candidate.trophies),
+    perks: normalizePerks(candidate.perks),
+    perkOffer: normalizePerkOffer(candidate.perkOffer, normalizePerks(candidate.perks)),
+    claimedMilestones: normalizeMilestones(candidate.claimedMilestones),
+    morale: normalizeMorale(candidate.morale),
+    pendingEvent: normalizePendingEvent(candidate.pendingEvent),
+    eventNote: typeof candidate.eventNote === 'string' && candidate.eventNote.length > 0
+      ? candidate.eventNote
+      : null,
+    rival: normalizeRival(candidate.rival),
   }
   return setShirtNumber(base, base.shirtNumber)
 }
@@ -880,6 +1072,7 @@ export const parseSave = (raw: string | null): PlayerSave | null => {
       candidate.version === 14 ||
       candidate.version === 15 ||
       candidate.version === 16 ||
+      candidate.version === 17 ||
       candidate.version === SAVE_VERSION
     ) {
       return parseCurrent(candidate)

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { clubById } from '../../data/clubs'
 import { nationById } from '../../data/nations'
+import { rivalTaunt } from '../../engine/career/rival'
 import { computeTable, recentForm } from '../../engine/season/season'
 import { SEASON_ROUNDS } from '../../engine/season/types'
 import { groupStandings, TOURNAMENT_NAMES } from '../../engine/tournament/tournament'
@@ -90,6 +91,24 @@ export const MatchesTab = ({ save }: MatchesTabProps) => {
             })}
           </div>
           <p className="muted table-note">Os 2 primeiros avançam à semifinal.</p>
+        </div>
+      )}
+
+      {section === 'tabela' && save.rival && (
+        <div className="card rival-card">
+          <span className="card-label">Duelo de artilharia</span>
+          <div className="rival-duel">
+            <div className="rival-side">
+              <span className="rival-goals">{save.rival.mySeasonGoals}</span>
+              <span className="rival-who">{save.playerName} · você</span>
+            </div>
+            <span className="rival-x">×</span>
+            <div className="rival-side">
+              <span className="rival-goals">{save.rival.seasonGoals}</span>
+              <span className="rival-who">{save.rival.name} · {clubDisplayName(save, save.rival.clubId)}</span>
+            </div>
+          </div>
+          <p className="muted rival-taunt">{rivalTaunt(save.rival)}</p>
         </div>
       )}
 

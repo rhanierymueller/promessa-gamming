@@ -3041,9 +3041,181 @@ h1 {
 }
 
 .market-buy:disabled {
-  opacity: 0.4;
+  opacity: 0.55;
   cursor: not-allowed;
   transform: none;
+  background: transparent;
+  border: 1px solid var(--muted);
+  color: var(--muted);
+}
+
+/* rival nemesis: duelo de artilharia */
+.rival-duel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin: 10px 0 6px;
+}
+
+.rival-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 120px;
+}
+
+.rival-goals {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.rival-x {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.rival-who {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.rival-taunt {
+  text-align: center;
+  font-style: italic;
+  margin-top: 4px;
+}
+
+/* vida de craque: moral e eventos fora de campo */
+.morale-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--muted);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.morale-high {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.morale-low {
+  color: #e85d75;
+  border-color: #e85d75;
+}
+
+.event-note {
+  border-color: var(--accent);
+}
+
+.event-tone {
+  text-transform: capitalize;
+}
+
+.event-seguro {
+  color: #7fd18a;
+}
+
+.event-ousado {
+  color: var(--accent);
+}
+
+.event-audacioso {
+  color: #e85d75;
+}
+
+/* perks: oferta de habilidade (Home) e lista adquirida (Perfil) */
+.perk-offer {
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 18px rgba(255, 210, 63, 0.12);
+}
+
+.perk-offer-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+.perk-offer-reason {
+  margin-top: 2px;
+}
+
+.perk-options {
+  display: grid;
+  gap: 8px;
+}
+
+.perk-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 14px;
+  background: transparent;
+  border: 1px solid var(--muted);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.perk-option:hover {
+  border-color: var(--accent);
+  background: rgba(255, 210, 63, 0.06);
+}
+
+.perk-list {
+  display: grid;
+  gap: 8px;
+}
+
+.perk-owned {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--accent);
+  background: rgba(255, 210, 63, 0.05);
+  border-radius: 6px;
+}
+
+.perk-name {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.perk-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.market-within {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.market-within input {
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 /* estrelas de overall */
@@ -3343,17 +3515,14 @@ h1 {
   text-align: center;
 }
 
-/* o botão fica ancorado à direita sem tirar o título do centro */
-.summary-header .summary-continue {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-}
-
+/* continuar: centralizado logo abaixo do título — sem caçar botão no rodapé */
 .summary-continue {
-  padding: 10px 20px;
-  font-size: 13px;
+  display: block;
+  width: 100%;
+  max-width: 340px;
+  margin: 10px auto 6px;
+  padding: 12px 20px;
+  font-size: 14px;
   white-space: nowrap;
 }
 
@@ -3614,8 +3783,8 @@ h1 {
   }
 
   .summary-continue {
-    padding: 8px 10px;
-    font-size: 10.5px;
+    padding: 11px 14px;
+    font-size: 12.5px;
   }
 
   .summary-scoreline {

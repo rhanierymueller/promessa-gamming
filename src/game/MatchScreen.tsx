@@ -39,6 +39,8 @@ import {
 } from '../engine/match/match'
 import { pickBestPlayer } from '../engine/match/facts'
 import { displayRating } from '../engine/match/rating'
+import { DEFAULT_MORALE, moraleRatingBonus } from '../engine/career/events'
+import { captainMomentum, type PerkId } from '../engine/career/perks'
 import { momentumFor, rollAutoGoal, rollMicroGoal, TACTIC_LABELS, type Tactic } from '../engine/match/tactics'
 import type { MatchState } from '../engine/match/types'
 import type { PassResolution } from '../engine/pass/pass'
@@ -86,6 +88,10 @@ interface MatchScreenProps {
   readonly opponentDivision?: number
   readonly competition?: Competition
   readonly attributes?: PlayerAttributes
+  /** Perks de RPG do craque — afetam lances, passes e momentum. */
+  readonly perks?: readonly PerkId[]
+  /** Moral do craque (0-100) — desloca a nota inicial da partida. */
+  readonly morale?: number
   /** Comemoração escolhida no Perfil (índice em celeb_0..3). */
   readonly celebrationId?: number
   /** Aparência do craque (pele/cabelo). */
@@ -132,6 +138,8 @@ export const MatchScreen = ({
   opponent,
   competition = 'liga',
   attributes = DEFAULT_ATTRIBUTES,
+  perks = [],
+  morale = DEFAULT_MORALE,
   celebrationId = 0,
   appearance = DEFAULT_APPEARANCE,
   crestUrls = {},
@@ -175,10 +183,11 @@ export const MatchScreen = ({
     return lineupRating(squad.slice(0, 11), FORMATIONS['4-3-3'].slots)
   }, [opponent, opponentDivision, careerYear])
 
-  const config = useMemo(
-    () => matchConfigForRatings(DEFAULT_MATCH_CONFIG, teamRating, opponentRating),
-    [teamRating, opponentRating],
-  )
+  const config = useMemo(() => {
+    const byRatings = matchConfigForRatings(DEFAULT_MATCH_CONFIG, teamRating, opponentRating)
+    // moral entra em campo: nota inicial desloca até ±0.8
+    return { ...byRatings, baseRating: byRatings.baseRating + moraleRatingBonus(morale) }
+  }, [teamRating, opponentRating, morale])
   const [match, setMatch] = useState<MatchState>(() => startMatch(seed, config))
   const [mode, setMode] = useState<MatchMode>('live')
   const [clock, setClock] = useState(0)
@@ -285,7 +294,12 @@ export const MatchScreen = ({
         return
       }
       if (moment.kind === 'teamGoal' || moment.kind === 'opponentGoal') {
-        const roll = rollAutoGoal(moment.kind, tactic, tacticRngRef.current, momentumFor(displayRating(match.rating)))
+        const roll = rollAutoGoal(
+          moment.kind,
+          tactic,
+          tacticRngRef.current,
+          captainMomentum(momentumFor(displayRating(match.rating)), perks),
+        )
         tacticRngRef.current = roll.next
         const isOurs = moment.kind === 'teamGoal'
         if (roll.value) {
@@ -312,7 +326,7 @@ export const MatchScreen = ({
       const goalRoll = rollMicroGoal(
         tactic,
         tacticRngRef.current,
-        momentumFor(displayRating(match.rating)),
+        captainMomentum(momentumFor(displayRating(match.rating)), perks),
         ratingEdgeFor(teamRating, opponentRating),
       )
       tacticRngRef.current = goalRoll.next
@@ -486,6 +500,11 @@ export const MatchScreen = ({
           wallColor={opponent.colors.primary}
           defense={mode === 'defense' ? { skill: opponent.strength / 5, kitColor: opponent.colors.primary } : undefined}
           attrs={attributes}
+          perks={perks}
+          perkContext={{
+            clutch: match.score.team <= match.score.opponent,
+            tournament: competition === 'selecao',
+          }}
           celebrationId={celebrationId}
           appearance={appearance}
           keeperQuality={keeperQualityFor(competition, opponent.strength)}
@@ -603,6 +622,7 @@ export const MatchScreen = ({
           intro={narrationForMoment(currentMoment(match))}
           rng={passRngRef.current}
           passeLevel={attributes.passe}
+          perks={perks}
           onResolved={onPassResolved}
         />
       )}
@@ -612,8 +632,8 @@ export const MatchScreen = ({
           <div className="summary-content">
           <div className="summary-header">
             <h2>Fim de jogo</h2>
-            <button className="btn summary-continue" onClick={finishMatch}>Continuar ▸</button>
           </div>
+          <button className="btn summary-continue" onClick={finishMatch}>Continuar ▸</button>
 
           <div className="summary-scoreline">
             <span className="summary-side">

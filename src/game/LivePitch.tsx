@@ -637,14 +637,30 @@ export const LivePitch = ({
       ctx.strokeStyle = 'rgba(0,0,0,0.45)'
       ctx.lineWidth = 0.6
       ctx.stroke()
-      // nome
-      ctx.font = p.isUser ? 'bold 7.5px monospace' : '7px monospace'
-      ctx.textAlign = 'center'
-      const label = fieldName(p.name)
-      ctx.fillStyle = 'rgba(10,14,10,0.85)'
-      ctx.fillText(label, pos.x + 0.7, pos.y + 14.7)
-      ctx.fillStyle = p.isUser ? USER_COLOR : 'rgba(245,240,230,0.92)'
-      ctx.fillText(label, pos.x, pos.y + 14)
+    }
+
+    const LABEL_MIN_DX = 26
+    const LABEL_MIN_DY = 8
+
+    /** Nomes desenhados por último, empurrando pra baixo quem colidiria. */
+    const drawLabels = (): void => {
+      const placed: { x: number; y: number }[] = []
+      const entries = sim.players
+        .map((p) => ({ ...toPitch(p.pos), isUser: p.isUser, label: fieldName(p.name) }))
+        .sort((a, b) => a.y - b.y)
+      for (const entry of entries) {
+        let y = entry.y + 14
+        while (placed.some((q) => Math.abs(q.x - entry.x) < LABEL_MIN_DX && Math.abs(q.y - y) < LABEL_MIN_DY)) {
+          y += LABEL_MIN_DY
+        }
+        placed.push({ x: entry.x, y })
+        ctx.font = entry.isUser ? 'bold 7.5px monospace' : '7px monospace'
+        ctx.textAlign = 'center'
+        ctx.fillStyle = 'rgba(10,14,10,0.85)'
+        ctx.fillText(entry.label, entry.x + 0.7, y + 0.7)
+        ctx.fillStyle = entry.isUser ? USER_COLOR : 'rgba(245,240,230,0.92)'
+        ctx.fillText(entry.label, entry.x, y)
+      }
     }
 
     const drawBall = (): void => {
@@ -694,6 +710,7 @@ export const LivePitch = ({
       drawPitch()
       const t = ts / 1000
       for (const p of sim.players) drawPlayer(p, t)
+      drawLabels()
       drawBall()
       if (sim.phase === 'goalFlash') {
         ctx.fillStyle = `rgba(255,210,63,${0.12 + Math.sin(t * 20) * 0.08})`

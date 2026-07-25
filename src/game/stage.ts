@@ -6,6 +6,13 @@ import {
   type PlayerAttributes,
 } from '../engine/career/attributes'
 import {
+  applyPerksToDefense,
+  applyPerksToShot,
+  applyPerksToWall,
+  type PerkId,
+  type ShotPerkContext,
+} from '../engine/career/perks'
+import {
   DEFAULT_DEFENSE_CONFIG,
   generateOpponentShot,
   resolveDive,
@@ -82,6 +89,10 @@ export interface StageState {
   readonly ballStartY: number
   /** Atributos do craque — afinam chute, cobrança e defesa. */
   readonly attrs: PlayerAttributes
+  /** Perks de RPG adquiridos — camada extra sobre os atributos. */
+  readonly perks: readonly PerkId[]
+  /** Contexto do lance para perks situacionais (matador, craque de copa). */
+  readonly perkContext: ShotPerkContext
   /** Meio ciclo da régua deste palco (depende da habilidade). */
   readonly barSweep: number
   /** Qualidade do goleiro rival (treino < liga < copa). */
@@ -111,14 +122,20 @@ const ballXForShot = (shotIndex: number): number =>
 /** Goleiro do treino: bom, mas abaixo dos jogos oficiais. */
 export const TRAINING_KEEPER_QUALITY = 0.4
 
+const NO_PERK_CONTEXT: ShotPerkContext = { clutch: false, tournament: false }
+
 export const createStage = (
   seed: number,
   totalShots: number = TOTAL_SHOTS,
   hasWall = false,
   attrs: PlayerAttributes = DEFAULT_ATTRIBUTES,
   keeperQuality: number = TRAINING_KEEPER_QUALITY,
+  perks: readonly PerkId[] = [],
+  perkContext: ShotPerkContext = NO_PERK_CONTEXT,
 ): StageState => ({
   attrs,
+  perks,
+  perkContext,
   barSweep: barSweepFor(hasWall ? attrs.cobranca : attrs.finalizacao),
   keeperQuality,
   phase: 'intro',
@@ -206,8 +223,9 @@ export const createDefenseStage = (
   skill: number,
   attrs: PlayerAttributes = DEFAULT_ATTRIBUTES,
   totalShots = 1,
+  perks: readonly PerkId[] = [],
 ): StageState => ({
-  ...createStage(seed, totalShots, false, attrs),
+  ...createStage(seed, totalShots, false, attrs, TRAINING_KEEPER_QUALITY, perks),
   mode: 'defend',
   defenseSkill: skill,
 })
@@ -262,7 +280,11 @@ export const barTAt = (time: number, sweepSeconds: number = BAR_SWEEP_SECONDS): 
 }
 
 const armPlayerShot = (state: StageState, points: readonly Vec2[]): StageState => {
-  const shotConfig = shotTuning({ ...CFG, ballStartY: state.ballStartY }, state.attrs.finalizacao)
+  const shotConfig = applyPerksToShot(
+    shotTuning({ ...CFG, ballStartY: state.ballStartY }, state.attrs.finalizacao),
+    state.perks,
+    state.perkContext,
+  )
   const { value, next } = simulateShot(
     points,
     state.ballX,
@@ -277,7 +299,12 @@ const armPlayerShot = (state: StageState, points: readonly Vec2[]): StageState =
   if (state.wall) {
     const jumpRoll = nextFloat(next)
     const jumped = jumpRoll.value < WALL_JUMP_CHANCE
-    const blocked = resolveWall(value.flight, wallTuning(state.wall, state.attrs.cobranca), jumped) === 'blocked'
+    const blocked =
+      resolveWall(
+        value.flight,
+        applyPerksToWall(wallTuning(state.wall, state.attrs.cobranca), state.perks),
+        jumped,
+      ) === 'blocked'
     const sim: ShotSimulation = blocked
       ? {
           ...value,
@@ -327,7 +354,7 @@ const resolveDefense = (state: StageState): [StageState, StageEvent[]] => {
       state.diveX,
       state.diveStartT,
       center,
-      defenseTuning(DEFAULT_DEFENSE_CONFIG, state.attrs.defesa),
+      applyPerksToDefense(defenseTuning(DEFAULT_DEFENSE_CONFIG, state.attrs.defesa), state.perks),
       state.diveHigh,
     ) === 'saved'
   const finalX = flightX(sim.flight, 1)
