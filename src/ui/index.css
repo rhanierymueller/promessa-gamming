@@ -728,9 +728,14 @@ h1 {
   font-size: 16px;
 }
 
+/*
+ * Colunas que acompanham a quantidade de itens. Com 4 fixas, um card de CINCO
+ * números deixava o quinto sozinho na segunda linha — foi o que aconteceu ao
+ * acrescentar "gols sofridos". Com auto-fit as faixas vazias colapsam.
+ */
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
   gap: 12px 8px;
 }
 
@@ -1480,11 +1485,64 @@ h1 {
   color: #ffd23f;
 }
 
+/* ---------- treinamento ---------- */
+
+.training-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/*
+ * Cada modo vira um cartão com arte e descrição. Antes eram três botões de
+ * texto iguais: nada dizia o que cada treino fazia, e "Lance decisivo" não
+ * sugeria nem que era o jogo dos dados.
+ */
+.training-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.training-card:hover {
+  border-color: var(--accent);
+}
+
+.training-art {
+  display: block;
+  height: 76px;
+  background-size: cover;
+  background-position: center;
+  /* a arte é fundo, não protagonista: escurece para o texto ficar legível */
+  box-shadow: inset 0 -40px 40px -20px var(--card);
+  filter: saturate(0.85) brightness(0.75);
+}
+
+.training-name {
+  padding: 8px 10px 0;
+  font-size: 13.5px;
+}
+
+.training-hint {
+  padding: 2px 10px 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
 .training-row {
   display: grid;
-  /* três botões de nomes longos: em grade eles dividem a largura por igual e
-     o texto quebra, em vez de o último vazar para fora da tela no celular */
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* colunas que acompanham a QUANTIDADE de modos: fixar em três deixava o
+     quarto sozinho numa linha, e some de novo se um quinto for criado */
+  grid-template-columns: repeat(auto-fit, minmax(min(118px, 100%), 1fr));
   gap: 8px;
 }
 
@@ -2207,6 +2265,8 @@ h1 {
   padding: 3px 0;
 }
 
+/* craque de elite puxa o dourado da marca: 95 e 75 não podem ler igual */
+.ovr-elite { background: rgba(255, 210, 63, 0.18); color: var(--accent); }
 .ovr-high { background: rgba(122, 204, 110, 0.18); color: #7acc6e; }
 .ovr-mid { background: rgba(239, 228, 176, 0.14); color: #efe4b0; }
 .ovr-low { background: rgba(156, 147, 179, 0.14); color: var(--muted); }
@@ -2373,6 +2433,7 @@ h1 {
   border-radius: 999px;
 }
 
+.player-attr-fill.ovr-elite { background: var(--accent); }
 .player-attr-fill.ovr-high { background: #7acc6e; }
 .player-attr-fill.ovr-mid { background: #efe4b0; }
 .player-attr-fill.ovr-low { background: #9c93b3; }
@@ -2518,16 +2579,32 @@ h1 {
   border-color: var(--accent);
 }
 
-.squad-row-swapping {
-  outline: 2px dashed var(--accent);
+/*
+ * Troca aberta: NENHUMA linha é marcada. Antes o titular que saía e os outros
+ * dezessete jogadores ganhavam contorno tracejado — três papéis com o mesmo
+ * signo, e a lista virava um mar de amarelo. Agora o único sinal é este ícone
+ * girando: a troca está acontecendo aqui.
+ */
+.squad-swap-btn-active {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
-.squad-row-target {
-  outline: 1px dashed rgba(255, 210, 63, 0.5);
+/* gira o ícone, não o botão: a moldura fica parada no lugar */
+.squad-swap-spin {
+  animation: squad-swap-spin 1s linear infinite;
 }
 
-.squad-row-target:hover {
-  background: rgba(255, 210, 63, 0.12);
+@keyframes squad-swap-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .squad-swap-spin {
+    animation: none;
+  }
 }
 
 /* ---------- prancheta tática ---------- */
@@ -3369,33 +3446,137 @@ h1 {
   gap: 2px;
 }
 
+/* retrato | identidade em duas alturas | nota | preço | ação */
 .market-row {
   font-family: var(--mono);
   display: grid;
-  grid-template-columns: 34px 22px 1fr 64px 132px 92px auto;
+  grid-template-columns: 44px minmax(0, 1fr) 46px minmax(92px, auto) auto;
   align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border-radius: 6px;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   font-size: 12.5px;
   cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
 }
 
 .market-row:hover {
   background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 210, 63, 0.22);
+}
+
+.market-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* miniatura do rosto: mesma moldura da carta, em escala de lista */
+.face-thumb {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: linear-gradient(160deg, #241b3c, #171126);
+  box-shadow: inset 0 0 0 1px rgba(255, 210, 63, 0.08);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* retrato cobre as iniciais quando (e se) chega */
+.face-thumb-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.face-thumb-initials {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+.market-id {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 
 .market-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
+  color: var(--text);
 }
 
-.market-stars {
+/* posição, bandeira, idade e estrelas descem para a segunda altura: libera a
+   largura que antes era coluna fixa e é o que faz a linha caber no celular */
+.market-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.market-meta-age {
+  white-space: nowrap;
+}
+
+.market-meta-stars {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  justify-content: flex-end;
+}
+
+/* nota do jogador: bloco sólido, é o que o olho procura ao varrer a lista */
+.market-ovr {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-align: center;
+  padding: 7px 0;
+  border-radius: 7px;
+  border: 1px solid transparent;
+}
+
+.market-ovr.ovr-elite {
+  background: rgba(255, 210, 63, 0.16);
+  border-color: rgba(255, 210, 63, 0.5);
+  color: var(--accent);
+}
+
+.market-ovr.ovr-high {
+  background: rgba(122, 204, 110, 0.16);
+  border-color: rgba(122, 204, 110, 0.42);
+  color: #7acc6e;
+}
+
+.market-ovr.ovr-mid {
+  background: rgba(239, 228, 176, 0.12);
+  border-color: rgba(239, 228, 176, 0.32);
+  color: #efe4b0;
+}
+
+/* sem borda: a escada de destaque desce junto com a nota, então o reserva
+   não disputa atenção com o craque na mesma lista */
+.market-ovr.ovr-low {
+  background: rgba(156, 147, 179, 0.1);
+  border-color: transparent;
+  color: var(--muted);
 }
 
 .market-price {
@@ -3403,6 +3584,13 @@ h1 {
   font-weight: 700;
   color: var(--accent);
   white-space: nowrap;
+}
+
+/* fora da verba: o preço apaga junto com o botão, em vez de seguir dourado
+   convidativo para algo que não dá para comprar */
+.market-price-over {
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .market-buy {
@@ -3609,13 +3797,26 @@ h1 {
   white-space: nowrap;
 }
 
+/* tablet: a linha ainda é de uma altura só, mas sem folga para as estrelas */
 @media (max-width: 700px) {
   .market-row {
-    grid-template-columns: 30px 20px 1fr 64px auto;
+    grid-template-columns: 40px minmax(0, 1fr) 42px minmax(78px, auto) auto;
+    gap: 9px;
+    padding: 8px 6px;
   }
-  .market-row .market-stars,
-  .market-row .squad-age {
+
+  .face-thumb {
+    width: 40px;
+    height: 40px;
+  }
+
+  .market-meta-stars {
     display: none;
+  }
+
+  .market-ovr {
+    font-size: 14px;
+    padding: 6px 0;
   }
 }
 
@@ -4099,40 +4300,57 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  /* celular: a linha vira duas alturas com o retrato atravessando as duas.
+     [retrato] [nome + meta ] [nota]
+     [       ] [preço       ] [contratar] */
   .market-row {
-    grid-template-columns: 30px 20px minmax(0, 1fr) auto;
-    gap: 7px;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    column-gap: 10px;
+    row-gap: 7px;
     padding: 10px 4px;
+    border-radius: 0;
+    border: none;
     border-bottom: 1px solid rgba(50, 40, 80, 0.65);
   }
 
-  .market-row > .squad-pos {
+  .market-row > .face-thumb {
     grid-column: 1;
+    grid-row: 1 / 3;
+    align-self: center;
+    width: 42px;
+    height: 42px;
   }
 
-  .market-row > svg {
+  .market-row > .market-id {
     grid-column: 2;
+    grid-row: 1;
   }
 
-  .market-row > .market-name {
+  .market-row > .market-ovr,
+  .market-row > .market-ovr-empty {
     grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    min-width: 40px;
   }
 
   .market-row > .market-price {
-    grid-column: 4;
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
     font-size: 11.5px;
   }
 
-  .market-row > .market-buy {
-    grid-column: 3 / 5;
-    width: 100%;
-    margin-top: 2px;
+  .market-row > .market-buy,
+  .market-row-history > .signing-tag {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: end;
+    margin-left: 0;
   }
 
-  .market-row-history > .signing-tag {
-    grid-column: 3 / 5;
-    justify-self: start;
-    margin-left: 0;
+  .market-meta-stars {
+    display: inline-flex;
   }
 
   .market-pagination {
@@ -4531,9 +4749,16 @@ h1 {
 
 /* ---------- tela de partidas disputadas ---------- */
 
+/*
+ * Colunas que se ajustam à quantidade. Herdava as 4 fixas do perfil e, com
+ * CINCO números, o quinto caía sozinho na segunda linha deixando um vazio
+ * enorme ao lado. Com auto-fit as faixas vazias colapsam e os cinco se
+ * espalham por igual — no celular quebram sem buraco.
+ */
 .history-summary {
   border-top: none;
   padding-top: 4px;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
 }
 
 .history-list {
@@ -4556,6 +4781,19 @@ h1 {
 
 .history-row:nth-child(odd) {
   background: rgba(255, 255, 255, 0.025);
+}
+
+/*
+ * A cor do resultado atravessa a linha inteira, não fica só no selo V/E/D.
+ * Numa lista de dez jogos, varrer com o olho fica imediato — é a informação
+ * que se procura primeiro ao abrir esta tela.
+ */
+.history-row-win { box-shadow: inset 3px 0 0 #7ee08a; }
+.history-row-draw { box-shadow: inset 3px 0 0 var(--muted); }
+.history-row-loss { box-shadow: inset 3px 0 0 #ff8a8a; }
+
+.history-row:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .history-crest {
@@ -5060,10 +5298,16 @@ h1 {
 }
 
 /* oito grupos: em grade no web, empilhados no celular */
+/* tabelas completas, como as das séries: precisam de largura para as colunas */
 .national-groups {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
   gap: 12px;
+}
+
+/* barra à esquerda em quem passa de fase */
+.table-through {
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .national-row {
@@ -5227,4 +5471,559 @@ h1 {
 /* o título da seção já diz o assunto: o rótulo do campo não precisa gritar */
 .create-section .create-label {
   color: var(--muted);
+}
+
+/* ---------- força por setor ---------- */
+
+.sector-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.sector-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sector-team {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.sector-title {
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sector-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 10px;
+}
+
+.sector-value {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sector-value-opp {
+  text-align: right;
+}
+
+/* quem leva o setor aparece em destaque — é a leitura do confronto */
+.sector-value-up {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.sector-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.sector-label {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sector-bar {
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(245, 240, 230, 0.22);
+  overflow: hidden;
+}
+
+.sector-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 320ms ease;
+}
+
+/* setores da escalação: mudam a cada troca de titular */
+.squad-sectors {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.squad-sector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.squad-sector-label {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.squad-sector-value {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+/* ---------- termos e privacidade ---------- */
+
+.legal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 16px;
+  background: rgba(10, 8, 16, 0.92);
+  overflow-y: auto;
+}
+
+.legal-box {
+  width: min(100%, 620px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.legal-box h2 { margin: 0; font-size: 18px; color: var(--accent); }
+.legal-box h3 { margin: 8px 0 0; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.legal-box p { margin: 0; }
+
+.legal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.legal-table th,
+.legal-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.legal-table th {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.legal-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+
+/* consentimento nasce desmarcado: aceitar é ato deliberado */
+.create-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.create-consent input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.legal-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+
+.legal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* tela de erro: existe para o pior momento, então precisa ser calma e clara */
+.crash-box {
+  width: min(100%, 520px);
+  margin: 40px auto;
+  gap: 14px;
+  text-align: center;
+}
+
+.crash-box h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.crash-box .legal-actions {
+  justify-content: center;
+}
+
+.crash-detail {
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.crash-note {
+  font-size: 11.5px;
+}
+
+/* ---------- conta e dados (Perfil) ---------- */
+
+.account-card {
+  gap: 14px;
+}
+
+/*
+ * Botões em grade, todos da mesma largura. O mínimo é largo o bastante para
+ * "Termos e privacidade" e "Recomeçar carreira" caberem numa linha — com a
+ * coluna estreita eles quebravam em duas e ficavam mais altos que os vizinhos.
+ */
+.account-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(232px, 100%), 1fr));
+  align-items: stretch;
+  gap: 8px;
+}
+
+.account-actions .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+/*
+ * Zona separada por uma linha: apagar carreira e excluir conta não podem
+ * dividir o mesmo bloco visual com "baixar meus dados". A moldura avisa antes
+ * do clique, não depois.
+ */
+.danger-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid rgba(255, 138, 138, 0.28);
+  border-radius: 10px;
+  background: rgba(255, 138, 138, 0.05);
+}
+
+.danger-zone-title {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #ff8a8a;
+}
+
+.danger-zone-note {
+  margin: 0;
+  font-size: 12px;
+}
+
+/* ---------- abertura da partida ---------- */
+
+.match-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 24px;
+  border: none;
+  cursor: pointer;
+  background:
+    radial-gradient(90% 60% at 50% 45%, rgba(255, 210, 63, 0.1), transparent 70%),
+    #0d0a16;
+  animation: intro-in 240ms ease-out;
+}
+
+@keyframes intro-in {
+  from { opacity: 0 }
+  to { opacity: 1 }
+}
+
+/*
+ * Saída em duas etapas: primeiro o conteúdo some e o fundo fecha em PRETO,
+ * depois o preto dissolve e o campo aparece. Cortar direto dá um solavanco.
+ */
+.match-intro-dark {
+  background: #000;
+  transition: background 420ms ease-in;
+}
+
+.match-intro-dark > * {
+  opacity: 0;
+  transition: opacity 300ms ease-in;
+}
+
+.match-intro-reveal {
+  background: #000;
+  opacity: 0;
+  transition: opacity 420ms ease-out;
+  pointer-events: none;
+}
+
+.match-intro-reveal > * {
+  opacity: 0;
+}
+
+.match-intro-sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.match-intro-teams {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(16px, 6vw, 48px);
+}
+
+.match-intro-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: clamp(96px, 30vw, 180px);
+  text-align: center;
+  font-size: 13px;
+}
+
+/* os escudos entram pelas laterais e se encaram no meio */
+.match-intro-home {
+  animation: intro-from-left 620ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+.match-intro-away {
+  animation: intro-from-right 620ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+@keyframes intro-from-left {
+  from { opacity: 0; transform: translateX(-60px) }
+  to { opacity: 1; transform: translateX(0) }
+}
+
+@keyframes intro-from-right {
+  from { opacity: 0; transform: translateX(60px) }
+  to { opacity: 1; transform: translateX(0) }
+}
+
+.match-intro-vs {
+  font-family: var(--mono);
+  font-size: clamp(28px, 9vw, 44px);
+  font-weight: 700;
+  color: var(--accent);
+  animation: intro-clash 500ms 420ms cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+
+/* o "×" bate quando os escudos se encontram */
+@keyframes intro-clash {
+  from { opacity: 0; transform: scale(2.4) }
+  to { opacity: 1; transform: scale(1) }
+}
+
+.match-intro-bar {
+  width: min(70%, 320px);
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(245, 240, 230, 0.16);
+  overflow: hidden;
+}
+
+.match-intro-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: intro-load 5000ms linear both;
+}
+
+@keyframes intro-load {
+  from { width: 0 }
+  to { width: 100% }
+}
+
+.match-intro-skip {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+/* quem prefere menos movimento vê o confronto sem a entrada */
+@media (prefers-reduced-motion: reduce) {
+  .match-intro-home,
+  .match-intro-away,
+  .match-intro-vs {
+    animation: none;
+  }
+}
+
+/* ---------- cerimônia da convocação ---------- */
+
+.callup-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  cursor: pointer;
+  text-align: center;
+  background:
+    radial-gradient(80% 55% at 50% 35%, rgba(255, 210, 63, 0.14), transparent 70%),
+    #0d0a16;
+  animation: intro-in 240ms ease-out;
+}
+
+/* a bandeira sobe e assenta — é ela que diz por quem você vai jogar */
+.callup-flag {
+  animation: callup-flag-in 700ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+@keyframes callup-flag-in {
+  from { opacity: 0; transform: translateY(40px) scale(0.7) }
+  to { opacity: 1; transform: translateY(0) scale(1) }
+}
+
+/* a palavra CARIMBA, como um chamado oficial */
+.callup-word {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: clamp(26px, 9vw, 46px);
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  color: var(--accent);
+  animation: callup-stamp 460ms 560ms cubic-bezier(0.3, 1.5, 0.5, 1) both;
+}
+
+@keyframes callup-stamp {
+  from { opacity: 0; transform: scale(2.2) }
+  to { opacity: 1; transform: scale(1) }
+}
+
+.callup-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: callup-rise 500ms 900ms ease-out both;
+}
+
+.callup-face {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  image-rendering: pixelated;
+}
+
+.callup-name {
+  display: block;
+  font-size: 19px;
+}
+
+.callup-nation {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.callup-comp {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  animation: callup-rise 500ms 1150ms ease-out both;
+}
+
+@keyframes callup-rise {
+  from { opacity: 0; transform: translateY(14px) }
+  to { opacity: 1; transform: translateY(0) }
+}
+
+/* as frases do anúncio entram uma a uma, para os 15s não serem tela parada */
+.callup-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(100%, 460px);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.callup-line {
+  margin: 0;
+  animation: callup-rise 600ms ease-out both;
+}
+
+.callup-line-1 { animation-delay: 2600ms }
+.callup-line-2 { animation-delay: 5200ms }
+.callup-line-3 { animation-delay: 8200ms; color: var(--text) }
+
+@media (prefers-reduced-motion: reduce) {
+  .callup-flag,
+  .callup-word,
+  .callup-who,
+  .callup-comp,
+  .callup-line {
+    animation: none;
+  }
 }

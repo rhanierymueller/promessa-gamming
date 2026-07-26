@@ -23,9 +23,16 @@ import { squadWithSignings, type Signing } from '../engine/market/market'
 import { rivalSquadFor } from '../engine/market/aiTransfers'
 import { lineupRating, squadPlayersFor, userAsSquadPlayer, USER_SQUAD_INDEX } from '../engine/squad/players'
 import { DiceDuelStage } from './DiceDuelStage'
+import { MatchIntro } from './MatchIntro'
 import { createRng, type RngState } from '../engine/rng'
 import { DEFAULT_MATCH_CONFIG } from '../engine/match/config'
-import { matchConfigForRatings, ratingEdgeFor } from '../engine/match/difficulty'
+import {
+  autoProbsForSectors,
+  matchConfigForSectors,
+  ratingEdgeFor,
+} from '../engine/match/difficulty'
+import { bestLineup } from '../engine/squad/bestLineup'
+import { sectorRatings } from '../engine/squad/sectors'
 import {
   advance,
   advanceAuto,
@@ -42,7 +49,7 @@ import {
   startMatch,
 } from '../engine/match/match'
 import { pickBestPlayer } from '../engine/match/facts'
-import { displayRating } from '../engine/match/rating'
+import { capRatingByResult, displayRating } from '../engine/match/rating'
 import { DEFAULT_MORALE, moraleRatingBonus } from '../engine/career/events'
 import { captainMomentum, type PerkId } from '../engine/career/perks'
 import { momentumFor, rollAutoGoal, rollMicroGoal, TACTIC_LABELS, type Tactic } from '../engine/match/tactics'
@@ -53,6 +60,16 @@ import { startResultsMusic, stopResultsMusic } from './music'
 import { DEFAULT_APPEARANCE, type Competition, type MatchRecord, type PlayerAppearance } from '../state/save'
 import { ClubCrest } from '../ui/ClubCrest'
 import { createLiveStats, LivePitch, type PitchDirective } from './LivePitch'
+import {
+  EMPTY_REVEAL,
+  queueGoal,
+  revealAll,
+  revealUpTo,
+  visibleScore,
+  type GoalRevealState,
+  type Reveal,
+} from './goalReveal'
+import type { LogLine } from './logLine'
 import { PassChallenge } from './PassChallenge'
 import { ShotStage, type RoundSummary } from './ShotStage'
 
@@ -62,6 +79,12 @@ const TICK_MS = 100
 const MICRO_EVERY_MINUTES = 2.4
 const SPEEDS = [1, 2, 4] as const
 const FULLTIME_MINUTE = 90
+/**
+ * Teto de espera pela coreografia do gol. Na velocidade 1x o pior caso (bola
+ * troca de lado, sobe o campo e finaliza) fica em torno de 6s; acima disso
+ * assumimos que a jogada travou e mostramos o gol assim mesmo.
+ */
+const GOAL_REVEAL_FAILSAFE_MS = 9000
 
 /** Simulação automática: quem treinou converte mais (atributos 1-10). */
 const AUTO_SHOT_BASE = 0.25
@@ -77,13 +100,7 @@ const autoProbsFor = (attrs: PlayerAttributes): AutoPlayProbs => ({
   defenseSave: AUTO_SAVE_BASE + attrs.defesa * AUTO_SAVE_PER_LEVEL,
 })
 
-type MatchMode = 'live' | 'handoff' | 'shot' | 'pass' | 'defense' | 'dice' | 'summary'
-
-interface LogLine {
-  readonly minute: number
-  readonly text: string
-  readonly tone: 'normal' | 'good' | 'bad' | 'you'
-}
+type MatchMode = 'intro' | 'live' | 'handoff' | 'shot' | 'pass' | 'defense' | 'dice' | 'summary'
 
 interface MatchScreenProps {
   readonly seed: number
@@ -238,16 +255,42 @@ export const MatchScreen = ({
   )
   const opponentRating = useMemo(() => {
     const squad = rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender)
-    return lineupRating(squad.slice(0, 11), FORMATIONS['4-3-3'].slots)
-  }, [opponent, opponentDivision, careerYear])
+    const lineup = bestLineup(squad, FORMATIONS['4-3-3'])
+    return lineupRating(lineup.map((index) => squad[index]), FORMATIONS['4-3-3'].slots)
+  }, [opponent, opponentDivision, careerYear, appearance.gender])
+
+  /* setores do SEU time e do rival: é o confronto entre eles que decide o jogo */
+  const mySectors = useMemo(
+    () =>
+      sectorRatings(
+        effectiveLineup.map((squadIndex) => teamPlayers[squadIndex]),
+        FORMATIONS[formation],
+      ),
+    [effectiveLineup, teamPlayers, formation],
+  )
+  const theirSectors = useMemo(() => {
+    const squad = rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender)
+    // o rival entra com o melhor time dele, não com os 11 primeiros da lista
+    return sectorRatings(
+      bestLineup(squad, FORMATIONS['4-3-3']).map((index) => squad[index]),
+      FORMATIONS['4-3-3'],
+    )
+  }, [opponent, opponentDivision, careerYear, appearance.gender])
 
   const config = useMemo(() => {
-    const byRatings = matchConfigForRatings(DEFAULT_MATCH_CONFIG, teamRating, opponentRating)
+    const byRatings = matchConfigForSectors(DEFAULT_MATCH_CONFIG, mySectors, theirSectors)
     // moral entra em campo: nota inicial desloca até ±0.8
     return { ...byRatings, baseRating: byRatings.baseRating + moraleRatingBonus(morale) }
-  }, [teamRating, opponentRating, morale])
+  }, [mySectors, theirSectors, morale])
   const [match, setMatch] = useState<MatchState>(() => startMatch(seed, config))
-  const [mode, setMode] = useState<MatchMode>('live')
+  /* a nota que vale é a limitada pelo resultado: empate não dá 10 */
+  const finalRating = capRatingByResult(
+    displayRating(match.rating),
+    match.score.team,
+    match.score.opponent,
+  )
+
+  const [mode, setMode] = useState<MatchMode>('intro')
   const [clock, setClock] = useState(0)
   const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1)
   const [tactic, setTactic] = useState<Tactic>('equilibrado')
@@ -262,10 +305,11 @@ export const MatchScreen = ({
     [effectiveLineup, teamPlayers],
   )
   const userIndex = Math.max(0, effectiveLineup.indexOf(USER_SQUAD_INDEX))
-  const opponentSquad = useMemo(
-    () => rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender).slice(0, 11).map((player) => player.name),
-    [opponent, opponentDivision, careerYear],
-  )
+  const opponentSquad = useMemo(() => {
+    // os nomes em campo são os da MELHOR escalação do rival, não os 11 primeiros
+    const squad = rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender)
+    return bestLineup(squad, FORMATIONS['4-3-3']).map((index) => squad[index].name)
+  }, [opponent, opponentDivision, careerYear, appearance.gender])
 
   // contadores VIVOS: tudo que aparece no resumo aconteceu no campo
   const liveStatsRef = useRef(createLiveStats())
@@ -281,7 +325,7 @@ export const MatchScreen = ({
         seed,
         teamGoals: match.score.team,
         opponentGoals: match.score.opponent,
-        playerRating: displayRating(match.rating),
+        playerRating: finalRating,
         playerName,
         teamSquad,
         opponentSquad,
@@ -296,8 +340,24 @@ export const MatchScreen = ({
 
   const pushLine = (line: LogLine): void => setLog((current) => [...current, line])
 
-  const choreographGoal = (side: 'team' | 'opponent'): void => {
-    setDirective({ id: directiveIdRef.current++, kind: 'goal', side })
+  /**
+   * Gols que a engine já somou e o gramado ainda não mostrou. A engine não pode
+   * esperar (o cursor do plano e o fim de jogo dependem dela), mas o placar na
+   * tela pode — e deve, senão o número muda antes de a bola entrar.
+   */
+  const [reveal, setReveal] = useState<GoalRevealState>(EMPTY_REVEAL)
+
+  const applyReveal = (next: Reveal): void => {
+    if (next.lines.length === 0) return
+    setReveal(next.state)
+    setLog((current) => [...current, ...next.lines])
+  }
+
+  /** Manda o campo levar a bola até a rede; o placar e a narração esperam a coreografia. */
+  const choreographGoal = (side: 'team' | 'opponent', line: LogLine): void => {
+    const directiveId = directiveIdRef.current++
+    setDirective({ id: directiveId, kind: 'goal', side })
+    setReveal((current) => queueGoal(current, { directiveId, side, line }))
   }
 
   const pendingMomentRef = useRef<ReturnType<typeof currentMoment> | null>(null)
@@ -313,6 +373,21 @@ export const MatchScreen = ({
     else if (moment.kind === 'opponentFreeKick') setMode('defense')
     else if (moment.kind === 'diceDuel') setMode('dice')
     else setMode('shot')
+  }
+
+  /**
+   * O campo cumpriu uma ordem. Entrega: abre o mini-game. Gol: a bola acabou de
+   * entrar, então agora o placar sobe e a narração entra.
+   */
+  const onDirectiveComplete = (id: number): void => {
+    if (pendingMomentRef.current) {
+      openPendingMoment()
+      return
+    }
+    applyReveal(revealUpTo(reveal, id))
+    // limpa a ordem cumprida — sem isso o campo repete a coreografia se remontar.
+    // Só a própria ordem sai: uma mais nova emitida no mesmo frame fica de pé.
+    setDirective((current) => (current?.id === id ? null : current))
   }
 
   useEffect(() => {
@@ -339,6 +414,22 @@ export const MatchScreen = ({
     // openPendingMoment é estável o suficiente para o fail-safe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
+
+  // gol pendente NUNCA some: se a coreografia travar, o placar sobe assim mesmo
+  useEffect(() => {
+    if (reveal.pending.length === 0) return
+    const failSafe = setTimeout(() => applyReveal(revealAll(reveal)), GOAL_REVEAL_FAILSAFE_MS)
+    return () => clearTimeout(failSafe)
+    // applyReveal só depende do estado já capturado em `reveal`
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reveal])
+
+  // saiu do campo (lance, dado, fim de jogo): a coreografia foi abortada, revela tudo
+  useEffect(() => {
+    if (mode === 'live' || reveal.pending.length === 0) return
+    applyReveal(revealAll(reveal))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, reveal])
 
   // o relógio dirige a partida: momentos do plano disparam, lances corridos preenchem
   useEffect(() => {
@@ -372,8 +463,12 @@ export const MatchScreen = ({
         tacticRngRef.current = roll.next
         const isOurs = moment.kind === 'teamGoal'
         if (roll.value) {
-          pushLine({ minute: moment.minute, text: narrationForMoment(moment), tone: isOurs ? 'good' : 'bad' })
-          choreographGoal(isOurs ? 'team' : 'opponent')
+          // a engine avança agora (o cursor não pode esperar), a TELA espera a bola entrar
+          choreographGoal(isOurs ? 'team' : 'opponent', {
+            minute: moment.minute,
+            text: narrationForMoment(moment),
+            tone: isOurs ? 'good' : 'bad',
+          })
         } else {
           pushLine({
             minute: moment.minute,
@@ -401,12 +496,11 @@ export const MatchScreen = ({
       tacticRngRef.current = goalRoll.next
       if (goalRoll.value) {
         const side = goalRoll.value
-        pushLine({
+        choreographGoal(side, {
           minute: Math.floor(clock),
           text: side === 'team' ? TACTIC_LINES.extraTeamGoal : TACTIC_LINES.extraOpponentGoal,
           tone: side === 'team' ? 'good' : 'bad',
         })
-        choreographGoal(side)
         setMatch(applyExtraGoal(match, side))
       }
     }
@@ -450,7 +544,9 @@ export const MatchScreen = ({
   const simulateRest = (): void => {
     setSimConfirmOpen(false)
     if (mode !== 'live') return
-    const result = simulateToEnd(match, config, autoProbsFor(attributes), tacticRngRef.current)
+    // a força dos elencos pesa: simular contra time melhor tem que ser difícil
+    const probs = autoProbsForSectors(autoProbsFor(attributes), mySectors, theirSectors)
+    const result = simulateToEnd(match, config, probs, tacticRngRef.current)
     tacticRngRef.current = result.next
     const stats = liveStatsRef.current
     for (const event of result.value.events) {
@@ -462,11 +558,14 @@ export const MatchScreen = ({
         stats.oppOnTarget += 1
       }
     }
+    // gol coreografado em andamento entra no log ANTES do resumo da simulação
     setLog((current) => [
       ...current,
+      ...revealAll(reveal).lines,
       { minute: Math.floor(clock), text: SIM_LINES.start, tone: 'normal' },
       ...result.value.events.map(simLineFor),
     ])
+    setReveal(EMPTY_REVEAL)
     setDirective(null)
     setMatch(result.value.state)
     setClock(FULLTIME_MINUTE + 1)
@@ -568,7 +667,7 @@ export const MatchScreen = ({
       opponentId: opponent.id,
       teamGoals: match.score.team,
       opponentGoals: match.score.opponent,
-      rating: displayRating(match.rating),
+      rating: finalRating,
       playerGoals: match.stats.goals,
       playedAt: Date.now(),
       competition,
@@ -576,6 +675,8 @@ export const MatchScreen = ({
   }
 
   const displayMinute = Math.min(90, Math.floor(clock))
+  // o placar do cabeçalho segue o GRAMADO: gol pendente ainda não conta na tela
+  const shownScore = visibleScore(match.score, reveal)
   // No desktop, campo/lance à esquerda e comando (placar, stats, narração) à direita.
   // lance decisivo: o mini-game TOMA a tela no lugar do campo ao vivo
   /** O que valeu no fim: nas copas quem decide é a disputa de pênaltis. */
@@ -595,13 +696,23 @@ export const MatchScreen = ({
           <ClubCrest club={club} customUrl={crestUrls[club.id]} size={20} />
           {club.abbr}
         </span>
-        <span className="match-score">{match.score.team} × {match.score.opponent}</span>
+        <span className="match-score">{shownScore.team} × {shownScore.opponent}</span>
         <span className="match-team">
           {opponent.abbr}
           <ClubCrest club={opponent} customUrl={crestUrls[opponent.id]} size={20} />
         </span>
         <span className="match-minute">{displayMinute}&prime;</span>
       </div>
+
+      {mode === 'intro' && (
+        <MatchIntro
+          club={club}
+          opponent={opponent}
+          crestUrls={crestUrls}
+          subtitle={competition === 'selecao' ? 'Jogo da seleção' : 'Dia de jogo'}
+          onDone={() => setMode('live')}
+        />
+      )}
 
       {mode === 'dice' ? (
         <div className="dice-lance">
@@ -655,7 +766,7 @@ export const MatchScreen = ({
             opponentSquad={opponentSquad}
             userName={playerName}
             directive={directive}
-            onDirectiveComplete={openPendingMoment}
+            onDirectiveComplete={onDirectiveComplete}
           />
 
           <div className="live-panel">
@@ -793,10 +904,10 @@ export const MatchScreen = ({
 
 
           <div className="match-rating">
-            <span className="match-rating-value">{displayRating(match.rating).toFixed(1)}</span>
+            <span className="match-rating-value">{finalRating.toFixed(1)}</span>
             <span className="match-rating-label">sua nota</span>
           </div>
-          <p className="match-verdict">“{ratingVerdict(match.rating)}”</p>
+          <p className="match-verdict">“{ratingVerdict(finalRating)}”</p>
 
           <div className="facts-table">
             <div className="facts-row facts-head">

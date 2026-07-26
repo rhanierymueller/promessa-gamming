@@ -23,6 +23,8 @@ import {
 } from '../../state/save'
 import { NationFlag } from '../NationFlag'
 import { PlayerCardModal } from '../PlayerCard'
+import { usePlayerPortrait } from '../usePlayerPortrait'
+import { tournamentScorers } from '../../engine/tournament/tournamentScorers'
 import { SquadBoard } from '../SquadBoard'
 
 /**
@@ -38,6 +40,7 @@ interface NationalTabProps {
 type View = 'chave' | 'elenco'
 
 export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
+  const userPortrait = usePlayerPortrait(save.appearance)
   const [view, setView] = useState<View>('chave')
   const [selected, setSelected] = useState<SquadPlayer | null>(null)
 
@@ -78,6 +81,21 @@ export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
     )
   }
 
+  /* gols do torneio: os seus vêm do histórico, o resto é repartido */
+  const artilharia = useMemo(
+    () =>
+      tournamentScorers({
+        tournament,
+        careerYear: save.careerYear,
+        playerName: save.playerName,
+        userGoals: save.history
+          .filter((record) => record.competition === 'selecao')
+          .reduce((sum, record) => sum + record.playerGoals, 0),
+        gender: save.appearance.gender,
+      }),
+    [tournament, save],
+  )
+
   const activeKnockout = KNOCKOUT_ORDER.filter((stage) =>
     tournament.results.some((result) => result.stage === stage),
   )
@@ -110,29 +128,75 @@ export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
         <>
           <div className="national-groups">
             {tournament.groups.map((group, groupIndex) => (
-              <div className="card" key={groupLetter(groupIndex)}>
+              <div className="card card-wide" key={groupLetter(groupIndex)}>
                 <span className="card-label">
                   Grupo {groupLetter(groupIndex)}
                   {groupIndex === 0 ? ' · o seu' : ''}
                 </span>
-                {groupStandings(tournament, group).map((standing, position) => {
-                  const team = nationById(standing.clubId)
-                  if (!team) return null
+                <div className="league-table" role="table" aria-label={`Grupo ${groupLetter(groupIndex)}`}>
+                  <div className="table-row table-head" role="row">
+                    <span className="table-pos">#</span>
+                    <span className="table-club">Seleção</span>
+                    <span className="table-form table-form-head" />
+                    <span className="table-num">P</span>
+                    <span className="table-num">J</span>
+                    <span className="table-num">GP</span>
+                    <span className="table-num">GC</span>
+                    <span className="table-num">SG</span>
+                  </div>
+                  {groupStandings(tournament, group).map((row, position) => {
+                    const team = nationById(row.clubId)
+                    if (!team) return null
+                    return (
+                      <div
+                        key={row.clubId}
+                        className={`table-row${row.clubId === nation.id ? ' table-player' : ''}${position < 2 ? ' table-through' : ''}`}
+                        role="row"
+                      >
+                        <span className="table-pos">{position + 1}</span>
+                        <span className="table-club">
+                          <NationFlag nationId={team.id} size={16} title={team.name} />
+                          <span className="table-club-name">{team.name}</span>
+                        </span>
+                        <span className="table-form" aria-hidden="true" />
+                        <span className="table-num table-points">{row.points}</span>
+                        <span className="table-num">{row.played}</span>
+                        <span className="table-num">{row.goalsFor}</span>
+                        <span className="table-num">{row.goalsAgainst}</span>
+                        <span className="table-num">{row.goalsFor - row.goalsAgainst}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="muted table-note">Os 2 primeiros avançam.</p>
+              </div>
+            ))}
+          </div>
+
+          {artilharia.length > 0 && (
+            <div className="card card-wide">
+              <span className="card-label">Artilharia da {TOURNAMENT_NAMES[tournament.kind]}</span>
+              <div className="scorer-list">
+                {artilharia.map((row, index) => {
+                  const team = nationById(row.clubId)
                   return (
                     <div
-                      key={standing.clubId}
-                      className={`national-row${standing.clubId === nation.id ? ' national-row-mine' : ''}${position < 2 ? ' national-row-through' : ''}`}
+                      className={`scorer-row${row.isUser ? ' scorer-row-user' : ''}`}
+                      key={row.playerId + row.clubId}
                     >
-                      <span className="national-pos">{position + 1}</span>
-                      <NationFlag nationId={team.id} size={14} title={team.name} />
-                      <span className="national-team">{team.name}</span>
-                      <span className="national-pts">{standing.points}</span>
+                      <span className="scorer-pos">{index + 1}</span>
+                      {team && <NationFlag nationId={team.id} size={16} title={team.name} />}
+                      <span className="scorer-name">
+                        {row.name}{row.isUser ? ' — você' : ''}
+                        <span className="scorer-club">{team?.name ?? ''}</span>
+                      </span>
+                      <strong className="scorer-goals">{row.goals}</strong>
                     </div>
                   )
                 })}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
 
           {activeKnockout.map((stage: KnockoutStage) => (
             <div className="card" key={stage}>
@@ -185,7 +249,8 @@ export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
               player={selected}
               clubName={nation.name}
               isUser={selected.id === USER_PLAYER_ID}
-              userFaceUrl={null}
+              /* o seu craque tem retrato: é o mesmo do Perfil */
+              userFaceUrl={selected.id === USER_PLAYER_ID ? userPortrait : null}
               renameState={null}
               onRename={() => {}}
               onClose={() => setSelected(null)}

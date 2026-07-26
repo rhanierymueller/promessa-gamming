@@ -24,6 +24,8 @@ import {
   type PlayerSave,
   type PlayerGender,
 } from '../state/save'
+import { recordConsent } from '../state/consent'
+import { Legal } from './Legal'
 import { NationFlag } from './NationFlag'
 
 interface CharacterCreateProps {
@@ -53,6 +55,9 @@ export const CharacterCreate = ({ onCreated, onBack }: CharacterCreateProps) => 
   const [nationalityId, setNationalityId] = useState<string>(NATIONS[0].id)
   // decisão de uma vez só: o gênero não muda depois da criação
   const [gender, setGender] = useState<PlayerGender>('masculino')
+  // consentimento LIVRE: nasce desmarcado, ninguém aceita sem clicar
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [showLegal, setShowLegal] = useState(false)
   const [attributes, setAttributes] = useState<PlayerAttributes>(DEFAULT_ATTRIBUTES)
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
@@ -102,6 +107,7 @@ export const CharacterCreate = ({ onCreated, onBack }: CharacterCreateProps) => 
         teamName,
         nationalityId,
         gender,
+        consent: recordConsent(Date.now()),
         playerAge,
         playerPosition: position,
         attributes,
@@ -328,9 +334,30 @@ export const CharacterCreate = ({ onCreated, onBack }: CharacterCreateProps) => 
       )}
       </section>
 
+      <label className="create-consent">
+        <input
+          type="checkbox"
+          checked={acceptedTerms}
+          onChange={(event) => setAcceptedTerms(event.target.checked)}
+        />
+        <span>
+          Li e aceito os{' '}
+          <button type="button" className="legal-link" onClick={() => setShowLegal(true)}>
+            termos de uso e a política de privacidade
+          </button>
+          .
+        </span>
+      </label>
+
+      {showLegal && <Legal onClose={() => setShowLegal(false)} />}
+
       {serverError && <p className="crest-error" role="alert">{serverError}</p>}
 
-      <button className="btn" disabled={isSubmitting} onClick={() => void submit()}>
+      <button
+        className="btn"
+        disabled={isSubmitting || !acceptedTerms}
+        onClick={() => void submit()}
+      >
         {isSubmitting ? 'Criando…' : 'Começar a carreira ▸'}
       </button>
     </div>

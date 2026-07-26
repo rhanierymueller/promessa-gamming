@@ -42,6 +42,7 @@ import { computeTable, createSeason, isSeasonOver } from '../engine/season/seaso
 import { createRng } from '../engine/rng'
 import type { TournamentKind, TournamentState } from '../engine/tournament/tournament'
 import { SEASON_TEAMS, type SeasonState } from '../engine/season/types'
+import { parseConsent, type ConsentRecord } from './consent'
 import { isOffensiveName } from './moderation'
 
 /**
@@ -72,10 +73,12 @@ export interface CareerTotals {
   readonly draws: number
   readonly losses: number
   readonly goals: number
+  /** Gols que o SEU TIME sofreu — o outro lado da campanha. */
+  readonly goalsAgainst: number
   readonly ratingSum: number
 }
 
-const EMPTY_CAREER: CareerTotals = { games: 0, wins: 0, draws: 0, losses: 0, goals: 0, ratingSum: 0 }
+const EMPTY_CAREER: CareerTotals = { games: 0, wins: 0, draws: 0, losses: 0, goals: 0, goalsAgainst: 0, ratingSum: 0 }
 
 const addToCareer = (career: CareerTotals, record: MatchRecord): CareerTotals => ({
   games: career.games + 1,
@@ -83,6 +86,7 @@ const addToCareer = (career: CareerTotals, record: MatchRecord): CareerTotals =>
   draws: career.draws + (record.teamGoals === record.opponentGoals ? 1 : 0),
   losses: career.losses + (record.teamGoals < record.opponentGoals ? 1 : 0),
   goals: career.goals + record.playerGoals,
+  goalsAgainst: career.goalsAgainst + record.opponentGoals,
   ratingSum: career.ratingSum + record.rating,
 })
 
@@ -208,6 +212,11 @@ export interface PlayerSave {
    * sincronização entre aparelhos: vence o mais recente.
    */
   readonly savedAt: number
+  /**
+   * Aceite dos termos: qual versão e quando. É a prova de consentimento que a
+   * LGPD exige — sem ela, não há como demonstrar que houve concordância.
+   */
+  readonly consent: ConsentRecord | null
 }
 
 export interface PerkOffer {
@@ -271,6 +280,8 @@ export interface CreateSaveInput {
    * trocar no meio da carreira reescreveria tudo isso.
    */
   readonly gender?: PlayerGender
+  /** Aceite dos termos registrado no cadastro. */
+  readonly consent?: ConsentRecord | null
   readonly account?: SaveAccount | null
 }
 
@@ -318,6 +329,7 @@ export const createSave = (
     tournamentPlayed: false,
     tournament: null,
     savedAt: 0,
+    consent: input.consent ?? null,
     season: createSeason(clubId, seasonSeed(roll), divisions[divisionOf(divisions, clubId)]),
     history: [],
     attributes,
@@ -751,12 +763,16 @@ const normalizeLineup = (
 const isValidCareer = (value: unknown): value is CareerTotals => {
   if (typeof value !== 'object' || value === null) return false
   const candidate = value as Record<string, unknown>
-  return ['games', 'wins', 'draws', 'losses', 'goals', 'ratingSum'].every(
+  return ['games', 'wins', 'draws', 'losses', 'goals', 'goalsAgainst', 'ratingSum'].every(
     (key) => typeof candidate[key] === 'number' && Number.isFinite(candidate[key]),
   )
 }
 
-/** Sem totais salvos (saves antigos), reconstrói a carreira do histórico. */
+/**
+ * Sem totais salvos — ou salvos antes de existir "gols sofridos" — reconstrói
+ * a carreira do histórico. O que estiver fora das últimas 10 partidas não volta,
+ * mas o número passa a crescer certo daqui em diante.
+ */
 const normalizeCareer = (value: unknown, fullHistory: readonly MatchRecord[]): CareerTotals => {
   if (isValidCareer(value)) return value
   return fullHistory.reduce(addToCareer, EMPTY_CAREER)
@@ -1094,6 +1110,7 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
         : 1,
     tournamentPlayed: candidate.tournamentPlayed === true,
     savedAt: typeof candidate.savedAt === 'number' ? candidate.savedAt : 0,
+    consent: parseConsent(candidate.consent),
     tournament,
     season,
     history: normalizeHistory(candidate.history).slice(-HISTORY_LIMIT),

@@ -49,12 +49,16 @@ describe('pickBestPlayer', () => {
     }
   })
 
-  test('empate com nota de gala ainda pode eleger o usuário', () => {
-    // Arrange: empate não é derrota
-    const empate = { ...baseInput, teamGoals: 1, opponentGoals: 1, playerRating: MOTM_MIN_RATING + 1 }
+  test('empate NÃO elege o usuário, mesmo com nota de gala', () => {
+    // craque do jogo é de quem DECIDIU a partida; empate não tem protagonista
+    const best = pickBestPlayer({
+      ...baseInput,
+      teamGoals: 2,
+      opponentGoals: 2,
+      playerRating: 10,
+    })
 
-    // Act + Assert
-    expect(pickBestPlayer(empate).isUser).toBe(true)
+    expect(best.isUser).toBe(false)
   })
 
   test('derrota com nota baixa dá o craque ao adversário', () => {

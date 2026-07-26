@@ -5,6 +5,9 @@ import { squadWithSignings } from '../market/market'
 import { playerAgeInSeason } from './aging'
 import { FORMATIONS } from './formation'
 import { lineupRating, squadPlayersFor, userAsSquadPlayer, USER_SQUAD_INDEX, type SquadPlayer } from './players'
+import { bestLineup } from './bestLineup'
+import { sectorRatings, type SectorRatings } from './sectors'
+import type { PlayerGender } from '../../state/save'
 
 /**
  * O MEU time de verdade: elenco gerado + reforços contratados + o craque —
@@ -33,5 +36,24 @@ export const myTeamRating = (save: PlayerSave, club: Club): number => {
  * Força padrão de um clube rival (11 titulares, formação clássica).
  * Com a divisão informada, inclui as contratações da IA (Séries A/B).
  */
-export const opponentTeamRating = (club: Club, careerYear: number, division = -1): number =>
-  lineupRating(rivalSquadFor(club, division, careerYear).slice(0, 11), FORMATIONS['4-3-3'].slots)
+export const opponentTeamRating = (club: Club, careerYear: number, division = -1): number => {
+  const squad = rivalSquadFor(club, division, careerYear)
+  const lineup = bestLineup(squad, FORMATIONS['4-3-3'])
+  return lineupRating(lineup.map((index) => squad[index]), FORMATIONS['4-3-3'].slots)
+}
+
+/** Setores do SEU time, pelo esquema escalado. */
+export const myTeamSectors = (save: PlayerSave, club: Club): SectorRatings =>
+  sectorRatings(
+    save.lineup.map((squadIndex) => myTeamPlayers(save, club)[squadIndex]),
+    FORMATIONS[save.formation],
+  )
+
+/** Setores do adversário. */
+export const opponentSectors = (
+  club: Club,
+  careerYear: number,
+  division = -1,
+  gender: PlayerGender = 'masculino',
+): SectorRatings =>
+  sectorRatings(rivalSquadFor(club, division, careerYear, gender).slice(0, 11), FORMATIONS['4-3-3'])

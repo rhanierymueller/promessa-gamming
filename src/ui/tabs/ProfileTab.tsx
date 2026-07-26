@@ -1,6 +1,7 @@
-import { Lock, LogOut, Trash2 } from 'lucide-react'
+import { Download, FileText, Lock, LogOut, RotateCcw, Trash2 } from 'lucide-react'
 import { TrophyRoom } from '../TrophyRoom'
 import { useEffect, useRef, useState } from 'react'
+import { Legal } from '../Legal'
 import portraitUrl from '../../assets/sprites/s_portrait.png'
 import portraitFUrl from '../../assets/sprites/f_portrait.png'
 import type { Club } from '../../data/clubs'
@@ -82,6 +83,7 @@ export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout, 
   // aproveitamento de pontos: 3 por vitória, 1 por empate (como na tabela)
   const winRate = games > 0 ? `${Math.round(((wins * 3 + draws) / (games * 3)) * 100)}%` : '—'
   const [isDeleting, setDeleting] = useState(false)
+  const [showLegal, setShowLegal] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [isBusy, setBusy] = useState(false)
 
@@ -280,13 +282,53 @@ export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout, 
 
       <TrophyRoom trophies={save.trophies} />
 
-      <button className="btn btn-secondary btn-icon" onClick={onLogout}>
-        <LogOut size={15} aria-hidden="true" /> Sair
-      </button>
-      <button className="btn btn-danger" onClick={confirmReset}>Recomeçar carreira</button>
-      <button className="btn btn-danger btn-icon" onClick={() => { setDeleteError(null); setDeleting(true) }}>
-        <Trash2 size={15} aria-hidden="true" /> Excluir conta
-      </button>
+      <div className="card card-wide account-card">
+        <span className="card-label">Conta e dados</span>
+        <div className="account-actions">
+          <button className="btn btn-secondary btn-icon" onClick={onLogout}>
+            <LogOut size={15} aria-hidden="true" /> Sair
+          </button>
+          <button
+            className="btn btn-secondary btn-icon"
+            onClick={() => {
+              /* portabilidade (LGPD): o save é tudo que guardamos sobre você */
+              const blob = new Blob([JSON.stringify(save, null, 2)], { type: 'application/json' })
+              const url = URL.createObjectURL(blob)
+              const link = document.createElement('a')
+              link.href = url
+              link.download = 'promessa-meus-dados.json'
+              link.click()
+              URL.revokeObjectURL(url)
+            }}
+          >
+            <Download size={15} aria-hidden="true" /> Baixar meus dados
+          </button>
+          <button className="btn btn-secondary btn-icon" onClick={() => setShowLegal(true)}>
+            <FileText size={15} aria-hidden="true" /> Termos e privacidade
+          </button>
+        </div>
+
+        {/* ações destrutivas separadas: nenhuma delas se clica sem querer */}
+        <div className="danger-zone">
+          <span className="danger-zone-title">Ações definitivas</span>
+          <p className="muted danger-zone-note">
+            Não dá para desfazer. Baixe seus dados antes, se quiser guardar.
+          </p>
+          <div className="account-actions">
+            <button className="btn btn-danger btn-icon" onClick={confirmReset}>
+              <RotateCcw size={15} aria-hidden="true" /> Recomeçar carreira
+            </button>
+            <button
+              className="btn btn-danger btn-icon"
+              onClick={() => { setDeleteError(null); setDeleting(true) }}
+            >
+              <Trash2 size={15} aria-hidden="true" /> Excluir conta
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {showLegal && <Legal onClose={() => setShowLegal(false)} />}
 
       {isDeleting && (
         <div className="sim-confirm" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">

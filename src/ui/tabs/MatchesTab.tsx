@@ -54,10 +54,11 @@ export const MatchesTab = ({ save }: MatchesTabProps) => {
     const v = played.filter((r) => r.teamGoals > r.opponentGoals).length
     const e = played.filter((r) => r.teamGoals === r.opponentGoals).length
     const gols = played.reduce((sum, r) => sum + r.playerGoals, 0)
+    const sofridos = played.reduce((sum, r) => sum + r.opponentGoals, 0)
     const nota = played.length > 0
       ? (played.reduce((sum, r) => sum + r.rating, 0) / played.length).toFixed(1)
       : '—'
-    return { v, e, d: played.length - v - e, gols, nota }
+    return { v, e, d: played.length - v - e, gols, sofridos, nota }
   }, [played])
 
   const [section, setSection] = useState<LeagueSection>('tabela')
@@ -191,6 +192,7 @@ export const MatchesTab = ({ save }: MatchesTabProps) => {
               <div className="stat"><dt className="stat-label">Empates</dt><dd className="stat-value">{retrospecto.e}</dd></div>
               <div className="stat"><dt className="stat-label">Derrotas</dt><dd className="stat-value">{retrospecto.d}</dd></div>
               <div className="stat"><dt className="stat-label">Seus gols</dt><dd className="stat-value">{retrospecto.gols}</dd></div>
+              <div className="stat"><dt className="stat-label">Gols sofridos</dt><dd className="stat-value">{retrospecto.sofridos}</dd></div>
               <div className="stat"><dt className="stat-label">Nota média</dt><dd className="stat-value">{retrospecto.nota}</dd></div>
             </dl>
           )}
@@ -207,7 +209,10 @@ export const MatchesTab = ({ save }: MatchesTabProps) => {
               const rival = clubById(record.opponentId)
               const gala = record.rating >= 8.5
               return (
-                <li key={`${record.playedAt}-${index}`} className="history-row">
+                <li
+                  key={`${record.playedAt}-${index}`}
+                  className={`history-row history-row-${won ? 'win' : drew ? 'draw' : 'loss'}`}
+                >
                   <span className={`history-result history-${won ? 'win' : drew ? 'draw' : 'loss'}`}>
                     {won ? 'V' : drew ? 'E' : 'D'}
                   </span>

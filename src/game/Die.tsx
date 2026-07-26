@@ -1,20 +1,11 @@
 import type { DiceSide } from '../engine/dice/duel'
+import { spinFor } from './dieSpin'
 
 /**
  * Dado de seis lados em 3D (CSS). Cada face fica numa parede do cubo, então o
  * lançamento é rotação de verdade — o dado cai na mesa, quica e vai virando
  * até assentar na face sorteada.
  */
-
-/** Rotação que traz cada face para a frente. */
-const FACE_ROTATION: Record<DiceSide, readonly [number, number]> = {
-  1: [0, 0],
-  2: [0, -90],
-  3: [0, 180],
-  4: [0, 90],
-  5: [-90, 0],
-  6: [90, 0],
-}
 
 /** Posições dos pontos em cada face, na grade 3×3. */
 const PIPS: Record<DiceSide, readonly number[]> = {
@@ -47,16 +38,9 @@ interface DieProps {
   readonly throwId?: number
 }
 
-/** Voltas completas no ar, para o dado nunca cair "direto" na face. */
-const SPINS_MIN = 2
-const SPINS_EXTRA = 3
-
 export const Die = ({ value, phase, energy = 0, throwId = 0 }: DieProps) => {
-  const [faceX, faceY] = FACE_ROTATION[value]
   // giros variam com o arremesso: dado nenhum cai igual duas vezes
-  const turns = SPINS_MIN + Math.round(energy * SPINS_EXTRA)
-  const spinX = phase === 'rolling' ? turns * 360 + (throwId % 2 === 0 ? 360 : 0) : 0
-  const spinY = phase === 'rolling' ? turns * 360 + (throwId % 3) * 180 : 0
+  const spin = spinFor(value, phase, energy, throwId)
 
   return (
     <div
@@ -64,8 +48,8 @@ export const Die = ({ value, phase, energy = 0, throwId = 0 }: DieProps) => {
       style={
         {
           '--die-shake': `${1.5 + energy * 3}px`,
-          '--die-spin-x': `${spinX + faceX}deg`,
-          '--die-spin-y': `${spinY + faceY}deg`,
+          '--die-spin-x': `${spin.x}deg`,
+          '--die-spin-y': `${spin.y}deg`,
         } as React.CSSProperties
       }
       aria-label={`Dado mostrando ${value}`}

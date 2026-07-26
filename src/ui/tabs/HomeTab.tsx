@@ -14,12 +14,17 @@ import {
   type TournamentKind,
 } from '../../engine/tournament/tournament'
 import { useState } from 'react'
+import treinoChute from '../../assets/backgrounds/gramado.jpg'
+import treinoGoleiro from '../../assets/backgrounds/estadio-medio.jpg'
+import treinoDado from '../../assets/backgrounds/varzea.jpg'
+import treinoFalta from '../../assets/backgrounds/estadio.jpg'
 import trophySerieA from '../../assets/trophies/serie-a.png'
 import trophySerieB from '../../assets/trophies/serie-b.png'
 import trophySerieC from '../../assets/trophies/serie-c.png'
 import trophySerieD from '../../assets/trophies/serie-d.png'
 import { titlePrizeFor, formatMoney } from '../../engine/market/market'
-import { myTeamRating, opponentTeamRating } from '../../engine/squad/myTeam'
+import { myTeamSectors, opponentSectors } from '../../engine/squad/myTeam'
+import { SectorBars } from '../SectorBars'
 import type { PlayerSave } from '../../state/save'
 import { ClubCrest } from '../ClubCrest'
 import { usePlayerPortrait } from '../usePlayerPortrait'
@@ -38,6 +43,7 @@ interface HomeTabProps {
   readonly onDismissMovement: () => void
   readonly onTraining: () => void
   readonly onGkTraining: () => void
+  readonly onFreeKickTraining: () => void
   readonly onDiceTraining: () => void
   readonly onChoosePerk: (perkId: PerkId) => void
   readonly onResolveEvent: (optionIndex: number) => void
@@ -63,6 +69,7 @@ export const HomeTab = ({
   onDismissMovement,
   onTraining,
   onGkTraining,
+  onFreeKickTraining,
   onDiceTraining,
   onChoosePerk,
   onResolveEvent,
@@ -301,34 +308,43 @@ export const HomeTab = ({
               </span>
             </div>
             <p className="next-meta">{homeClub.city} · {isHomeGame ? 'em casa' : 'fora de casa'}</p>
-            <div className="power-compare" aria-label="Força dos elencos">
-              <span className="power-label">Força dos elencos (overall médio dos 11)</span>
-              <div className="power-row">
-                <span className="power-value">{myTeamRating(save, club)}</span>
-                <div className="power-bar">
-                  <div
-                    className="power-fill"
-                    style={{
-                      width: `${Math.round(
-                        (myTeamRating(save, club) /
-                          (myTeamRating(save, club) + opponentTeamRating(nextOpponent, save.careerYear, divisionOf(save.divisions, nextOpponent.id)))) * 100,
-                      )}%`,
-                    }}
-                  />
-                </div>
-                <span className="power-value power-value-opp">{opponentTeamRating(nextOpponent, save.careerYear, divisionOf(save.divisions, nextOpponent.id))}</span>
-              </div>
-            </div>
+            <SectorBars
+              mine={myTeamSectors(save, club)}
+              theirs={opponentSectors(
+                nextOpponent,
+                save.careerYear,
+                divisionOf(save.divisions, nextOpponent.id),
+                save.appearance.gender,
+              )}
+              myAbbr={club.abbr}
+              theirAbbr={nextOpponent.abbr}
+            />
             <button className="btn btn-icon" onClick={onPlayMatch}><Play size={15} aria-hidden="true" /> Jogar partida</button>
           </div>
           )
         })()
       )}
 
-      <div className="training-row">
-        <button className="btn btn-secondary" onClick={onTraining}>Treino de finalização</button>
-        <button className="btn btn-secondary" onClick={onGkTraining}>Treino de goleiro</button>
-        <button className="btn btn-secondary" onClick={onDiceTraining}>Lance decisivo</button>
+      <div className="training-section card-wide">
+        <span className="card-label">Treinamento</span>
+        <div className="training-row">
+          {([
+            { url: treinoChute, label: 'Finalização', hint: 'Chutes a gol', onClick: onTraining },
+            { url: treinoFalta, label: 'Falta', hint: 'Por cima da barreira', onClick: onFreeKickTraining },
+            { url: treinoGoleiro, label: 'Goleiro', hint: 'Defenda as cobranças', onClick: onGkTraining },
+            { url: treinoDado, label: 'Lance decisivo', hint: 'A sorte nos dados', onClick: onDiceTraining },
+          ] as const).map((modo) => (
+            <button key={modo.label} className="training-card" onClick={modo.onClick}>
+              <span
+                className="training-art"
+                style={{ backgroundImage: `url(${modo.url})` }}
+                aria-hidden="true"
+              />
+              <strong className="training-name">{modo.label}</strong>
+              <span className="training-hint">{modo.hint}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <NewsCarousel save={save} club={club} />

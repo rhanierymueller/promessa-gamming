@@ -7,6 +7,7 @@ import { DEFAULT_APPEARANCE, type PlayerAppearance } from '../state/save'
 import { applyAppearance } from './appearance'
 import { BACKGROUND_URL, loadGameSprites, tintSprite, type GameSprites } from './assets'
 import { initAudio, playStageEvent } from './audio'
+import { mancheteFor, type MancheteMode } from './manchete'
 import { drawStage, type WallSprites, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './render'
 import {
   beginRound,
@@ -63,24 +64,8 @@ interface ShotStageProps {
   readonly onRoundEnd?: (summary: RoundSummary) => void
 }
 
-const MANCHETES: readonly [number, string][] = [
-  [9, 'FENÔMENO! O olheiro já ligou pro seu empresário.'],
-  [7, 'CRAQUE! A promessa é real, diz a mesa-redonda.'],
-  [5, 'Promete, mas oscila. O debate segue quente.'],
-  [3, 'A torcida pede paciência… muita paciência.'],
-  [0, 'Volta pra várzea, menino.'],
-]
-
-const MANCHETES_GOLEIRO: readonly [number, string][] = [
-  [9, 'PAREDÃO! Fecharam o gol com você dentro.'],
-  [7, 'Seguríssimo! A defesa dorme em paz.'],
-  [5, 'Boas defesas, mas ainda sai frango no meio.'],
-  [3, 'A zaga já olha torto pro gol.'],
-  [0, 'Peneira. A bola passou o dia inteiro.'],
-]
-
-const mancheteFor = (score: number, isKeeper: boolean): string =>
-  (isKeeper ? MANCHETES_GOLEIRO : MANCHETES).find(([min]) => score >= min)![1]
+const mancheteModeFor = (isKeeper: boolean, isFreeKick: boolean): MancheteMode =>
+  isKeeper ? 'goleiro' : isFreeKick ? 'falta' : 'finalizacao'
 
 export const ShotStage = ({
   shots = TOTAL_SHOTS,
@@ -219,8 +204,15 @@ export const ShotStage = ({
         const jump = tintSprite(sprites.wallJump, color)
         wallSpritesRef.current = stand && jump ? { stand, jump } : { stand: sprites.wallStand, jump: sprites.wallJump }
       }
-      // defesa: o cobrador é o RIVAL — uniforme na cor do clube dele
-      if (defense && !tintedStrikerRef.current && sprites.striker.back.img) {
+      /*
+       * Defesa: o cobrador é o RIVAL — uniforme na cor do clube dele.
+       *
+       * Espera TODAS as poses carregarem. Antes bastava a primeira: as que
+       * chegavam depois ficavam sem tingir, e como a marcação só acontece uma
+       * vez, o uniforme do rival trocava de cor no meio da corrida para a bola.
+       */
+      const strikerReady = Object.values(sprites.striker).every((holder) => holder.img)
+      if (defense && !tintedStrikerRef.current && strikerReady) {
         const tinted = Object.fromEntries(
           Object.entries(sprites.striker).map(([pose, holder]) => [
             pose,
@@ -232,9 +224,8 @@ export const ShotStage = ({
       // aparência do craque: recolore UMA vez, quando tudo carregar — o kit é
       // SEMPRE aplicado (a arte nova é cinza neutra; amarelo é o tint padrão)
       if (!defense && !appearanceRef.current) {
-        const strikerLoaded = Object.values(sprites.striker).every((h) => h.img)
         const celebsLoaded = sprites.celebrations.every((h) => h.img)
-        if (strikerLoaded && celebsLoaded) {
+        if (strikerReady && celebsLoaded) {
           appearanceRef.current = {
             striker: Object.fromEntries(
               Object.entries(sprites.striker).map(([pose, holder]) => [
@@ -331,8 +322,19 @@ export const ShotStage = ({
       />
       {uiPhase === 'intro' && !autoStart && !defense && (
         <div className="stage-overlay">
-          <h2>Treino de finalização</h2>
-          <p>Arraste da bola em direção ao gol para MIRAR (curve o traço para dar efeito). A régua à esquerda sobe e desce: solte com ela embaixo para o rasteiro forte, em cima para buscar o ângulo.</p>
+          <h2>{freeKick ? 'Cobrança de falta' : 'Treino de finalização'}</h2>
+          <p>
+            Arraste da bola em direção ao gol para MIRAR (curve o traço para dar efeito).
+            A régua à esquerda sobe e desce: solte com ela embaixo para o rasteiro forte,
+            em cima para buscar o ângulo.
+          </p>
+          {freeKick && (
+            <p>
+              Tem barreira no caminho, e ela <strong>pula</strong> na hora do chute:
+              passe por cima com a bola alta ou contorne pelo lado com efeito.
+              Aqui quem manda é a sua <strong>cobrança</strong>, não a finalização.
+            </p>
+          )}
           <button className="btn" onClick={startRound}>Começar ▸</button>
         </div>
       )}
@@ -358,7 +360,9 @@ export const ShotStage = ({
           <h2>Fim do treino</h2>
           <div className="stage-score">{finalGoals}/{shots}</div>
           <p className="stage-score-label">{defense ? 'defesas' : 'gols'}</p>
-          <p className="stage-headline">“{mancheteFor(finalGoals, Boolean(defense))}”</p>
+          <p className="stage-headline">
+            “{mancheteFor(finalGoals, mancheteModeFor(Boolean(defense), freeKick))}”
+          </p>
           <button className="btn" onClick={startRound}>Jogar de novo</button>
         </div>
       )}

@@ -847,3 +847,29 @@ describe('gênero do atleta', () => {
     expect(mexido.appearance.skin).toBe(2)
   })
 })
+
+describe('gols sofridos na carreira', () => {
+  const base = () => createSave({ playerName: 'M', clubId: 'real-vila', nationalityId: 'brasil' }, fixedRoll())!
+
+  test('somam a cada partida, junto com os seus', () => {
+    let save = base()
+    save = recordMatch(save, { ...sampleRecord, teamGoals: 2, opponentGoals: 1, playerGoals: 1 })
+    save = recordMatch(save, { ...sampleRecord, teamGoals: 0, opponentGoals: 3, playerGoals: 0 })
+
+    expect(save.career.goalsAgainst).toBe(4)
+    expect(save.career.goals).toBe(1)
+  })
+
+  test('carreira nova começa zerada', () => {
+    expect(base().career.goalsAgainst).toBe(0)
+  })
+
+  test('save antigo, sem o campo, reconstrói do histórico em vez de quebrar', () => {
+    // o total some para partidas fora das últimas 10, mas volta a crescer certo
+    const save = recordMatch(base(), { ...sampleRecord, opponentGoals: 2 })
+    const { goalsAgainst: _fora, ...semCampo } = save.career
+    const carregado = parseSave(JSON.stringify({ ...save, career: semCampo }))!
+
+    expect(carregado.career.goalsAgainst).toBe(2)
+  })
+})

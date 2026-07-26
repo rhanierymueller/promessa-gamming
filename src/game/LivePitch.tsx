@@ -103,6 +103,8 @@ interface SimState {
   directiveQueue: PitchDirective | null
   lastDirectiveId: number
   completedDirectiveId: number
+  /** Diretiva de gol cujo chute está no ar — só conclui quando a bola entrar (0 = nenhuma). */
+  goalShotDirectiveId: number
   lastGoalSide: 'team' | 'opponent'
 }
 
@@ -188,6 +190,7 @@ export const LivePitch = ({
       directiveQueue: null,
       lastDirectiveId: 0,
       completedDirectiveId: 0,
+      goalShotDirectiveId: 0,
       lastGoalSide: 'opponent',
     }
     simRef.current = sim
@@ -310,6 +313,7 @@ export const LivePitch = ({
 
       // diretiva de gol da engine: coreografa até a rede
       if (sim.directiveQueue && sim.directiveQueue.side === side) {
+        const queue = sim.directiveQueue
         const attackers = teammatesOf(side).filter((i) => {
           const p = sim.players[i].pos
           return side === 'team' ? p.x > 0.55 : p.x < 0.45
@@ -317,6 +321,8 @@ export const LivePitch = ({
         const inFinalThird = side === 'team' ? holder.pos.x > 0.62 : holder.pos.x < 0.38
         if (inFinalThird || attackers.length === 0) {
           sim.directiveQueue = null
+          // a ordem não terminou aqui: só quando a bola cruzar a linha
+          sim.goalShotDirectiveId = queue.id
           shoot(side, true)
         } else {
           passTo(attackers[Math.floor(Math.random() * attackers.length)])
@@ -364,6 +370,13 @@ export const LivePitch = ({
       if (outcome === 'goal') {
         sim.phase = 'goalFlash'
         sim.flashTimer = 0.9
+        // a bola entrou: só AGORA o placar lá fora pode subir
+        const goalId = sim.goalShotDirectiveId
+        sim.goalShotDirectiveId = 0
+        if (goalId !== 0 && sim.completedDirectiveId !== goalId) {
+          sim.completedDirectiveId = goalId
+          onCompleteRef.current?.(goalId)
+        }
         return
       }
       // defesa: goleiro rival fica com a bola; fora: tiro de meta

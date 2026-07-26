@@ -10,6 +10,7 @@ import { advanceSeason, isSeasonOver, playerOpponentId } from '../engine/season/
 import { shootoutFor } from '../engine/tournament/shootout'
 import {
   advanceTournament,
+  TOURNAMENT_NAMES,
   createTournament,
   playerTournamentOpponentId,
   type TournamentKind,
@@ -63,13 +64,17 @@ import { MarketTab } from './tabs/MarketTab'
 import { deleteCloudSave, pushSave, syncSave } from '../online/cloudSave'
 import { clearAllLocalData, clearCareerData } from '../state/localData'
 import { MatchesTab } from './tabs/MatchesTab'
+import { CallUpIntro } from './CallUpIntro'
 import { NationalTab } from './tabs/NationalTab'
 import { isTournamentRunning } from '../engine/career/seasonEnd'
 import { ProfileTab } from './tabs/ProfileTab'
 import { TeamTab } from './tabs/TeamTab'
 
 type Tab = 'home' | 'matches' | 'selecao' | 'team' | 'market' | 'profile'
-type Screen = 'tabs' | 'match' | 'training' | 'gk-training' | 'dice-training'
+type Screen = 'tabs' | 'match' | 'training' | 'gk-training' | 'freekick-training' | 'dice-training'
+
+/** Telas com gramado na tela — são as que ligam a torcida. */
+const PITCH_SCREENS: readonly Screen[] = ['match', 'training', 'gk-training', 'freekick-training']
 
 interface MatchSetup {
   readonly seed: number
@@ -264,8 +269,7 @@ export const App = () => {
     // a torcida só existe com o gramado na tela. Fica no App (e não no
     // ShotStage) porque o ShotStage remonta a cada cobrança — ali o som
     // reiniciaria a todo lance e cortaria o grito do gol.
-    const onPitch = screen === 'match' || screen === 'training' || screen === 'gk-training'
-    if (!onPitch) return
+    if (!PITCH_SCREENS.includes(screen)) return
     startAmbience()
     return stopMatchAudio
   }, [screen])
@@ -331,10 +335,19 @@ export const App = () => {
     setScreen('match')
   }
 
+  /* a convocação passa pela cerimônia antes de o torneio existir */
+  const [callUpCeremony, setCallUpCeremony] = useState<TournamentKind | null>(null)
+
   const startTournament = (kind: TournamentKind): void => {
     if (!save) return
-    const tournament = createTournament(kind, save.nationalityId, Date.now() & 0xffffffff)
-    updateSave(applyTournament(save, tournament))
+    setCallUpCeremony(kind)
+  }
+
+  const finishCallUp = (): void => {
+    const kind = callUpCeremony
+    setCallUpCeremony(null)
+    if (!save || !kind) return
+    updateSave(applyTournament(save, createTournament(kind, save.nationalityId, Date.now() & 0xffffffff)))
   }
 
   const startTournamentMatch = (): void => {
@@ -565,6 +578,30 @@ export const App = () => {
     )
   }
 
+  if (screen === 'freekick-training') {
+    return (
+      <main className="shell">
+        <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
+        <header className="header">
+          <p className="eyebrow">Promessa · Treino</p>
+          <h1>Na Barreira</h1>
+        </header>
+        <button className="btn btn-secondary btn-back" onClick={() => setScreen('tabs')}>← Voltar</button>
+        <ShotStage
+          backgroundUrl={homeStadiumUrl}
+          freeKick
+          /* a barreira veste o próximo rival: o treino já ensaia o jogo que vem */
+          wallColor={nextOpponent?.colors.primary}
+          attrs={save.attributes}
+          celebrationId={save.celebrationId}
+          appearance={save.appearance}
+          perks={save.perks}
+        />
+        <footer className="footer">PROMESSA · em desenvolvimento</footer>
+      </main>
+    )
+  }
+
   if (screen === 'dice-training') {
     return (
       <main className="shell">
@@ -621,6 +658,16 @@ export const App = () => {
         <h1>{TAB_ITEMS.find((item) => item.id === tab)!.label}</h1>
       </header>
 
+      {callUpCeremony && nationById(save.nationalityId) && (
+        <CallUpIntro
+          nation={nationById(save.nationalityId)!}
+          playerName={save.playerName}
+          competition={TOURNAMENT_NAMES[callUpCeremony]}
+          portraitUrl={null}
+          onDone={finishCallUp}
+        />
+      )}
+
       {tab === 'home' && (
         <HomeTab
           save={save}
@@ -635,6 +682,7 @@ export const App = () => {
           onNewSeason={onNewSeason}
           onTraining={() => setScreen('training')}
           onGkTraining={() => setScreen('gk-training')}
+          onFreeKickTraining={() => setScreen('freekick-training')}
           onDiceTraining={() => setScreen('dice-training')}
           onChoosePerk={(perkId) => save && updateSave(choosePerk(save, perkId))}
           onResolveEvent={(optionIndex) => save && updateSave(resolvePendingEvent(save, optionIndex))}

@@ -39,7 +39,8 @@ const weightOf = (player: SquadPlayer): number =>
   (POSITION_WEIGHT[player.position] ?? 1) * finishingFactor(player)
 
 /** Semente estável por clube: a artilharia não muda a cada renderização. */
-const clubSeed = (seasonSeed: number, clubId: string): number => {
+/** Semente estável por clube/seleção — compartilhada com a artilharia de copa. */
+export const clubSeed = (seasonSeed: number, clubId: string): number => {
   let hash = seasonSeed >>> 0
   for (let i = 0; i < clubId.length; i++) {
     hash ^= clubId.charCodeAt(i)
@@ -49,7 +50,8 @@ const clubSeed = (seasonSeed: number, clubId: string): number => {
 }
 
 /** Reparte os `goals` do clube entre o elenco, respeitando os pesos. */
-const distribute = (
+/** Reparte os gols de um time entre os jogadores dele, pela posição. */
+export const distribute = (
   squad: readonly SquadPlayer[],
   goals: number,
   seed: number,

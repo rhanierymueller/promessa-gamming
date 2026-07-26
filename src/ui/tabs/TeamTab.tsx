@@ -29,6 +29,7 @@ import {
   type PlayerSave,
 } from '../../state/save'
 import { ClubCrest, fileToCrestDataUrl } from '../ClubCrest'
+import { bestLineup } from '../../engine/squad/bestLineup'
 import { SquadBoard } from '../SquadBoard'
 import { TrophyRoom } from '../TrophyRoom'
 import { OverallStars } from '../OverallStars'
@@ -100,9 +101,11 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
 
   // no seu time você escolhe; cada rival joga no esquema próprio dele
   const formation = isMyClub ? FORMATIONS[save.formation] : FORMATIONS[formationIdFor(squadClub.id)]
+  /* o rival não entra com os 11 primeiros da lista: o técnico dele escala o
+     melhor time possível para o esquema, como qualquer um faria */
   const starters: readonly number[] = isMyClub
     ? save.lineup
-    : squad.slice(0, 11).map((_, index) => index)
+    : bestLineup(squad, FORMATIONS[formationIdFor(squadClub.id)])
 
   return (
     <div className="tab-panel">
@@ -144,6 +147,7 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
           <div className="stat"><span className="stat-value">{save.career.games}</span><span className="stat-label">jogos</span></div>
           <div className="stat"><span className="stat-value">{wins}</span><span className="stat-label">vitórias</span></div>
           <div className="stat"><span className="stat-value">{goals}</span><span className="stat-label">gols seus</span></div>
+          <div className="stat"><span className="stat-value">{save.career.goalsAgainst ?? 0}</span><span className="stat-label">gols sofridos</span></div>
           <div className="stat"><span className="stat-value">{averageRating(save)}</span><span className="stat-label">nota média</span></div>
         </div>
       </div>

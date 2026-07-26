@@ -1,9 +1,10 @@
-import { ArrowLeftRight, X } from 'lucide-react'
+import { ArrowLeftRight, LoaderCircle, X } from 'lucide-react'
 import { useState } from 'react'
 import { FORMATION_IDS, FORMATIONS, type Formation, type FormationId } from '../engine/squad/formation'
 import { overallAt, positionFit, type SquadPlayer } from '../engine/squad/players'
+import { sectorRatings } from '../engine/squad/sectors'
 import { FormationBoard } from './FormationBoard'
-import { ovrClass } from './PlayerCard'
+import { ovrClass } from '../engine/squad/overallTier'
 
 /**
  * Prancheta do técnico: o campo com os titulares, o seletor de esquema e a
@@ -31,6 +32,15 @@ interface SquadBoardProps {
   readonly signingIds?: ReadonlySet<string>
 }
 
+/**
+ * Quem está esperando um par. A troca começa dos dois lados: pelo titular
+ * ("quem entra no lugar dele") ou pelo reserva ("qual titular sai para ele
+ * entrar"). Um estado só, porque os dois nunca coexistem.
+ */
+type PendingSwap =
+  | { readonly kind: 'starter'; readonly slot: number }
+  | { readonly kind: 'bench'; readonly squadIndex: number }
+
 export const SquadBoard = ({
   squad,
   formation,
@@ -43,8 +53,8 @@ export const SquadBoard = ({
   onSelect,
   signingIds,
 }: SquadBoardProps) => {
-  /** Slot cuja troca está aberta, esperando quem entra. */
-  const [swapSlot, setSwapSlot] = useState<number | null>(null)
+  /** Troca aberta, esperando o outro lado. */
+  const [pending, setPending] = useState<PendingSwap | null>(null)
 
   const shape: Formation = FORMATIONS[formation]
   const starters = lineup.slice(0, 11)
@@ -52,11 +62,33 @@ export const SquadBoard = ({
 
   const applySwap = (slot: number, squadIndex: number): void => {
     onSwap?.(slot, squadIndex)
-    setSwapSlot(null)
+    setPending(null)
   }
+
+  /** Nome de quem abriu a troca, para a frase de instrução. */
+  const pendingName = pending
+    ? pending.kind === 'starter'
+      ? squad[starters[pending.slot]]?.name
+      : squad[pending.squadIndex]?.name
+    : undefined
+
+  /* recalculado a cada troca: o efeito da escalação aparece na hora */
+  const sectors = sectorRatings(
+    starters.map((squadIndex) => squad[squadIndex]),
+    shape,
+  )
 
   return (
     <>
+      <div className="squad-sectors" aria-label="Força por setor da escalação">
+        {([['def', 'Defesa'], ['mei', 'Meio'], ['ata', 'Ataque']] as const).map(([key, label]) => (
+          <div className="squad-sector" key={key}>
+            <span className="squad-sector-label">{label}</span>
+            <strong className={`squad-sector-value ${ovrClass(sectors[key])}`}>{sectors[key]}</strong>
+          </div>
+        ))}
+      </div>
+
       {editable && (
         <div className="squad-coach-bar">
           {onFormationChange && (
@@ -67,7 +99,7 @@ export const SquadBoard = ({
                 value={formation}
                 aria-label="Escolher formação tática"
                 onChange={(event) => {
-                  setSwapSlot(null)
+                  setPending(null)
                   onFormationChange(event.target.value as FormationId)
                 }}
               >
@@ -77,12 +109,19 @@ export const SquadBoard = ({
               </select>
             </label>
           )}
-          {swapSlot !== null && (
+          {pending && (
             <p className="squad-swap-hint" role="status">
-              Escolha quem fica no lugar de{' '}
-              <strong>{squad[starters[swapSlot]]?.name}</strong>
-              {' '}— outro titular (trocam de posição) ou alguém do banco
-              <button className="banner-close" onClick={() => setSwapSlot(null)} aria-label="Cancelar troca">
+              {pending.kind === 'starter' ? (
+                <>
+                  Escolha quem fica no lugar de <strong>{pendingName}</strong>
+                  {' '}— outro titular (trocam de posição) ou alguém do banco
+                </>
+              ) : (
+                <>
+                  Escolha qual titular sai para <strong>{pendingName}</strong> entrar
+                </>
+              )}
+              <button className="banner-close" onClick={() => setPending(null)} aria-label="Cancelar troca">
                 <X size={13} />
               </button>
             </p>
@@ -116,12 +155,14 @@ export const SquadBoard = ({
             const slotPosition = shape.slots[slot]
             const fit = positionFit(player, slotPosition)
             const effective = overallAt(player, slotPosition)
-            // com uma troca aberta, os OUTROS titulares também são alvo: dá
-            // para inverter dois jogadores de posição sem passar pelo banco
-            const isSwapTarget = editable && swapSlot !== null && swapSlot !== slot && !isUser
+            const isSwapping = pending?.kind === 'starter' && pending.slot === slot
+            // o craque nunca sai de campo; fora isso todo titular é alvo — de
+            // outro titular (invertem posições) ou de um reserva (substituição)
+            const isSwapTarget = editable && pending !== null && !isSwapping && !isUser
             const pick = (): void => {
-              if (isSwapTarget && swapSlot !== null) {
-                applySwap(swapSlot, squadIndex)
+              if (isSwapTarget && pending) {
+                if (pending.kind === 'starter') applySwap(pending.slot, squadIndex)
+                else applySwap(slot, pending.squadIndex)
                 return
               }
               onSelect(player)
@@ -129,7 +170,7 @@ export const SquadBoard = ({
             return (
               <div
                 key={player.id}
-                className={`squad-row${isUser ? ' squad-row-user' : ''}${isSigning ? ' squad-row-signing' : ''}${swapSlot === slot ? ' squad-row-swapping' : ''}${isSwapTarget ? ' squad-row-target' : ''}`}
+                className={`squad-row${isUser ? ' squad-row-user' : ''}${isSigning ? ' squad-row-signing' : ''}`}
                 role="button"
                 tabIndex={0}
                 onClick={pick}
@@ -154,15 +195,18 @@ export const SquadBoard = ({
                 </span>
                 {editable && !isUser && (
                   <button
-                    className="squad-swap-btn"
-                    title="Trocar este titular"
-                    aria-label={`Trocar ${player.name}`}
+                    className={`squad-swap-btn${isSwapping ? ' squad-swap-btn-active' : ''}`}
+                    title={isSwapping ? 'Cancelar a troca' : 'Trocar este titular'}
+                    aria-label={isSwapping ? `Cancelar troca de ${player.name}` : `Trocar ${player.name}`}
+                    aria-pressed={isSwapping}
                     onClick={(event) => {
                       event.stopPropagation()
-                      setSwapSlot(swapSlot === slot ? null : slot)
+                      setPending(isSwapping ? null : { kind: 'starter', slot })
                     }}
                   >
-                    <ArrowLeftRight size={13} />
+                    {isSwapping
+                      ? <LoaderCircle size={13} className="squad-swap-spin" />
+                      : <ArrowLeftRight size={13} />}
                   </button>
                 )}
               </div>
@@ -172,11 +216,14 @@ export const SquadBoard = ({
           {bench.map((squadIndex, benchRow) => {
             const player = squad[squadIndex]
             if (!player) return null
-            const isTarget = editable && swapSlot !== null
+            const isSwapping = pending?.kind === 'bench' && pending.squadIndex === squadIndex
+            // dois reservas trocando de lugar não mudam nada: só o titular
+            // aberto transforma um reserva em alvo
+            const isTarget = editable && pending?.kind === 'starter'
             const isSigning = signingIds?.has(player.id) ?? false
             const pick = (): void => {
-              if (isTarget && swapSlot !== null) {
-                applySwap(swapSlot, squadIndex)
+              if (isTarget && pending?.kind === 'starter') {
+                applySwap(pending.slot, squadIndex)
                 return
               }
               onSelect(player)
@@ -184,7 +231,7 @@ export const SquadBoard = ({
             return (
               <div
                 key={player.id}
-                className={`squad-row${benchRow === 0 ? ' squad-row-bench' : ''}${isSigning ? ' squad-row-signing' : ''}${isTarget ? ' squad-row-target' : ''}`}
+                className={`squad-row${benchRow === 0 ? ' squad-row-bench' : ''}${isSigning ? ' squad-row-signing' : ''}`}
                 role="button"
                 tabIndex={0}
                 onClick={pick}
@@ -198,6 +245,22 @@ export const SquadBoard = ({
                 </span>
                 <span className="squad-age">{player.age} anos</span>
                 <span className={`squad-ovr ${ovrClass(player.overall)}`}>{player.overall}</span>
+                {editable && (
+                  <button
+                    className={`squad-swap-btn${isSwapping ? ' squad-swap-btn-active' : ''}`}
+                    title={isSwapping ? 'Cancelar a troca' : 'Colocar este reserva em campo'}
+                    aria-label={isSwapping ? `Cancelar troca de ${player.name}` : `Escalar ${player.name}`}
+                    aria-pressed={isSwapping}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setPending(isSwapping ? null : { kind: 'bench', squadIndex })
+                    }}
+                  >
+                    {isSwapping
+                      ? <LoaderCircle size={13} className="squad-swap-spin" />
+                      : <ArrowLeftRight size={13} />}
+                  </button>
+                )}
               </div>
             )
           })}

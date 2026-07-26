@@ -1,5 +1,7 @@
 import { X } from 'lucide-react'
 import { useState } from 'react'
+import { initialsOf } from '../engine/squad/initials'
+import { ovrClass } from '../engine/squad/overallTier'
 import type { SquadPlayer } from '../engine/squad/players'
 import { faceUrlFor } from '../game/faces'
 import { MAX_SQUAD_PLAYER_NAME } from '../state/save'
@@ -7,9 +9,6 @@ import { OverallStars } from './OverallStars'
 import type { PlayerGender } from '../state/save'
 
 /** Carta de jogador estilo FIFA: retrato, overall + estrelas, posição e seis barras. */
-
-export const ovrClass = (overall: number): string =>
-  overall >= 75 ? 'ovr-high' : overall >= 62 ? 'ovr-mid' : 'ovr-low'
 
 const ATTR_LABELS: readonly { readonly key: keyof SquadPlayer['attrs']; readonly label: string }[] = [
   { key: 'pac', label: 'Ritmo' },
@@ -38,12 +37,7 @@ const PlayerFace = ({
   // suavização; os do elenco são pinturas 256×256 que preenchem a moldura
   const isUserPortrait = Boolean(userFaceUrl)
   const url = userFaceUrl ?? faceUrlFor(player.id, gender)
-  const initials = player.name
-    .split(' ')
-    .filter((part) => part.length > 0)
-    .slice(0, 2)
-    .map((part) => part[0].toUpperCase())
-    .join('')
+  const initials = initialsOf(player.name)
 
   return (
     <div className="player-face">

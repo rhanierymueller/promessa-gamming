@@ -1,12 +1,11 @@
 import { BadgeDollarSign, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { NATIONS, nationById } from '../../data/nations'
+import { NATIONS } from '../../data/nations'
 import { formatMoney, marketPoolFor, type MarketPlayer } from '../../engine/market/market'
 import type { SquadPosition } from '../../engine/squad/players'
 import { signPlayer, type PlayerSave } from '../../state/save'
-import { NationFlag } from '../NationFlag'
-import { OverallStars } from '../OverallStars'
-import { ovrClass, PlayerCardModal } from '../PlayerCard'
+import { MarketRow } from '../MarketRow'
+import { PlayerCardModal } from '../PlayerCard'
 
 /** Transfermarket: filtros estilo FIFA e contratação com a verba da divisão. */
 
@@ -161,39 +160,32 @@ export const MarketTab = ({ save, onSaveChange }: MarketTabProps) => {
           {paged.map((player) => {
             const affordable = player.price <= save.budget
             return (
-              <div
+              <MarketRow
                 key={player.id}
-                className="market-row"
-                role="button"
-                tabIndex={0}
-                onClick={() => setSelected(player)}
-                onKeyDown={(event) => { if (event.key === 'Enter') setSelected(player) }}
-              >
-                <span className="squad-pos">{player.position}</span>
-                <NationFlag
-                  nationId={player.nationality}
-                  size={16}
-                  title={nationById(player.nationality)?.name ?? 'Bandeira'}
-                />
-                <span className="market-name">{player.name}</span>
-                <span className="squad-age">{player.age} anos</span>
-                <span className="market-stars">
-                  <OverallStars overall={player.overall} size={11} />
-                  <span className={`squad-ovr ${ovrClass(player.overall)}`}>{player.overall}</span>
-                </span>
-                <span className="market-price">{formatMoney(player.price)}</span>
-                <button
-                  className="btn market-buy"
-                  disabled={!affordable}
-                  title={affordable ? `Contratar por ${formatMoney(player.price)}` : 'Verba insuficiente'}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    setConfirming(player)
-                  }}
-                >
-                  {affordable ? 'Contratar' : 'Sem verba'}
-                </button>
-              </div>
+                playerId={player.id}
+                name={player.name}
+                position={player.position}
+                nationality={player.nationality}
+                age={player.age}
+                price={player.price}
+                overall={player.overall}
+                gender={save.appearance.gender}
+                isAffordable={affordable}
+                onSelect={() => setSelected(player)}
+                action={
+                  <button
+                    className="btn market-buy"
+                    disabled={!affordable}
+                    title={affordable ? `Contratar por ${formatMoney(player.price)}` : 'Verba insuficiente'}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setConfirming(player)
+                    }}
+                  >
+                    {affordable ? 'Contratar' : 'Sem verba'}
+                  </button>
+                }
+              />
             )
           })}
         </div>
@@ -238,19 +230,17 @@ export const MarketTab = ({ save, onSaveChange }: MarketTabProps) => {
         ) : (
           <div className="market-list">
             {seasonSignings.map((signing) => (
-              <div key={signing.id} className="market-row market-row-history">
-                <span className="squad-pos">{signing.position}</span>
-                <NationFlag
-                  nationId={signing.nationality}
-                  size={16}
-                  title={nationById(signing.nationality)?.name ?? 'Bandeira'}
-                />
-                <span className="market-name">{signing.name}</span>
-                <span className="squad-age">{signing.baseAge} anos</span>
-                <span className="market-stars" />
-                <span className="market-price">{formatMoney(signing.price)}</span>
-                <span className="signing-tag">reforço</span>
-              </div>
+              <MarketRow
+                key={signing.id}
+                playerId={signing.id}
+                name={signing.name}
+                position={signing.position}
+                nationality={signing.nationality}
+                age={signing.baseAge}
+                price={signing.price}
+                gender={save.appearance.gender}
+                action={<span className="signing-tag">reforço</span>}
+              />
             ))}
           </div>
         )}
