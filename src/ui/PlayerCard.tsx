@@ -4,6 +4,7 @@ import type { SquadPlayer } from '../engine/squad/players'
 import { faceUrlFor } from '../game/faces'
 import { MAX_SQUAD_PLAYER_NAME } from '../state/save'
 import { OverallStars } from './OverallStars'
+import type { PlayerGender } from '../state/save'
 
 /** Carta de jogador estilo FIFA: retrato, overall + estrelas, posição e seis barras. */
 
@@ -24,11 +25,19 @@ const ATTR_LABELS: readonly { readonly key: keyof SquadPlayer['attrs']; readonly
  * Sem banco de retratos (ou no SEU craque), cai nas iniciais — a carta
  * continua completa em vez de abrir um buraco no layout.
  */
-const PlayerFace = ({ player, userFaceUrl }: { player: SquadPlayer; userFaceUrl?: string | null }) => {
+const PlayerFace = ({
+  player,
+  userFaceUrl,
+  gender = 'masculino',
+}: {
+  player: SquadPlayer
+  userFaceUrl?: string | null
+  gender?: PlayerGender
+}) => {
   // o retrato do craque é pixel art com fundo vazado: cabe inteiro e sem
   // suavização; os do elenco são pinturas 256×256 que preenchem a moldura
   const isUserPortrait = Boolean(userFaceUrl)
-  const url = userFaceUrl ?? faceUrlFor(player.id)
+  const url = userFaceUrl ?? faceUrlFor(player.id, gender)
   const initials = player.name
     .split(' ')
     .filter((part) => part.length > 0)
@@ -54,6 +63,8 @@ const PlayerFace = ({ player, userFaceUrl }: { player: SquadPlayer; userFaceUrl?
 }
 
 interface PlayerCardModalProps {
+  /** Gênero do mundo do jogo — decide de qual banco vem o rosto. */
+  readonly gender?: PlayerGender
   readonly player: SquadPlayer
   readonly clubName: string
   readonly isUser: boolean
@@ -67,7 +78,7 @@ interface PlayerCardModalProps {
   readonly footer?: React.ReactNode
 }
 
-export const PlayerCardModal = ({ player, clubName, isUser, userFaceUrl, renameState, onRename, onClose, footer }: PlayerCardModalProps) => {
+export const PlayerCardModal = ({ player, clubName, isUser, userFaceUrl, renameState, onRename, onClose, footer, gender }: PlayerCardModalProps) => {
   const [draft, setDraft] = useState('')
   return (
   <div className="player-modal" role="dialog" aria-modal="true" aria-label={`Carta de ${player.name}`} onClick={onClose}>
@@ -77,7 +88,7 @@ export const PlayerCardModal = ({ player, clubName, isUser, userFaceUrl, renameS
       </button>
       <div className="player-card-top">
         <div className="player-card-portrait">
-          <PlayerFace player={player} userFaceUrl={userFaceUrl} />
+          <PlayerFace player={player} userFaceUrl={userFaceUrl} gender={gender} />
           <span className={`player-ovr ${ovrClass(player.overall)}`}>{player.overall}</span>
         </div>
         <div className="player-card-id">

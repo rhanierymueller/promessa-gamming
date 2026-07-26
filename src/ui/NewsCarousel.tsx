@@ -55,7 +55,7 @@ export const NewsCarousel = ({ save, club }: NewsCarouselProps) => {
 
   const portraitFor = (entry: NewsItem): string | null => {
     // entrevista: o rosto é o de quem falou, o mesmo das cartas do elenco
-    if (entry.speaker) return faceUrlFor(entry.speaker.playerId)
+    if (entry.speaker) return faceUrlFor(entry.speaker.playerId, save.appearance.gender)
     if (entry.source === 'jogador') {
       return save.appearance.gender === 'feminino' ? portraitFUrl : portraitUrl
     }

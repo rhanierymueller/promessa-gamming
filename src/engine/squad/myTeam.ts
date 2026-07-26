@@ -13,7 +13,7 @@ import { lineupRating, squadPlayersFor, userAsSquadPlayer, USER_SQUAD_INDEX, typ
  */
 
 export const myTeamPlayers = (save: PlayerSave, club: Club): readonly SquadPlayer[] =>
-  squadWithSignings(squadPlayersFor(club, save.careerYear), save.signings, save.careerYear).map(
+  squadWithSignings(squadPlayersFor(club, save.careerYear, save.appearance.gender), save.signings, save.careerYear).map(
     (player, index) =>
       index === USER_SQUAD_INDEX
         ? userAsSquadPlayer(player, save.playerName, save.attributes, save.playerPosition, playerAgeInSeason(save.playerAge, save.careerYear))

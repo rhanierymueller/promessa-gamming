@@ -5,6 +5,7 @@ import type { Divisions } from '../pyramid/pyramid'
 import { divisionOf } from '../pyramid/pyramid'
 import { FORMATIONS } from './formation'
 import { SQUAD_SIZE, squadPlayersFor, type SquadPlayer, type SquadPosition } from './players'
+import type { PlayerGender } from '../../state/save'
 
 /**
  * Convocação: a seleção é a NATA do jogo, não um elenco gerado à parte. Os
@@ -43,6 +44,7 @@ const candidatesFor = (
   divisions: Divisions,
   careerYear: number,
   market: readonly MarketPlayer[],
+  gender: PlayerGender,
 ): readonly SquadPlayer[] => {
   const fromMarketPool = market
     .filter((player) => player.nationality === nationId)
@@ -51,7 +53,7 @@ const candidatesFor = (
 
   const fromLeague = CLUBS.filter(
     (club) => divisionOf(divisions, club.id) <= SCOUTED_DIVISIONS,
-  ).flatMap((club) => squadPlayersFor(club, careerYear))
+  ).flatMap((club) => squadPlayersFor(club, careerYear, gender))
   return [...fromLeague, ...fromMarketPool]
 }
 
@@ -85,11 +87,12 @@ export const nationalSquadFor = (
    * carreira, não um ranking frio.
    */
   user: SquadPlayer | null = null,
+  gender: PlayerGender = 'masculino',
 ): readonly SquadPlayer[] => {
   const nation = nationById(nationId)
   if (!nation) return []
-  const generated = squadPlayersFor(nationAsClub(nation), careerYear)
-  const pool = candidatesFor(nationId, divisions, careerYear, market)
+  const generated = squadPlayersFor(nationAsClub(nation), careerYear, gender)
+  const pool = candidatesFor(nationId, divisions, careerYear, market, gender)
   if (pool.length < SQUAD_SIZE) return generated
 
   const slots = [...FORMATIONS[NATIONAL_FORMATION].slots, ...BENCH]

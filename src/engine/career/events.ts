@@ -1,4 +1,6 @@
 import { createRng, nextFloat, nextInt } from '../rng'
+import { applyGender } from './gender'
+import type { PlayerGender } from '../../state/save'
 
 /**
  * Eventos FORA de campo: entre rodadas, a vida de craque cobra decisões —
@@ -82,7 +84,7 @@ export const LIFE_EVENTS: readonly LifeEvent[] = [
       option('Treinar finalização', 'ousado', 0.65, 6, -4,
         'Uma hora de bola parada — o pé calibrou.', 'Forçou demais e sentiu a coxa. Susto à toa.', 1),
       option('Dobrar o turno', 'audacioso', 0.4, 10, -8,
-        'Dobradinha completa. Você saiu do campo OUTRO jogador.', 'O corpo apagou no meio do segundo turno.', 1),
+        'Dobradinha completa. Você saiu do campo OUTR{o} {jogador}.', 'O corpo apagou no meio do segundo turno.', 1),
     ],
   },
   {
@@ -118,7 +120,7 @@ export const LIFE_EVENTS: readonly LifeEvent[] = [
       option('Aceitar e estampar a chuteira', 'ousado', 0.6, 7, -5,
         'A cidade inteira reparou na chuteira. Orgulho local.', 'O clube reclamou do contrato paralelo.'),
       option('Pedir o dobro', 'audacioso', 0.35, 10, -7,
-        'Fechou pelo dobro! Faro de negócio.', 'O dono riu e cancelou a proposta.'),
+        'Fechou pelo dobro! Faro de negócio.', '{O} {dono} riu e cancelou a proposta.'),
     ],
   },
 ]
@@ -163,6 +165,7 @@ export const resolveLifeEvent = (
   templateId: string,
   optionIndex: number,
   seed: number,
+  gender: PlayerGender = 'masculino',
 ): LifeEventResult => {
   const event = eventById(templateId) ?? LIFE_EVENTS[0]
   const chosen = event.options[optionIndex] ?? event.options[0]
@@ -172,7 +175,7 @@ export const resolveLifeEvent = (
     success,
     moraleDelta: success ? chosen.moraleWin : chosen.moraleLose,
     trainingPoints: success ? chosen.pointsWin : 0,
-    note: success ? chosen.textWin : chosen.textLose,
+    note: applyGender(success ? chosen.textWin : chosen.textLose, gender),
   }
 }
 

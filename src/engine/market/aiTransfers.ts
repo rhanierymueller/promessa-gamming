@@ -2,6 +2,7 @@ import type { Club } from '../../data/clubs'
 import { clubById } from '../../data/clubs'
 import { NATIONS } from '../../data/nations'
 import { ageFactor, RETIRE_AGE, type Potential } from '../squad/aging'
+import type { PlayerGender } from '../../state/save'
 import { clubBaseQuality, squadPlayersFor, type SquadPlayer, type SquadPosition } from '../squad/players'
 import {
   hashSeed,
@@ -154,9 +155,10 @@ export const rivalSquadFor = (
   club: Club,
   division: number,
   careerYear: number,
+  gender: PlayerGender = 'masculino',
 ): readonly SquadPlayer[] =>
   squadWithSignings(
-    squadPlayersFor(club, careerYear),
+    squadPlayersFor(club, careerYear, gender),
     aiTransfersFor(club, division, careerYear).map((transfer) => transfer.signing),
     careerYear,
     -1,

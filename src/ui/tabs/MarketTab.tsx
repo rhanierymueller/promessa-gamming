@@ -281,6 +281,7 @@ export const MarketTab = ({ save, onSaveChange }: MarketTabProps) => {
 
       {selected && (
         <PlayerCardModal
+          gender={save.appearance.gender}
           player={selected}
           clubName="Livre no mercado"
           isUser={false}

@@ -1,4 +1,5 @@
 import { NATIONAL_NAMES } from './nationalNames'
+import type { PlayerGender } from '../state/save'
 /**
  * Elencos com nomes realistas — determinísticos por semente (mesmo clube +
  * mesma partida = mesmos nomes). Mistura "Nome Sobrenome" com apelidos de
@@ -11,6 +12,21 @@ export const FIRST_NAMES: readonly string[] = [
   'Rodrigo', 'Fábio', 'Léo', 'Davi', 'Samuel', 'Yuri', 'Nathan', 'Otávio',
   'Henrique', 'Vinícius', 'Emerson', 'Robson', 'Wallace', 'Jonas', 'Maicon',
   'Édson', 'Nilton', 'Valdir', 'Gilmar', 'Adriano',
+]
+
+/** Mesma quantidade da lista masculina — o mundo feminino tem o mesmo leque. */
+export const FIRST_NAMES_F: readonly string[] = [
+  'Ana', 'Bruna', 'Camila', 'Daniela', 'Fernanda', 'Gabriela', 'Helena', 'Isabela',
+  'Juliana', 'Larissa', 'Mariana', 'Natália', 'Patrícia', 'Rafaela', 'Sabrina', 'Tainá',
+  'Vitória', 'Yasmin', 'Amanda', 'Beatriz', 'Carolina', 'Débora', 'Eduarda', 'Flávia',
+  'Giovana', 'Ingrid', 'Jéssica', 'Késia', 'Letícia', 'Michele', 'Nayara', 'Priscila',
+  'Renata', 'Simone', 'Tatiane', 'Vanessa', 'Aline', 'Bianca', 'Cristiane', 'Denise',
+  'Elaine', 'Franciele', 'Geísa', 'Luana',
+]
+
+const NICKNAMES_F: readonly string[] = [
+  'Nena', 'Duda', 'Kika', 'Bel', 'Tita', 'Chica', 'Lelê', 'Bia',
+  'Nina', 'Pepa', 'Zaza', 'Mila', 'Tami', 'Cacá', 'Formiga', 'Preta',
 ]
 
 export const SURNAMES: readonly string[] = [
@@ -58,9 +74,11 @@ export const foreignSquadFor = (
   seedText: string,
   count: number,
   nationId: string,
+  gender: PlayerGender = 'masculino',
 ): readonly string[] => {
-  const pool = NATIONAL_NAMES[nationId]
-  if (!pool) return squadFor(seedText, count)
+  const named = NATIONAL_NAMES[nationId]
+  if (!named) return squadFor(seedText, count, gender)
+  const pool = { firsts: gender === 'feminino' ? named.firstsF : named.firsts, lasts: named.lasts }
   let state = hashSeed(seedText)
   let firsts = [...pool.firsts]
   const squad: string[] = []
@@ -85,10 +103,15 @@ export const foreignSquadFor = (
   return squad
 }
 
-export const squadFor = (seedText: string, count: number): readonly string[] => {
+export const squadFor = (
+  seedText: string,
+  count: number,
+  gender: PlayerGender = 'masculino',
+): readonly string[] => {
   let state = hashSeed(seedText)
-  const firsts = [...FIRST_NAMES]
-  const nicknames = [...NICKNAMES]
+  const feminino = gender === 'feminino'
+  const firsts = [...(feminino ? FIRST_NAMES_F : FIRST_NAMES)]
+  const nicknames = [...(feminino ? NICKNAMES_F : NICKNAMES)]
   const squad: string[] = []
   while (squad.length < count && (firsts.length > 0 || nicknames.length > 0)) {
     const [kindRoll, s1] = nextRoll(state)

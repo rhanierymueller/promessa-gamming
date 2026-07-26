@@ -2,6 +2,7 @@ import { clubById } from '../../data/clubs'
 import { createRng, nextFloat } from '../rng'
 import { squadPlayersFor, type SquadPlayer } from '../squad/players'
 import { computeTable } from './season'
+import type { PlayerGender } from '../../state/save'
 import type { SeasonState } from './types'
 
 /**
@@ -83,6 +84,8 @@ export interface ScorersInput {
   readonly userGoals: number
   /** Nomes que o jogador batizou (playerId → nome). */
   readonly customNames?: Readonly<Record<string, string>>
+  /** Gênero do mundo do jogo — carreira feminina tem elencos de jogadoras. */
+  readonly gender?: PlayerGender
 }
 
 /**
@@ -99,7 +102,7 @@ export const seasonScorers = (input: ScorersInput, limit = 10): readonly ScorerR
     if (!club) continue
     const clubGoals = goalsByClub.get(clubId) ?? 0
     const isUserClub = clubId === userClubId
-    const squad = squadPlayersFor(club, careerYear)
+    const squad = squadPlayersFor(club, careerYear, input.gender ?? 'masculino')
 
     if (isUserClub) {
       // os seus gols são fato; só o restante do clube entra no sorteio

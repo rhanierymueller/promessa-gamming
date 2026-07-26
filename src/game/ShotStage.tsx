@@ -112,7 +112,8 @@ export const ShotStage = ({
   // uma vez ao soltar, sem atropelar o arrasto do celular todo quadro
   const keyboardActiveRef = useRef(false)
   // na defesa o atacante é o RIVAL — o gênero do usuário não se aplica a ele
-  const spritesRef = useRef(loadGameSprites(defense ? 'masculino' : appearance.gender))
+  // o gênero vale para os DOIS: quando você defende, quem está no gol é você
+  const spritesRef = useRef(loadGameSprites(appearance.gender))
   const wallSpritesRef = useRef<WallSprites | null>(null)
   const tintedStrikerRef = useRef<GameSprites['striker'] | null>(null)
   const appearanceRef = useRef<{

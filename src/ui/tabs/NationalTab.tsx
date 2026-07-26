@@ -60,6 +60,7 @@ export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
         save.playerPosition,
         currentPlayerAge(save),
       ),
+      save.appearance.gender,
     )
   }, [save, nation])
 
@@ -180,6 +181,7 @@ export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
           />
           {selected && (
             <PlayerCardModal
+          gender={save.appearance.gender}
               player={selected}
               clubName={nation.name}
               isUser={selected.id === USER_PLAYER_ID}

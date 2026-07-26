@@ -1,4 +1,4 @@
-import { LogOut, Trash2 } from 'lucide-react'
+import { Lock, LogOut, Trash2 } from 'lucide-react'
 import { TrophyRoom } from '../TrophyRoom'
 import { useEffect, useRef, useState } from 'react'
 import portraitUrl from '../../assets/sprites/s_portrait.png'
@@ -244,17 +244,13 @@ export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout, 
         </div>
         <div className="appearance-row">
           <span className="appearance-label">Gênero</span>
+          {/* escolhido na criação: define arte, nomes do mundo e narração */}
           <div className="swatch-row">
-            {(['masculino', 'feminino'] as const).map((gender) => (
-              <button
-                key={gender}
-                type="button"
-                className={`btn appearance-gender${save.appearance.gender === gender ? ' appearance-gender-active' : ''}`}
-                onClick={() => onSaveChange(setAppearance(save, { ...save.appearance, gender }))}
-              >
-                {gender === 'masculino' ? 'Masculino' : 'Feminino'}
-              </button>
-            ))}
+            <span className="appearance-locked">
+              {save.appearance.gender === 'masculino' ? 'Masculino' : 'Feminino'}
+              <Lock size={12} aria-hidden="true" />
+            </span>
+            <span className="muted appearance-locked-note">definido na criação</span>
           </div>
         </div>
       </div>

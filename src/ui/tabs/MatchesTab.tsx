@@ -44,6 +44,7 @@ export const MatchesTab = ({ save }: MatchesTabProps) => {
         userName: save.playerName,
         userGoals: save.rival?.mySeasonGoals ?? 0,
         customNames: save.customPlayerNames,
+        gender: save.appearance.gender,
       }),
     [season, save.careerYear, save.clubId, save.playerName, save.rival, save.customPlayerNames],
   )
@@ -154,8 +155,8 @@ export const MatchesTab = ({ save }: MatchesTabProps) => {
                     <span className="scorer-face">
                       {scorer.isUser && userPortrait ? (
                         <img className="scorer-face-img scorer-face-pixel" src={userPortrait} alt="" aria-hidden="true" />
-                      ) : faceUrlFor(scorer.playerId) ? (
-                        <img className="scorer-face-img" src={faceUrlFor(scorer.playerId)!} alt="" aria-hidden="true" loading="lazy" />
+                      ) : faceUrlFor(scorer.playerId, save.appearance.gender) ? (
+                        <img className="scorer-face-img" src={faceUrlFor(scorer.playerId, save.appearance.gender)!} alt="" aria-hidden="true" loading="lazy" />
                       ) : (
                         <ClubCrest club={displayClub(save, clubById(scorer.clubId)!)} size={26} />
                       )}

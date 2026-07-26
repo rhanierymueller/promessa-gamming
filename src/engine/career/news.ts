@@ -5,6 +5,8 @@ import { computeTable, recentForm, tablePosition } from '../season/season'
 import { nationById } from '../../data/nations'
 import { clubDisplayName, type PlayerSave } from '../../state/save'
 import { matchQuotes, pickVariant, type QuoteSpeaker } from './quotes'
+import { applyGender } from './gender'
+import type { PlayerGender } from '../../state/save'
 
 /**
  * Central de notícias da Home: manchetes derivadas do que REALMENTE
@@ -46,6 +48,14 @@ const KICKERS: Record<NewsSource, string> = {
 
 // o feed comporta mais manchetes agora que existem entrevistas do pós-jogo
 export const MAX_NEWS = 8
+
+/** Passa título e corpo pela concordância de gênero. */
+const withGender = (items: readonly NewsItem[], gender: PlayerGender): readonly NewsItem[] =>
+  items.map((item) => ({
+    ...item,
+    headline: applyGender(item.headline, gender),
+    body: applyGender(item.body, gender),
+  }))
 const GREAT_RATING = 8
 const AWFUL_RATING = 4.5
 const STRIKER_GOALS = 2
@@ -136,15 +146,15 @@ export const newsFor = (save: PlayerSave): readonly NewsItem[] => {
         pickVariant([
           `Anotei o nome: ${save.playerName}`,
           `Relatório entregue: ${save.playerName}`,
-          `Fui ver o jogo por causa dele`,
+          `Fui ver o jogo por causa {dele}`,
           `${save.playerName} entrou no meu caderno`,
         ], seed) ?? `Anotei o nome: ${save.playerName}`,
         pickVariant([
           `Nota ${nota} contra o ${rival}. Decide, aparece e não se esconde. Vale o ingresso.`,
           `Nota ${nota}. Rodei três estados este mês e não vi ninguém dessa idade jogar assim.`,
-          `Contra o ${rival} ele pediu a bola quando o jogo pesou. Isso não se ensina.`,
+          `Contra o ${rival} {ele} pediu a bola quando o jogo pesou. Isso não se ensina.`,
           `Nota ${nota} e uma leitura de jogo que assusta. Já liguei pro clube grande.`,
-          `Não é só o talento: é a cabeça. Contra o ${rival} ele nunca sumiu.`,
+          `Não é só o talento: é a cabeça. Contra o ${rival} {ele} nunca sumiu.`,
         ], seed) ?? '',
         lastContext))
     }
@@ -156,7 +166,7 @@ export const newsFor = (save: PlayerSave): readonly NewsItem[] => {
           `Noite de apagão de ${save.playerName}`,
         ], seed) ?? `${save.playerName} deve mais`,
         pickVariant([
-          `Nota ${nota} não paga o talento que ele tem. Craque joga TODO dia, não quando quer.`,
+          `Nota ${nota} não paga o talento que {ele} tem. Craque joga TODO dia, não quando quer.`,
           `Nota ${nota} contra o ${rival}. Sumiu do jogo e ninguém sentiu falta — isso é grave.`,
           `Talento não é desculpa pra jogo fraco. Nota ${nota} é pouco pra quem quer ser referência.`,
         ], seed) ?? '',
@@ -165,12 +175,12 @@ export const newsFor = (save: PlayerSave): readonly NewsItem[] => {
     if (last.playerGoals >= STRIKER_GOALS) {
       news.push(item('artilheiro', 'jogador',
         pickVariant([
-          `${last.playerGoals} gols: noite de artilheiro`,
+          `${last.playerGoals} gols: noite de {artilheiro}`,
           `${save.playerName} faz ${last.playerGoals} e cala o ${rival}`,
-          `Show de ${last.playerGoals}: a bola era dele`,
-        ], seed) ?? `${last.playerGoals} gols: noite de artilheiro`,
+          `Show de ${last.playerGoals}: a bola era {dele}`,
+        ], seed) ?? `${last.playerGoals} gols: noite de {artilheiro}`,
         pickVariant([
-          `${save.playerName} resolveu contra o ${rival} e a torcida já grita o nome dele no alambrado.`,
+          `${save.playerName} resolveu contra o ${rival} e a torcida já grita o nome {dele} no alambrado.`,
           `Faltou combinar com ${save.playerName}: o ${rival} montou o plano e ele fez ${last.playerGoals} assim mesmo.`,
           `Bola parada, jogada trabalhada, sobra na área — ${save.playerName} fez de tudo contra o ${rival}.`,
         ], seed) ?? '',
@@ -266,5 +276,6 @@ export const newsFor = (save: PlayerSave): readonly NewsItem[] => {
       'A seleção volta pra casa mais cedo — e o clube recebe o craque de volta.'))
   }
 
-  return news.slice(0, MAX_NEWS)
+  // concordância com o gênero do atleta, feita na saída
+  return withGender(news.slice(0, MAX_NEWS), save.appearance.gender)
 }

@@ -60,6 +60,7 @@ import { Landing } from './Landing'
 import { PasswordReset } from './PasswordReset'
 import { HomeTab } from './tabs/HomeTab'
 import { MarketTab } from './tabs/MarketTab'
+import { pushSave, syncSave } from '../online/cloudSave'
 import { MatchesTab } from './tabs/MatchesTab'
 import { NationalTab } from './tabs/NationalTab'
 import { isTournamentRunning } from '../engine/career/seasonEnd'
@@ -219,6 +220,22 @@ export const App = () => {
     void currentSessionEmail().then((email) => setHasSession(email !== null))
   }, [gate])
 
+  /*
+   * Entrou na conta: junta o que está no aparelho com o que está na nuvem.
+   * Vence o mais recente; nuvem vazia recebe a carreira local, que é o caso de
+   * quem já jogava antes de a sincronização existir.
+   */
+  useEffect(() => {
+    if (!hasSession) return
+    let ativo = true
+    void syncSave(loadSave(localStorage)).then((result) => {
+      if (!ativo || result.winner !== 'cloud' || !result.save) return
+      persistSave(localStorage, result.save, result.save.savedAt)
+      setSave(result.save)
+    })
+    return () => { ativo = false }
+  }, [hasSession])
+
   useEffect(() => {
     // link de recuperação inválido/expirado: volta ao login com aviso e limpa a URL
     const urlError = recoveryErrorMessage(window.location.hash)
@@ -297,8 +314,11 @@ export const App = () => {
   }, [save])
 
   const updateSave = (updated: PlayerSave): void => {
-    persistSave(localStorage, updated)
-    setSave(updated)
+    // persistSave carimba o savedAt: é ele que decide quem jogou por último
+    const stamped = persistSave(localStorage, updated)
+    setSave(stamped)
+    // a nuvem é comodidade: se falhar, a carreira local segue valendo
+    void pushSave(stamped)
   }
 
   const startLeagueMatch = (): void => {

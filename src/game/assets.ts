@@ -1,3 +1,4 @@
+import type { PlayerGender } from '../state/save'
 import ballUrl from '../assets/sprites/ball.png'
 import kCrouchUrl from '../assets/sprites/k_crouch.png'
 import kDiveLUrl from '../assets/sprites/k_divel.png'
@@ -123,21 +124,37 @@ const strikerSetFor = (gender: 'masculino' | 'feminino'): Record<StrikerPose, Sp
   }
 }
 
-export const loadGameSprites = (gender: 'masculino' | 'feminino' = 'masculino'): GameSprites => ({
+/**
+ * Arte da goleira, descoberta sozinha em assets/sprites/kf_*.png. Enquanto uma
+ * pose não existir, a masculina cobre a vaga — assim a arte pode chegar em
+ * partes sem deixar buraco em campo.
+ */
+const femaleKeeperModules = import.meta.glob('../assets/sprites/kf_*.png', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>
+
+const keeperUrl = (pose: string, fallback: string, gender: PlayerGender): string => {
+  if (gender !== 'feminino') return fallback
+  const match = Object.keys(femaleKeeperModules).find((path) => path.endsWith(`/kf_${pose}.png`))
+  return match ? femaleKeeperModules[match] : fallback
+}
+
+export const loadGameSprites = (gender: PlayerGender = 'masculino'): GameSprites => ({
   keeper: {
-    idle: loadSprite(kIdleUrl),
-    crouch: loadSprite(kCrouchUrl),
-    diveL: loadSprite(kDiveLUrl),
-    diveR: loadSprite(kDiveRUrl),
-    jump: loadSprite(kJumpUrl),
-    sad: loadSprite(kSadUrl),
-    step: loadSprite(kStepUrl),
-    takeoff: loadSprite(kTakeoffUrl),
-    saved: loadSprite(kSavedUrl),
-    getup: loadSprite(kGetupUrl),
-    fly: loadSprite(kFlyUrl),
-    tip: loadSprite(kTipUrl),
-    punch: loadSprite(kPunchUrl),
+    idle: loadSprite(keeperUrl('idle', kIdleUrl, gender)),
+    crouch: loadSprite(keeperUrl('crouch', kCrouchUrl, gender)),
+    diveL: loadSprite(keeperUrl('divel', kDiveLUrl, gender)),
+    diveR: loadSprite(keeperUrl('diver', kDiveRUrl, gender)),
+    jump: loadSprite(keeperUrl('jump', kJumpUrl, gender)),
+    sad: loadSprite(keeperUrl('sad', kSadUrl, gender)),
+    step: loadSprite(keeperUrl('step', kStepUrl, gender)),
+    takeoff: loadSprite(keeperUrl('takeoff', kTakeoffUrl, gender)),
+    saved: loadSprite(keeperUrl('saved', kSavedUrl, gender)),
+    getup: loadSprite(keeperUrl('getup', kGetupUrl, gender)),
+    fly: loadSprite(keeperUrl('fly', kFlyUrl, gender)),
+    tip: loadSprite(keeperUrl('tip', kTipUrl, gender)),
+    punch: loadSprite(keeperUrl('punch', kPunchUrl, gender)),
   },
   striker: strikerSetFor(gender),
   celebrations: celebrationUrlsFor(gender).map(loadSprite),

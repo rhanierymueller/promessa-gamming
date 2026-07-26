@@ -1,4 +1,4 @@
-import { Minus, Plus } from 'lucide-react'
+import { Minus, Plus, TriangleAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
   ATTRIBUTE_KEYS,
@@ -22,6 +22,7 @@ import {
   PLAYER_MAX_AGE,
   PLAYER_MIN_AGE,
   type PlayerSave,
+  type PlayerGender,
 } from '../state/save'
 import { NationFlag } from './NationFlag'
 
@@ -48,6 +49,8 @@ export const CharacterCreate = ({ onCreated }: CharacterCreateProps) => {
   const [playerAge, setPlayerAge] = useState(DEFAULT_AGE)
   const [position, setPosition] = useState<PlayerFieldPosition>('ATA')
   const [nationalityId, setNationalityId] = useState<string>(NATIONS[0].id)
+  // decisão de uma vez só: o gênero não muda depois da criação
+  const [gender, setGender] = useState<PlayerGender>('masculino')
   const [attributes, setAttributes] = useState<PlayerAttributes>(DEFAULT_ATTRIBUTES)
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
@@ -74,7 +77,7 @@ export const CharacterCreate = ({ onCreated }: CharacterCreateProps) => {
   const submit = async (): Promise<void> => {
     const form = {
       playerName, teamName, playerAge, playerPosition: position,
-      nationalityId, attributes, email, username, password, confirmPassword,
+      nationalityId, gender, attributes, email, username, password, confirmPassword,
     }
     const found = validateRegistration(form, { skipAccount: sessionEmail !== null })
     setErrors(found)
@@ -96,6 +99,7 @@ export const CharacterCreate = ({ onCreated }: CharacterCreateProps) => {
         playerName,
         teamName,
         nationalityId,
+        gender,
         playerAge,
         playerPosition: position,
         attributes,
@@ -169,6 +173,25 @@ export const CharacterCreate = ({ onCreated }: CharacterCreateProps) => {
           </button>
         ))}
       </div>
+
+      <span className="create-label">Gênero</span>
+      <div className="create-gender">
+        {([['masculino', 'Masculino'], ['feminino', 'Feminino']] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={`nation-chip${id === gender ? ' nation-chip-active' : ''}`}
+            onClick={() => setGender(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="create-warning">
+        <TriangleAlert size={13} aria-hidden="true" />
+        Escolha com calma: o gênero <strong>não pode ser trocado depois</strong>. Ele define a
+        arte do seu atleta, os nomes de todo o mundo do jogo e a narração das partidas.
+      </p>
 
       <span className="create-label">Nacionalidade (seleção que pode te convocar)</span>
       <div className="create-nations">

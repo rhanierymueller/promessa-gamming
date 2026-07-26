@@ -69,9 +69,9 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
   const squadClub = displayClub(save, squadClubBase)
   const isMyClub = squadClub.id === save.clubId
   const squad = useMemo(() => {
-    const generated = squadPlayersFor(squadClub, save.careerYear)
+    const generated = squadPlayersFor(squadClub, save.careerYear, save.appearance.gender)
     if (squadClub.id !== save.clubId) {
-      return rivalSquadFor(squadClub, divisionOf(save.divisions, squadClub.id), save.careerYear)
+      return rivalSquadFor(squadClub, divisionOf(save.divisions, squadClub.id), save.careerYear, save.appearance.gender)
     }
     const base = squadWithSignings(generated, save.signings, save.careerYear)
     // o SEU craque entra com atributos reais; os demais ganham o batismo local
@@ -317,6 +317,7 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
 
       {selectedPlayer && (
         <PlayerCardModal
+          gender={save.appearance.gender}
           player={selectedPlayer}
           clubName={clubDisplayName(save, squadClub.id)}
           isUser={selectedPlayer.id === USER_PLAYER_ID}

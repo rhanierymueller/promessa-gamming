@@ -140,7 +140,7 @@ describe('mutações imutáveis do save', () => {
     expect(setCelebration(save, 1.5)).toBe(save)
   })
 
-  test('setAppearance atualiza pele/cabelo/gênero e ignora índices inválidos', () => {
+  test('setAppearance atualiza pele/cabelo/uniforme e ignora índices inválidos', () => {
     // Arrange
     const save = createSave({ playerName: 'Craque', clubId: 'real-vila', nationalityId: 'brasil' }, fixedRoll())!
 
@@ -149,7 +149,8 @@ describe('mutações imutáveis do save', () => {
 
     // Assert
     expect(save.appearance).toEqual({ skin: 0, hair: 0, kit: 0, gender: 'masculino' })
-    expect(updated.appearance).toEqual({ skin: 3, hair: 2, kit: 1, gender: 'feminino' })
+    // o gênero é da criação e não se troca — ver a suíte "gênero do atleta"
+    expect(updated.appearance).toEqual({ skin: 3, hair: 2, kit: 1, gender: 'masculino' })
     expect(setAppearance(save, { skin: 99, hair: 0, kit: 0, gender: 'masculino' })).toBe(save)
     expect(setAppearance(save, { skin: 0, hair: -1, kit: 0, gender: 'masculino' })).toBe(save)
   })
@@ -708,11 +709,38 @@ describe('persistSave e loadSave', () => {
     const storage = fakeStorage()
     const save = recordMatch(createSave({ playerName: 'Craque da Vila', clubId: 'estrela-minas', nationalityId: 'mexico' }, fixedRoll())!, sampleRecord)
 
-    // Act
-    persistSave(storage, save)
+    // Act: persistSave carimba o savedAt e devolve o save gravado
+    const gravado = persistSave(storage, save, 1_700_000_000_000)
 
     // Assert
-    expect(loadSave(storage)).toEqual(save)
+    expect(loadSave(storage)).toEqual(gravado)
+    expect(gravado).toEqual({ ...save, savedAt: 1_700_000_000_000 })
+  })
+
+  test('cada gravação renova o carimbo — é ele que decide quem jogou por último', () => {
+    // Arrange
+    const storage = fakeStorage()
+    const save = createSave({ playerName: 'Craque', clubId: 'real-vila' }, fixedRoll())!
+
+    // Act
+    const antes = persistSave(storage, save, 1000)
+    const depois = persistSave(storage, antes, 2000)
+
+    // Assert
+    expect(antes.savedAt).toBe(1000)
+    expect(depois.savedAt).toBe(2000)
+    expect(loadSave(storage)!.savedAt).toBe(2000)
+  })
+
+  test('save antigo, sem carimbo, carrega com zero e perde para qualquer um', () => {
+    // Arrange: formato anterior à sincronização
+    const storage = fakeStorage()
+    const save = createSave({ playerName: 'Craque', clubId: 'real-vila' }, fixedRoll())!
+    const { savedAt: _ignorado, ...semCarimbo } = save
+    storage.setItem('promessa.save', JSON.stringify(semCarimbo))
+
+    // Assert
+    expect(loadSave(storage)!.savedAt).toBe(0)
   })
 })
 
@@ -792,5 +820,30 @@ describe('idade do craque ao longo da carreira', () => {
     const carregado = parseSave(JSON.stringify(atual))!
 
     expect(carregado.playerAge).toBe(base.playerAge)
+  })
+})
+
+describe('gênero do atleta', () => {
+  const base = (gender?: 'masculino' | 'feminino') =>
+    createSave({ playerName: 'Alex', clubId: 'real-vila', nationalityId: 'brasil', gender })!
+
+  test('é escolhido na criação', () => {
+    expect(base('feminino').appearance.gender).toBe('feminino')
+    expect(base('masculino').appearance.gender).toBe('masculino')
+  })
+
+  test('quem não escolheu fica no masculino — carreiras antigas seguem como estavam', () => {
+    expect(base().appearance.gender).toBe('masculino')
+    const antigo = createSave({ playerName: 'Alex', clubId: 'real-vila' })!
+    expect(parseSave(JSON.stringify(antigo))!.appearance.gender).toBe('masculino')
+  })
+
+  test('NÃO troca depois: setAppearance mexe no resto e preserva o gênero', () => {
+    // trocar no meio da carreira reescreveria arte, nomes do mundo e textos
+    const save = base('feminino')
+    const mexido = setAppearance(save, { ...save.appearance, gender: 'masculino', skin: 2 })
+
+    expect(mexido.appearance.gender).toBe('feminino')
+    expect(mexido.appearance.skin).toBe(2)
   })
 })

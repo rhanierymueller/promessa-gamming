@@ -1,6 +1,7 @@
 import type { Club } from '../../data/clubs'
 import { foreignSquadFor, squadFor } from '../../data/squadNames'
 import type { PlayerAttributes } from '../career/attributes'
+import type { PlayerGender } from '../../state/save'
 import { ageFactor, RETIRE_AGE, type Potential } from './aging'
 import { FORMATIONS, formationIdFor } from './formation'
 
@@ -249,15 +250,27 @@ const nationalityOf = (clubId: string): string | null =>
  * e serve aos clubes da liga e à seleção brasileira; as outras seleções puxam
  * da lista da própria nacionalidade.
  */
-const squadNamesFor = (clubId: string, seedText: string): readonly string[] => {
+const squadNamesFor = (
+  clubId: string,
+  seedText: string,
+  gender: PlayerGender,
+): readonly string[] => {
   const nationality = nationalityOf(clubId)
   return nationality !== null && nationality !== 'brasil'
-    ? foreignSquadFor(seedText, SQUAD_SIZE, nationality)
-    : squadFor(seedText, SQUAD_SIZE)
+    ? foreignSquadFor(seedText, SQUAD_SIZE, nationality, gender)
+    : squadFor(seedText, SQUAD_SIZE, gender)
 }
 
-export const squadPlayersFor = (club: Club, careerYear = 1): readonly SquadPlayer[] => {
-  const names = squadNamesFor(club.id, `${club.id}-elenco`)
+/**
+ * O mundo do jogo acompanha o gênero do atleta: numa carreira feminina, todos
+ * os elencos e seleções são de jogadoras.
+ */
+export const squadPlayersFor = (
+  club: Club,
+  careerYear = 1,
+  gender: PlayerGender = 'masculino',
+): readonly SquadPlayer[] => {
+  const names = squadNamesFor(club.id, `${club.id}-elenco`, gender)
   // cada clube monta o elenco para o PRÓPRIO esquema — no seu time você é o
   // técnico e pode mudar a forma por cima dos jogadores que herdou
   const positions = [...FORMATIONS[formationIdFor(club.id)].slots, ...BENCH_POSITIONS]
@@ -278,7 +291,7 @@ export const squadPlayersFor = (club: Club, careerYear = 1): readonly SquadPlaye
       generation++
       const regenState = hashSeed(`${club.id}-${index}-gen${generation}`)
       peak = rollPeakPlayer(regenState, position, clubBase, REGEN_MIN_AGE, REGEN_MAX_AGE)
-      name = squadNamesFor(club.id, `${club.id}-elenco-gen${generation}`)[index] ?? name
+      name = squadNamesFor(club.id, `${club.id}-elenco-gen${generation}`, gender)[index] ?? name
       age = peak.baseAge + (yearsPastRetire - 1)
     }
 

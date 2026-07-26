@@ -203,6 +203,11 @@ export interface PlayerSave {
   readonly eventNote: string | null
   /** O nêmesis: atacante rival que disputa a artilharia com você. */
   readonly rival: RivalState | null
+  /**
+   * Quando este save foi gravado (epoch ms). É o critério de desempate da
+   * sincronização entre aparelhos: vence o mais recente.
+   */
+  readonly savedAt: number
 }
 
 export interface PerkOffer {
@@ -260,6 +265,12 @@ export interface CreateSaveInput {
   readonly playerPosition?: PlayerFieldPosition
   /** Atributos após distribuir os pontos extras da criação. */
   readonly attributes?: PlayerAttributes
+  /**
+   * Gênero da atleta ou do atleta. Escolhido UMA vez, na criação: ele decide
+   * a arte, os nomes gerados no mundo inteiro e a concordância dos textos —
+   * trocar no meio da carreira reescreveria tudo isso.
+   */
+  readonly gender?: PlayerGender
   readonly account?: SaveAccount | null
 }
 
@@ -306,12 +317,13 @@ export const createSave = (
     careerYear: 1,
     tournamentPlayed: false,
     tournament: null,
+    savedAt: 0,
     season: createSeason(clubId, seasonSeed(roll), divisions[divisionOf(divisions, clubId)]),
     history: [],
     attributes,
     trainingPoints: 0,
     celebrationId: 0,
-    appearance: DEFAULT_APPEARANCE,
+    appearance: { ...DEFAULT_APPEARANCE, gender: input.gender ?? DEFAULT_APPEARANCE.gender },
     customClubNames,
     customClubCrests: {},
     divisions,
@@ -442,6 +454,10 @@ const isValidIndex = (value: number, count: number): boolean =>
   Number.isInteger(value) && value >= 0 && value < count
 
 /** Atualiza a aparência — ignora índices fora dos catálogos. */
+/**
+ * Ajusta a aparência. O GÊNERO é preservado de propósito: ele foi escolhido na
+ * criação e define arte, nomes do mundo e concordância dos textos.
+ */
 export const setAppearance = (save: PlayerSave, appearance: PlayerAppearance): PlayerSave => {
   if (
     !isValidIndex(appearance.skin, SKIN_TONE_COUNT) ||
@@ -451,7 +467,8 @@ export const setAppearance = (save: PlayerSave, appearance: PlayerAppearance): P
   ) {
     return save
   }
-  return { ...save, appearance }
+  // o gênero vem da criação e não se troca depois
+  return { ...save, appearance: { ...appearance, gender: save.appearance.gender } }
 }
 
 /**
@@ -850,7 +867,7 @@ export const recordMatch = (save: PlayerSave, record: MatchRecord): PlayerSave =
 /** Decide o evento de vida pendente: moral (e às vezes treino) reagem. */
 export const resolvePendingEvent = (save: PlayerSave, optionIndex: number): PlayerSave => {
   if (!save.pendingEvent) return save
-  const result = resolveLifeEvent(save.pendingEvent.templateId, optionIndex, save.pendingEvent.seed)
+  const result = resolveLifeEvent(save.pendingEvent.templateId, optionIndex, save.pendingEvent.seed, save.appearance.gender)
   return {
     ...save,
     morale: clampMorale(save.morale + result.moraleDelta),
@@ -1076,6 +1093,7 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
         ? Math.floor(candidate.careerYear)
         : 1,
     tournamentPlayed: candidate.tournamentPlayed === true,
+    savedAt: typeof candidate.savedAt === 'number' ? candidate.savedAt : 0,
     tournament,
     season,
     history: normalizeHistory(candidate.history).slice(-HISTORY_LIMIT),
@@ -1160,6 +1178,14 @@ export const parseSave = (raw: string | null): PlayerSave | null => {
 export const loadSave = (storage: StorageLike): PlayerSave | null =>
   parseSave(storage.getItem(SAVE_KEY))
 
-export const persistSave = (storage: StorageLike, save: PlayerSave): void => {
-  storage.setItem(SAVE_KEY, JSON.stringify(save))
+export const persistSave = (
+  storage: StorageLike,
+  save: PlayerSave,
+  now: number = Date.now(),
+): PlayerSave => {
+  // carimba na gravação: é assim que a sincronização sabe qual aparelho jogou
+  // por último, sem depender do relógio do servidor
+  const stamped: PlayerSave = { ...save, savedAt: now }
+  storage.setItem(SAVE_KEY, JSON.stringify(stamped))
+  return stamped
 }

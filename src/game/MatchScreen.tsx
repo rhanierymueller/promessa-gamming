@@ -213,7 +213,7 @@ export const MatchScreen = ({
 }: MatchScreenProps) => {
   // elenco com o SEU craque dentro — a força do time muda com a escalação
   const teamPlayers = useMemo(() => {
-    const squad = squadWithSignings(squadPlayersFor(club, careerYear), signings, careerYear)
+    const squad = squadWithSignings(squadPlayersFor(club, careerYear, appearance.gender), signings, careerYear)
     return squad.map((player, index) =>
       index === USER_SQUAD_INDEX
         ? userAsSquadPlayer(player, playerName, attributes, playerPosition, playerAge)
@@ -237,7 +237,7 @@ export const MatchScreen = ({
     [effectiveLineup, teamPlayers, formation],
   )
   const opponentRating = useMemo(() => {
-    const squad = rivalSquadFor(opponent, opponentDivision, careerYear)
+    const squad = rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender)
     return lineupRating(squad.slice(0, 11), FORMATIONS['4-3-3'].slots)
   }, [opponent, opponentDivision, careerYear])
 
@@ -263,7 +263,7 @@ export const MatchScreen = ({
   )
   const userIndex = Math.max(0, effectiveLineup.indexOf(USER_SQUAD_INDEX))
   const opponentSquad = useMemo(
-    () => rivalSquadFor(opponent, opponentDivision, careerYear).slice(0, 11).map((player) => player.name),
+    () => rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender).slice(0, 11).map((player) => player.name),
     [opponent, opponentDivision, careerYear],
   )
 
