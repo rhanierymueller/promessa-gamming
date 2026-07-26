@@ -52,7 +52,7 @@ export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
       save.nationalityId,
       save.divisions,
       save.careerYear,
-      marketPoolFor(save.season.seed, save.careerYear),
+      marketPoolFor(save.season.seed, save.careerYear, save.appearance.gender),
       userAsSquadPlayer(
         myTeamPlayers(save, club)[USER_SQUAD_INDEX],
         save.playerName,

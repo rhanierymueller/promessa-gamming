@@ -47,7 +47,7 @@ export const MarketTab = ({ save, onSaveChange }: MarketTabProps) => {
   const [page, setPage] = useState(0)
 
   const pool = useMemo(
-    () => marketPoolFor(save.season.seed, save.careerYear),
+    () => marketPoolFor(save.season.seed, save.careerYear, save.appearance.gender),
     [save.season.seed, save.careerYear],
   )
   const signedIds = useMemo(() => new Set(save.signings.map((signing) => signing.id)), [save.signings])

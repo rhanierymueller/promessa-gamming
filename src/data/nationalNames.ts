@@ -1,3 +1,4 @@
+import type { PlayerGender } from '../state/save'
 /**
  * Nomes críveis por nacionalidade para o mercado — um belga não se chama
  * João Silva. Combinações aleatórias de nomes COMUNS de cada país
@@ -192,10 +193,16 @@ export const NATIONAL_NAMES: Record<string, NamePool> = {
 }
 
 /** Nome completo da nacionalidade (rolls 0-1); null se não houver banco (brasil usa o próprio). */
-export const nationalName = (nationId: string, rollFirst: number, rollLast: number): string | null => {
+export const nationalName = (
+  nationId: string,
+  rollFirst: number,
+  rollLast: number,
+  gender: PlayerGender = 'masculino',
+): string | null => {
   const pool = NATIONAL_NAMES[nationId]
   if (!pool) return null
-  const first = pool.firsts[Math.floor(rollFirst * pool.firsts.length) % pool.firsts.length]
+  const firsts = gender === 'feminino' ? pool.firstsF : pool.firsts
+  const first = firsts[Math.floor(rollFirst * firsts.length) % firsts.length]
   const last = pool.lasts[Math.floor(rollLast * pool.lasts.length) % pool.lasts.length]
   return `${first} ${last}`
 }

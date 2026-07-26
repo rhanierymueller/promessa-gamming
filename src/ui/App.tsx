@@ -60,7 +60,8 @@ import { Landing } from './Landing'
 import { PasswordReset } from './PasswordReset'
 import { HomeTab } from './tabs/HomeTab'
 import { MarketTab } from './tabs/MarketTab'
-import { pushSave, syncSave } from '../online/cloudSave'
+import { deleteCloudSave, pushSave, syncSave } from '../online/cloudSave'
+import { clearAllLocalData, clearCareerData } from '../state/localData'
 import { MatchesTab } from './tabs/MatchesTab'
 import { NationalTab } from './tabs/NationalTab'
 import { isTournamentRunning } from '../engine/career/seasonEnd'
@@ -374,8 +375,15 @@ export const App = () => {
   }
 
   const leaveToLanding = (): void => {
-    // sessão do Supabase encerra em silêncio; o save local fica intacto
+    /*
+     * Sair da conta limpa o progresso deste aparelho: a carreira está na
+     * nuvem e volta no próximo login. Sem isso, o save ficaria visível para a
+     * próxima pessoa que abrisse o navegador.
+     */
     void getClient()?.auth.signOut().catch(() => undefined)
+    clearCareerData(localStorage)
+    setSave(null)
+    setHasSession(false)
     setScreen('tabs')
     setTab('home')
     setGate('landing')
@@ -383,11 +391,14 @@ export const App = () => {
   }
 
   const eraseAccount = async (): Promise<string | null> => {
+    // a carreira da nuvem sai primeiro: o cascade cobriria, mas depender só
+    // dele deixaria o dado de pé se a remoção do usuário falhar no meio
+    await deleteCloudSave()
     const result = await deleteAccount()
     if (!result.ok) return result.message
-    localStorage.removeItem('promessa.save')
-    clearPendingMatch(localStorage)
+    clearAllLocalData(localStorage)
     setSave(null)
+    setHasSession(false)
     setScreen('tabs')
     setTab('home')
     setGate('landing')
@@ -474,6 +485,7 @@ export const App = () => {
             updateSave(created)
             setGate('game')
           }}
+          onBack={() => setGate('auth')}
         />
         <footer className="footer">PROMESSA · em desenvolvimento</footer>
       </main>

@@ -455,8 +455,9 @@ const isValidIndex = (value: number, count: number): boolean =>
 
 /** Atualiza a aparência — ignora índices fora dos catálogos. */
 /**
- * Ajusta a aparência. O GÊNERO é preservado de propósito: ele foi escolhido na
- * criação e define arte, nomes do mundo e concordância dos textos.
+ * Ajusta a aparência. O GÊNERO é preservado de propósito: ele se escolhe UMA
+ * vez, no cadastro, porque define a arte, os nomes de todo o mundo do jogo e a
+ * concordância dos textos — trocar no meio da carreira reescreveria tudo isso.
  */
 export const setAppearance = (save: PlayerSave, appearance: PlayerAppearance): PlayerSave => {
   if (
@@ -467,7 +468,6 @@ export const setAppearance = (save: PlayerSave, appearance: PlayerAppearance): P
   ) {
     return save
   }
-  // o gênero vem da criação e não se troca depois
   return { ...save, appearance: { ...appearance, gender: save.appearance.gender } }
 }
 

@@ -3120,9 +3120,30 @@ h1 {
   width: 100%;
 }
 
+/*
+ * Voltar discreto, ALINHADO com o cartão. Antes era um botão cheio jogado no
+ * canto da tela, competindo com o formulário e sem relação visual com ele.
+ */
 .auth-back {
-  align-self: flex-start;
-  margin-left: clamp(4px, 4vw, 40px);
+  align-self: center;
+  width: min(100%, 420px);
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 6px 2px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.auth-back:hover {
+  color: var(--accent);
+}
+
+/* no cadastro o cartão é mais largo que o do login */
+.create-back {
+  width: min(100%, 620px);
 }
 
 .auth-card {
@@ -5151,10 +5172,12 @@ h1 {
   gap: 8px;
 }
 
+/*
+ * Bloco, não flex: como flex, cada trecho de texto e cada <strong> virava um
+ * item próprio e a frase saía repartida em colunas. O ícone entra inline.
+ */
 .create-warning {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  display: block;
   margin: 0;
   padding: 9px 11px;
   border: 1px solid rgba(255, 210, 63, 0.35);
@@ -5167,4 +5190,41 @@ h1 {
 
 .create-warning strong {
   color: var(--accent);
+}
+
+.create-warning svg {
+  display: inline;
+  vertical-align: -2px;
+  margin-right: 6px;
+  color: var(--accent);
+}
+
+/*
+ * Cadastro em SEÇÕES. Era uma lista corrida de rótulos e campos: nome, idade,
+ * time, posição, gênero, nacionalidade, atributos e conta, tudo no mesmo peso
+ * visual — quem chegava não sabia onde uma escolha terminava e outra começava.
+ */
+.create-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.create-section-title {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* o título da seção já diz o assunto: o rótulo do campo não precisa gritar */
+.create-section .create-label {
+  color: var(--muted);
 }

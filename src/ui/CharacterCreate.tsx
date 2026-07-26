@@ -1,4 +1,4 @@
-import { Minus, Plus, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, Minus, Plus, TriangleAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
   ATTRIBUTE_KEYS,
@@ -28,6 +28,8 @@ import { NationFlag } from './NationFlag'
 
 interface CharacterCreateProps {
   readonly onCreated: (save: PlayerSave) => void
+  /** Volta para o login. Ausente quando o cadastro é a única saída. */
+  readonly onBack?: () => void
 }
 
 const POSITIONS: readonly { readonly id: PlayerFieldPosition; readonly label: string }[] = [
@@ -43,7 +45,7 @@ const POSITIONS: readonly { readonly id: PlayerFieldPosition; readonly label: st
 const DEFAULT_AGE = 18
 const MAX_ATTR_LEVEL = 10
 
-export const CharacterCreate = ({ onCreated }: CharacterCreateProps) => {
+export const CharacterCreate = ({ onCreated, onBack }: CharacterCreateProps) => {
   const [playerName, setPlayerName] = useState('')
   const [teamName, setTeamName] = useState('')
   const [playerAge, setPlayerAge] = useState(DEFAULT_AGE)
@@ -117,8 +119,19 @@ export const CharacterCreate = ({ onCreated }: CharacterCreateProps) => {
 
   return (
     <div className="create">
+      {onBack && (
+        <button
+          className="btn btn-secondary btn-icon auth-back create-back"
+          disabled={isSubmitting}
+          onClick={onBack}
+        >
+          <ArrowLeft size={14} aria-hidden="true" /> Voltar
+        </button>
+      )}
       <h2 className="create-title">Crie a sua promessa</h2>
 
+      <section className="create-section">
+        <h3 className="create-section-title">O atleta</h3>
       <div className="create-grid">
         <label className="create-field">
           <span className="create-label">Nome do craque</span>
@@ -147,6 +160,10 @@ export const CharacterCreate = ({ onCreated }: CharacterCreateProps) => {
         </label>
       </div>
 
+      </section>
+
+      <section className="create-section">
+        <h3 className="create-section-title">O clube</h3>
       <label className="create-field">
         <span className="create-label">Nome do SEU time (entra na Série D)</span>
         <input
@@ -160,6 +177,10 @@ export const CharacterCreate = ({ onCreated }: CharacterCreateProps) => {
         {fieldError('teamName') && <span className="create-error">{fieldError('teamName')}</span>}
       </label>
 
+      </section>
+
+      <section className="create-section">
+        <h3 className="create-section-title">Em campo</h3>
       <span className="create-label">Sua posição (goleiro não — você é craque de linha)</span>
       <div className="create-nations">
         {POSITIONS.map((option) => (
@@ -208,6 +229,10 @@ export const CharacterCreate = ({ onCreated }: CharacterCreateProps) => {
         ))}
       </div>
 
+      </section>
+
+      <section className="create-section">
+        <h3 className="create-section-title">Atributos</h3>
       <span className="create-label">
         Distribua seus pontos — restam <strong className="create-points">{remaining}</strong>
       </span>
@@ -241,13 +266,16 @@ export const CharacterCreate = ({ onCreated }: CharacterCreateProps) => {
       </div>
       {fieldError('attributes') && <span className="create-error">{fieldError('attributes')}</span>}
 
+      </section>
+
+      <section className="create-section">
       {sessionEmail !== null && (
         <p className="muted">Conta conectada: <strong>{sessionEmail}</strong></p>
       )}
 
       {sessionEmail === null && (
       <>
-      <span className="create-label">Sua conta</span>
+      <h3 className="create-section-title">Sua conta</h3>
       <div className="create-grid">
         <label className="create-field">
           <span className="create-label">E-mail</span>
@@ -298,6 +326,7 @@ export const CharacterCreate = ({ onCreated }: CharacterCreateProps) => {
       </div>
       </>
       )}
+      </section>
 
       {serverError && <p className="crest-error" role="alert">{serverError}</p>}
 

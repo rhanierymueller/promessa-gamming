@@ -134,6 +134,21 @@ const femaleKeeperModules = import.meta.glob('../assets/sprites/kf_*.png', {
   import: 'default',
 }) as Record<string, string>
 
+/**
+ * Barreira feminina, descoberta sozinha em assets/sprites/wall_*_f.png —
+ * mesma ideia da goleira: pose que ainda não existir cai na masculina.
+ */
+const femaleWallModules = import.meta.glob('../assets/sprites/wall_*_f.png', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>
+
+const wallUrl = (pose: string, fallback: string, gender: PlayerGender): string => {
+  if (gender !== 'feminino') return fallback
+  const match = Object.keys(femaleWallModules).find((path) => path.endsWith(`/wall_${pose}_f.png`))
+  return match ? femaleWallModules[match] : fallback
+}
+
 const keeperUrl = (pose: string, fallback: string, gender: PlayerGender): string => {
   if (gender !== 'feminino') return fallback
   const match = Object.keys(femaleKeeperModules).find((path) => path.endsWith(`/kf_${pose}.png`))
@@ -159,8 +174,8 @@ export const loadGameSprites = (gender: PlayerGender = 'masculino'): GameSprites
   striker: strikerSetFor(gender),
   celebrations: celebrationUrlsFor(gender).map(loadSprite),
   ball: loadSprite(ballUrl),
-  wallStand: loadSprite(wallStandUrl),
-  wallJump: loadSprite(wallJumpUrl),
+  wallStand: loadSprite(wallUrl('stand', wallStandUrl, gender)),
+  wallJump: loadSprite(wallUrl('jump', wallJumpUrl, gender)),
 })
 
 const isNeutralKitPixel = (r: number, g: number, b: number): boolean => {

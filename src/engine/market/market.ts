@@ -1,9 +1,10 @@
 import { nationalName } from '../../data/nationalNames'
 import { NATIONS } from '../../data/nations'
-import { FIRST_NAMES, SURNAMES } from '../../data/squadNames'
+import { FIRST_NAMES, FIRST_NAMES_F, SURNAMES } from '../../data/squadNames'
 import { ageValueMultiplier } from './valuation'
 import { ageFactor, RETIRE_AGE, type Potential } from '../squad/aging'
 import type { FifaAttributes, SquadPlayer, SquadPosition } from '../squad/players'
+import type { PlayerGender } from '../../state/save'
 
 /**
  * Transfermarket: verba por divisão, preço que segue o overall (estilo FIFA)
@@ -165,8 +166,9 @@ export const scaleAttrs = (peak: FifaAttributes, factor: number): FifaAttributes
   fis: clampAttr(peak.fis * factor),
 })
 
-const brazilianName = (rollFirst: number, rollLast: number): string => {
-  const first = FIRST_NAMES[Math.floor(rollFirst * FIRST_NAMES.length) % FIRST_NAMES.length]
+const brazilianName = (rollFirst: number, rollLast: number, gender: PlayerGender): string => {
+  const firsts = gender === 'feminino' ? FIRST_NAMES_F : FIRST_NAMES
+  const first = firsts[Math.floor(rollFirst * firsts.length) % firsts.length]
   const last = SURNAMES[Math.floor(rollLast * SURNAMES.length) % SURNAMES.length]
   return `${first} ${last}`
 }
@@ -177,14 +179,16 @@ export const uniqueName = (
   rollFirst: number,
   rollLast: number,
   used: Set<string>,
+  gender: PlayerGender = 'masculino',
 ): string => {
   for (let attempt = 0; attempt < 40; attempt++) {
     const shiftedLast = (rollLast + attempt * 0.0625) % 1
     const shiftedFirst = (rollFirst + Math.floor(attempt / 16) * 0.0625) % 1
     const name =
       nationality === 'brasil'
-        ? brazilianName(shiftedFirst, shiftedLast)
-        : nationalName(nationality, shiftedFirst, shiftedLast) ?? brazilianName(shiftedFirst, shiftedLast)
+        ? brazilianName(shiftedFirst, shiftedLast, gender)
+        : nationalName(nationality, shiftedFirst, shiftedLast, gender)
+          ?? brazilianName(shiftedFirst, shiftedLast, gender)
     if (!used.has(name)) {
       used.add(name)
       return name
@@ -218,15 +222,40 @@ const LEGENDS: readonly {
   { name: 'Lukas Brandt', nationality: 'alemanha', position: 'MEI', age: 26, target: 89 },
 ]
 
+/**
+ * As mesmas dez estrelas do mercado feminino: mesma quantidade, mesmas
+ * posições, mesmas idades e os mesmos tetos de overall — só os nomes mudam,
+ * para que potencial, evolução e preço se comportem igual nas duas carreiras.
+ */
+const LEGENDS_F: typeof LEGENDS = [
+  { name: 'Marta Bezerra', nationality: 'brasil', position: 'ATA', age: 26, target: 93 },
+  { name: 'Carolina Vilela', nationality: 'portugal', position: 'PON', age: 29, target: 92 },
+  { name: 'Debinha Sales', nationality: 'brasil', position: 'PON', age: 24, target: 91 },
+  { name: 'Bárbara Prado', nationality: 'brasil', position: 'GOL', age: 28, target: 90 },
+  { name: 'Cristiane Farias', nationality: 'brasil', position: 'ATA', age: 27, target: 89 },
+  { name: 'Ellen Colton', nationality: 'inglaterra', position: 'ATA', age: 28, target: 90 },
+  { name: 'Tessa Lemmens', nationality: 'belgica', position: 'MEI', age: 29, target: 91 },
+  { name: 'Amandine Renard', nationality: 'franca', position: 'ATA', age: 27, target: 90 },
+  { name: 'Alexia Salas', nationality: 'espanha', position: 'VOL', age: 30, target: 89 },
+  { name: 'Lena Brandt', nationality: 'alemanha', position: 'MEI', age: 26, target: 89 },
+]
+
 /** O leque da temporada: determinístico pela seed da temporada + ano. */
-export const marketPoolFor = (seasonSeed: number, careerYear: number): readonly MarketPlayer[] => {
+export const marketPoolFor = (
+  seasonSeed: number,
+  careerYear: number,
+  gender: PlayerGender = 'masculino',
+): readonly MarketPlayer[] => {
   let state = hashSeed(`mercado-${seasonSeed}-${careerYear}`)
-  const usedNames = new Set<string>(LEGENDS.map((legend) => legend.name))
+  const lendas = gender === 'feminino' ? LEGENDS_F : LEGENDS
+  const usedNames = new Set<string>(lendas.map((legend) => legend.name))
   const pool: MarketPlayer[] = []
 
   // os craques de vitrine primeiro — o sonho de consumo da Série A
-  for (const [index, legend] of LEGENDS.entries()) {
-    const legendState = hashSeed(`lenda-${legend.name}`)
+  for (const [index, legend] of lendas.entries()) {
+    // semente pelo ÍNDICE, não pelo nome: assim a estrela nº 3 tem os mesmos
+    // atributos nas duas carreiras, e só o nome muda entre elas
+    const legendState = hashSeed(`lenda-${index}`)
     const factor = ageFactor(legend.age, 'alto')
     const peakTarget = legend.target / factor
     const weights = OVERALL_WEIGHTS[legend.position]
@@ -316,7 +345,7 @@ export const marketPoolFor = (seasonSeed: number, careerYear: number): readonly 
     state = s8
     const [lastRoll, s9] = nextRoll(state)
     state = s9
-    const name = uniqueName(nationality, firstRoll, lastRoll, usedNames)
+    const name = uniqueName(nationality, firstRoll, lastRoll, usedNames, gender)
 
     const [priceRoll, s10] = nextRoll(state)
     state = s10

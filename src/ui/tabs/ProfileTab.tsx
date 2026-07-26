@@ -244,13 +244,13 @@ export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout, 
         </div>
         <div className="appearance-row">
           <span className="appearance-label">Gênero</span>
-          {/* escolhido na criação: define arte, nomes do mundo e narração */}
+          {/* escolhido no cadastro: define arte, nomes do mundo e narração */}
           <div className="swatch-row">
             <span className="appearance-locked">
               {save.appearance.gender === 'masculino' ? 'Masculino' : 'Feminino'}
               <Lock size={12} aria-hidden="true" />
             </span>
-            <span className="muted appearance-locked-note">definido na criação</span>
+            <span className="muted appearance-locked-note">definido no cadastro</span>
           </div>
         </div>
       </div>

@@ -78,3 +78,15 @@ export const syncSave = async (local: PlayerSave | null): Promise<SyncResult> =>
   if (winner === 'cloud') return { winner, save: cloud }
   return { winner, save: local }
 }
+
+/**
+ * Apaga a carreira guardada na nuvem. Chamado ANTES de derrubar a conta: o
+ * cascade de auth.users cobriria isso, mas depender só dele deixaria o dado
+ * de pé se a remoção do usuário falhar no meio.
+ */
+export const deleteCloudSave = async (): Promise<void> => {
+  const client = getClient()
+  const userId = await currentUserId()
+  if (!client || !userId) return
+  await client.from(TABLE).delete().eq('user_id', userId)
+}

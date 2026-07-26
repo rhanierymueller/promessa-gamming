@@ -149,7 +149,7 @@ describe('mutações imutáveis do save', () => {
 
     // Assert
     expect(save.appearance).toEqual({ skin: 0, hair: 0, kit: 0, gender: 'masculino' })
-    // o gênero é da criação e não se troca — ver a suíte "gênero do atleta"
+    // o gênero é do cadastro e não se troca — ver a suíte "gênero do atleta"
     expect(updated.appearance).toEqual({ skin: 3, hair: 2, kit: 1, gender: 'masculino' })
     expect(setAppearance(save, { skin: 99, hair: 0, kit: 0, gender: 'masculino' })).toBe(save)
     expect(setAppearance(save, { skin: 0, hair: -1, kit: 0, gender: 'masculino' })).toBe(save)
