@@ -1,0 +1,128 @@
+/* ---------- time: clube, elenco e editor ---------- */
+
+/*
+ * A faixa do clube era um gradiente de 34px indo da cor primária à secundária.
+ * Com um clube preto e branco isso vira uma barra branca desbotando para o
+ * preto, que lê como defeito de renderização e não como identidade. Agora são
+ * as duas cores em bandas sólidas, como bandeira de torcida, numa faixa fina
+ * que escurece ao encostar no cartão.
+ */
+.tab-panel .team-banner {
+  height: 12px;
+  border-radius: 0;
+  background:
+    linear-gradient(rgba(12, 10, 20, 0.05), rgba(12, 10, 20, 0.6)),
+    linear-gradient(90deg, var(--club-a, var(--line)) 0 50%, var(--club-b, var(--line)) 50%);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.tab-panel .team-name {
+  font-family: var(--display);
+  font-size: clamp(26px, 4.4vw, 38px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.tab-panel .team-strength {
+  color: var(--steel);
+  font-size: 13px;
+}
+
+/*
+ * Cinco números dourados do mesmo tamanho: nenhum se destaca. O dourado fica
+ * na nota, que é sobre você; vitórias em verde; o resto é apoio.
+ */
+.tab-panel .team-campaign .stat-value {
+  font-family: var(--display);
+  font-size: 27px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.tab-panel .team-campaign .stat:nth-child(2) .stat-value {
+  color: #7ee08a;
+}
+
+.tab-panel .team-campaign .stat:nth-child(5) .stat-value {
+  color: var(--accent);
+}
+
+.tab-panel .team-campaign .stat-label {
+  color: var(--steel);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+}
+
+/* ---------- força por setor ---------- */
+
+.tab-panel .squad-sector {
+  border-radius: 2px;
+  border-color: #2b2242;
+  background: rgba(255, 255, 255, 0.022);
+  padding: 10px 6px;
+}
+
+.tab-panel .squad-sector-label {
+  color: var(--steel);
+  letter-spacing: 0.2em;
+}
+
+.tab-panel .squad-sector-value {
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- seletores ---------- */
+
+.tab-panel .squad-select {
+  border-radius: 2px;
+  border-color: #2b2242;
+  background: #14101f;
+  letter-spacing: 0.04em;
+}
+
+.tab-panel .squad-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* ---------- editor de clubes ---------- */
+
+/*
+ * O seletor de divisão era o último bloco dourado chapado da aba — mesmo
+ * problema das subabas antigas. Agora acende com filete, como todo o resto.
+ */
+.tab-panel .editor-division {
+  border-radius: 2px;
+  border-color: #2b2242;
+  color: var(--steel);
+  letter-spacing: 0.2em;
+}
+
+.tab-panel .editor-division:hover {
+  color: var(--text);
+  border-color: #4a3f6b;
+}
+
+.tab-panel .editor-division-active {
+  background: rgba(255, 210, 63, 0.1);
+  border-color: rgba(255, 210, 63, 0.55);
+  color: var(--accent);
+  font-weight: 400;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.tab-panel .editor-division:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.tab-panel .club-edit-row {
+  border-radius: 2px;
+}

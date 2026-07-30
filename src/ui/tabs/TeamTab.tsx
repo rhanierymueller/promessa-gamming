@@ -1,6 +1,7 @@
 import { Camera } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { CLUBS, clubById, type Club } from '../../data/clubs'
+import '../styles/team.css'
 import { rivalSquadFor } from '../../engine/market/aiTransfers'
 import { DIVISION_NAMES, divisionOf } from '../../engine/pyramid/pyramid'
 import { tablePosition } from '../../engine/season/season'
@@ -127,7 +128,11 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
       {section === 'clube' && (
       <>
       <div className="card card-wide team-card">
-        <div className="team-banner" style={{ background: `linear-gradient(120deg, ${club.colors.primary}, ${club.colors.secondary})` }} />
+        {/* as cores vão como variáveis: o desenho da faixa é decisão do CSS */}
+        <div
+          className="team-banner"
+          style={{ '--club-a': club.colors.primary, '--club-b': club.colors.secondary } as CSSProperties}
+        />
         <div className="team-crest-holder">
           <ClubCrest club={club} customUrl={save.customClubCrests[club.id]} size={52} />
         </div>
