@@ -8,6 +8,11 @@
   --accent-dark: #b8901a;
   --hot: #e85d75;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* manchete condensada: o contraste que faltava num jogo 100% monoespaçado */
+  --display: Impact, Haettenschweiler, 'Arial Narrow Bold', 'Arial Black', sans-serif;
+  /* apoio da direção "túnel": gramado sob refletor e o azul frio da luz */
+  --grass: #2f7d4f;
+  --steel: #8fa7c4;
 }
 
 * {
@@ -479,8 +484,16 @@ h1 {
   line-height: 1.5;
 }
 
-/* telas estreitas: o nome da jogada vai pra cima e os números pra baixo */
-@media (max-width: 420px) {
+/*
+ * Telas estreitas: o nome da jogada vai pra cima e os números pra baixo.
+ *
+ * O corte acompanha o do palco (559px) de propósito. Enquanto era 420px havia
+ * uma faixa morta — 421 a 559, onde mora celular grande em pé (Pro Max = 430) —
+ * com a linha ainda horizontal e `white-space: nowrap` nos três números: eles
+ * ocupam ~300px e sobrava um filete para o nome da jogada, que quebrava numa
+ * coluna de uma palavra por linha.
+ */
+@media (max-width: 559px) {
   .decision-overlay {
     padding: 12px;
   }
@@ -3027,306 +3040,6 @@ h1 {
   font-size: 11px;
 }
 
-/* ---------- landing page ---------- */
-
-.landing {
-  width: 100%;
-  /* clip (e não hidden): hidden viraria scroll container e mataria o sticky do hero */
-  overflow-x: clip;
-}
-
-.landing-nav {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px clamp(16px, 5vw, 48px);
-  background: linear-gradient(rgba(16, 12, 26, 0.9), rgba(16, 12, 26, 0));
-}
-
-.landing-brand {
-  font-weight: 700;
-  letter-spacing: 0.3em;
-  color: var(--accent);
-  font-size: 14px;
-}
-
-.landing-nav-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 18px;
-  font-size: 12px;
-}
-
-.landing-hero-stage {
-  height: 190svh;
-}
-
-.landing-hero {
-  position: sticky;
-  top: 0;
-  min-height: 100svh;
-  max-height: 100svh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  background-size: cover;
-  background-position: center 22%;
-  overflow: hidden;
-}
-
-.landing-hero-glow {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(60% 50% at 50% 62%, rgba(20, 16, 31, 0.25), rgba(20, 16, 31, 0.94)),
-    linear-gradient(rgba(20, 16, 31, 0.35), rgba(20, 16, 31, 0.98));
-}
-
-.hero-sprite {
-  position: absolute;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 14px 24px rgba(0, 0, 0, 0.5));
-  pointer-events: none;
-  will-change: transform;
-}
-
-.hero-kicker {
-  width: clamp(120px, 17vw, 230px);
-  left: clamp(2%, 6vw, 12%);
-  bottom: 8%;
-}
-
-.hero-keeper {
-  width: clamp(130px, 20vw, 280px);
-  right: clamp(1%, 5vw, 10%);
-  top: 22%;
-}
-
-.hero-ball {
-  width: clamp(28px, 3.4vw, 46px);
-  left: clamp(14%, 18vw, 24%);
-  bottom: 11%;
-}
-
-.landing-hero-content {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  padding: 90px 20px 60px;
-  max-width: 720px;
-}
-
-.landing-eyebrow {
-  margin: 0;
-  color: var(--accent);
-  letter-spacing: 0.34em;
-  text-transform: uppercase;
-  font-size: clamp(11px, 1.4vw, 13px);
-}
-
-.landing-title {
-  margin: 0;
-  font-size: clamp(64px, 14vw, 150px);
-  line-height: 0.95;
-  letter-spacing: 0.02em;
-  background: linear-gradient(115deg, #fff6d6 20%, var(--accent) 55%, #e8762c 90%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-}
-
-.landing-title-accent {
-  -webkit-text-stroke: 2px rgba(255, 210, 63, 0.4);
-}
-
-.landing-tagline {
-  margin: 0;
-  font-size: clamp(14px, 2vw, 17px);
-  line-height: 1.65;
-  color: var(--text);
-  max-width: 52ch;
-}
-
-.landing-cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: clamp(14px, 1.8vw, 17px);
-  padding: 16px 34px;
-  border-radius: 999px;
-  box-shadow: 0 12px 40px rgba(255, 210, 63, 0.3);
-}
-
-.landing-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-  font-size: 11.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  animation: hint-bob 2.2s ease-in-out infinite;
-}
-
-@keyframes hint-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(6px); }
-}
-
-.landing-section {
-  padding: clamp(60px, 10vw, 110px) clamp(16px, 6vw, 64px);
-  max-width: 1160px;
-  margin: 0 auto;
-}
-
-.landing-section-title {
-  margin: 0 0 36px;
-  text-align: center;
-  font-size: clamp(24px, 4.5vw, 40px);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.landing-features {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 18px;
-}
-
-.landing-card {
-  background: rgba(30, 23, 49, 0.72);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 26px 22px;
-  backdrop-filter: blur(6px);
-  transition: transform 0.25s ease, border-color 0.25s ease;
-}
-
-.landing-card:hover {
-  transform: translateY(-6px);
-  border-color: var(--accent);
-}
-
-.landing-card-icon {
-  color: var(--accent);
-}
-
-.landing-card h3 {
-  margin: 12px 0 8px;
-  font-size: 16px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.landing-card p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.65;
-}
-
-.landing-strip {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: clamp(24px, 6vw, 80px);
-  padding: clamp(36px, 6vw, 60px) 20px;
-  background: linear-gradient(115deg, rgba(255, 210, 63, 0.08), rgba(232, 118, 44, 0.06));
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-.landing-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.landing-stat-value {
-  font-size: clamp(30px, 5vw, 46px);
-  font-weight: 700;
-  color: var(--accent);
-}
-
-.landing-stat-label {
-  color: var(--muted);
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.landing-final {
-  text-align: center;
-  padding: clamp(70px, 11vw, 130px) 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-}
-
-.landing-final-sprite {
-  width: clamp(90px, 12vw, 150px);
-  image-rendering: pixelated;
-  filter: drop-shadow(0 12px 26px rgba(0, 0, 0, 0.5));
-  animation: hint-bob 3s ease-in-out infinite;
-}
-
-.landing-final h2 {
-  margin: 0;
-  font-size: clamp(22px, 4vw, 36px);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  max-width: 22ch;
-}
-
-.landing-footer {
-  text-align: center;
-  color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  padding: 26px 16px 34px;
-  border-top: 1px solid var(--line);
-}
-
-/* reveal ao entrar na tela */
-.reveal {
-  opacity: 0;
-  transform: translateY(28px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
-}
-
-.reveal.is-visible {
-  opacity: 1;
-  transform: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reveal {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-  .hero-sprite,
-  .landing-hint,
-  .landing-final-sprite {
-    animation: none;
-    transform: none !important;
-  }
-}
-
-/* ---------- calendário mensal (estilo FIFA) ---------- */
 
 .cal-header {
   display: flex;
@@ -3462,19 +3175,6 @@ h1 {
   }
 }
 
-/* ---------- portão de acesso (login/cadastro) ---------- */
-
-.auth-gate {
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  padding: 24px 16px;
-  width: 100%;
-}
-
 /*
  * Voltar discreto, ALINHADO com o cartão. Antes era um botão cheio jogado no
  * canto da tela, competindo com o formulário e sem relação visual com ele.
@@ -3499,63 +3199,6 @@ h1 {
 /* no cadastro o cartão é mais largo que o do login */
 .create-back {
   width: min(100%, 620px);
-}
-
-.auth-card {
-  width: min(100%, 420px);
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 28px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.auth-continue {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.auth-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-}
-
-.auth-divider::before,
-.auth-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--line);
-}
-
-/* "Esqueci minha senha" e afins: botão com cara de link */
-.auth-link {
-  background: none;
-  border: none;
-  padding: 2px;
-  align-self: flex-start;
-  color: var(--muted);
-  font-size: 13px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-
-.auth-link:hover {
-  color: var(--text);
-}
-
-.auth-link:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 4px;
 }
 
 /* cores do clube no editor */

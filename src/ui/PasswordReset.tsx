@@ -1,5 +1,7 @@
 import { KeyRound, LogIn } from 'lucide-react'
 import { useState } from 'react'
+import { AuthField } from './auth/AuthField'
+import { AuthScene } from './auth/AuthScene'
 import { updatePassword } from '../online/account'
 import { validateNewPassword, type PasswordResetErrors } from '../state/passwordReset'
 
@@ -43,58 +45,60 @@ export const PasswordReset = ({ onDone, onCancel }: PasswordResetProps) => {
 
   if (isDone) {
     return (
-      <div className="auth-gate">
-        <div className="auth-card">
-          <h2 className="create-title">Senha atualizada!</h2>
-          <p className="muted">Você já está conectado com a nova senha.</p>
-          <button className="btn btn-icon" onClick={onDone}>
+      <AuthScene
+        place="Portaria · credencial nova"
+        kicker="Balcão da portaria"
+        title="Credencial liberada"
+        subtitle="Senha trocada. Você já está conectado com ela."
+        stamp="deferido"
+      >
+        <div className="gate-actions">
+          <button className="gate-btn" onClick={onDone}>
             <LogIn size={15} aria-hidden="true" /> Entrar no jogo
           </button>
         </div>
-      </div>
+      </AuthScene>
     )
   }
 
   return (
-    <div className="auth-gate">
-      <div className="auth-card">
-        <h2 className="create-title">Criar nova senha</h2>
-        <p className="muted">Defina a nova senha da sua conta.</p>
+    <AuthScene
+      place="Portaria · credencial nova"
+      kicker="Balcão da portaria"
+      title="Nova senha"
+      subtitle="Escolha a senha nova da conta. A antiga deixa de valer na hora."
+    >
+      <div className="badge-fields">
+        <AuthField
+          label="Nova senha"
+          value={password}
+          onChange={setPassword}
+          type="password"
+          autoComplete="new-password"
+          error={errors.password}
+        />
+        <AuthField
+          label="Confirmar nova senha"
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          type="password"
+          autoComplete="new-password"
+          error={errors.confirmPassword}
+          onSubmit={() => void submit()}
+        />
+      </div>
 
-        <label className="create-field">
-          <span className="create-label">Nova senha</span>
-          <input
-            className="create-input"
-            type="password"
-            value={password}
-            autoComplete="new-password"
-            onChange={(event) => setPassword(event.target.value)}
-          />
-          {errors.password && <span className="create-error">{errors.password}</span>}
-        </label>
-        <label className="create-field">
-          <span className="create-label">Confirmar nova senha</span>
-          <input
-            className="create-input"
-            type="password"
-            value={confirmPassword}
-            autoComplete="new-password"
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            onKeyDown={(event) => { if (event.key === 'Enter') void submit() }}
-          />
-          {errors.confirmPassword && <span className="create-error">{errors.confirmPassword}</span>}
-        </label>
+      {serverError && <p className="gate-alert" role="alert">{serverError}</p>}
 
-        {serverError && <p className="crest-error" role="alert">{serverError}</p>}
-
-        <button className="btn btn-icon" disabled={isSubmitting} onClick={() => void submit()}>
+      <div className="gate-actions">
+        <button className="gate-btn" disabled={isSubmitting} onClick={() => void submit()}>
           <KeyRound size={15} aria-hidden="true" /> {isSubmitting ? 'Salvando…' : 'Salvar nova senha'}
         </button>
 
-        <button type="button" className="auth-link" disabled={isSubmitting} onClick={onCancel}>
+        <button type="button" className="gate-link" disabled={isSubmitting} onClick={onCancel}>
           Voltar ao login
         </button>
       </div>
-    </div>
+    </AuthScene>
   )
 }
