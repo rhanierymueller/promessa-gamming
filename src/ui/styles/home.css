@@ -1,0 +1,279 @@
+/* ---------- a carreira: dia de jogo ---------- */
+
+/*
+ * O problema desta tela era hierarquia: cinco painéis com a mesma borda, o
+ * mesmo raio e o mesmo fundo, empilhados — o olho não tinha onde pousar. Aqui
+ * cada bloco ganha um peso: o compromisso manda, a identidade do jogador é a
+ * faixa de cima, o resto obedece.
+ *
+ * Os seletores partem de .shell-tabs/.tab-panel de propósito: precisam vencer
+ * o index.css sem depender da ordem em que os arquivos entram no bundle.
+ */
+
+/* ---------- cabeçalho da shell ---------- */
+
+.shell-tabs .tabs-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding-right: 44px; /* o botão de volume mora nesse canto */
+}
+
+.shell-tabs .tabs-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--steel);
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+.shell-tabs .tabs-brand::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(255, 210, 63, 0.8);
+}
+
+.shell-tabs .tabs-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(21px, 4.6vw, 32px);
+  line-height: 1;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+/* ---------- a faixa de identidade ---------- */
+
+.tab-panel .hero-bar {
+  position: relative;
+  overflow: hidden;
+  padding: 15px 17px;
+  border-radius: 4px;
+  border-color: #2b2242;
+  background:
+    linear-gradient(118deg, rgba(255, 210, 63, 0.1), transparent 44%),
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.015) 0 2px, transparent 2px 7px),
+    linear-gradient(#1d1730, #17122a);
+}
+
+/* o filete dourado: quem é você vem antes de tudo */
+.tab-panel .hero-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--accent);
+}
+
+.tab-panel .hero-avatar {
+  border-radius: 3px;
+  border-color: #322850;
+}
+
+.tab-panel .hero-name {
+  font-family: var(--display);
+  font-size: 23px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.tab-panel .hero-sub {
+  margin-top: 5px;
+  color: var(--steel);
+  font-size: 11.5px;
+}
+
+.tab-panel .hero-stat dt {
+  color: var(--steel);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+}
+
+.tab-panel .hero-stat dd {
+  font-family: var(--display);
+  font-size: 25px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- rótulos de seção: mesma marca das telas de entrada ---------- */
+
+.tab-panel .card-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--steel);
+  font-size: 10px;
+  letter-spacing: 0.26em;
+}
+
+.tab-panel .card-label::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.85;
+}
+
+/* ---------- o bloco dominante: o próximo compromisso ---------- */
+
+.tab-panel .next-match,
+.tab-panel .callup-card {
+  position: relative;
+  overflow: hidden;
+  padding: 20px 20px 18px;
+  border: 1px solid #2b2242;
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  background:
+    linear-gradient(rgba(16, 12, 26, 0.82), rgba(14, 11, 22, 0.96)),
+    url('../../assets/backgrounds/estadio.jpg') center 30% / cover;
+  outline: none;
+}
+
+/* vinheta: a arte é atmosfera, o texto é o assunto */
+.tab-panel .next-match::after,
+.tab-panel .callup-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(80% 70% at 50% 40%, transparent, rgba(12, 10, 20, 0.75));
+  pointer-events: none;
+}
+
+.tab-panel .next-match > *,
+.tab-panel .callup-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.tab-panel .next-match-clubs {
+  font-family: var(--display);
+  font-size: clamp(19px, 4.4vw, 27px);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.tab-panel .next-vs {
+  color: var(--accent);
+}
+
+.tab-panel .next-meta {
+  color: var(--steel);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tab-panel .callup-card strong {
+  font-family: var(--display);
+  font-size: clamp(18px, 4vw, 25px);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.tab-panel .callup-text {
+  color: var(--steel);
+  font-size: 12px;
+}
+
+/* o veredito da temporada é manchete, não parágrafo centralizado */
+.tab-panel .season-final {
+  font-family: var(--display);
+  font-size: clamp(22px, 5.4vw, 38px);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-align: left;
+  text-wrap: balance;
+}
+
+/* ---------- avisos: filete em vez de caixa ---------- */
+
+.tab-panel .division-banner {
+  border-radius: 4px;
+}
+
+/* ---------- treinamento ---------- */
+
+.tab-panel .training-card {
+  border-radius: 4px;
+  border-color: #2b2242;
+  transition: transform 0.22s ease, border-color 0.22s ease;
+}
+
+.tab-panel .training-card:hover {
+  transform: translateY(-3px);
+}
+
+.tab-panel .training-art {
+  height: 96px;
+  filter: saturate(0.65) brightness(0.55);
+  box-shadow: inset 0 -52px 44px -22px #17122a;
+}
+
+.tab-panel .training-name {
+  padding-top: 9px;
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.tab-panel .training-hint {
+  color: var(--steel);
+  font-size: 11px;
+}
+
+/* ---------- barra de abas ---------- */
+
+.shell-tabs .tabbar-item {
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.shell-tabs .tabbar-active {
+  position: relative;
+}
+
+/* a aba ativa acende, em vez de só mudar de cor */
+.shell-tabs .tabbar-active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 26px;
+  height: 2px;
+  transform: translateX(-50%);
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(255, 210, 63, 0.9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-panel .training-card {
+    transition: none;
+  }
+  .tab-panel .training-card:hover {
+    transform: none;
+  }
+}
