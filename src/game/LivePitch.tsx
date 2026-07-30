@@ -1,8 +1,21 @@
 import { useEffect, useRef } from 'react'
 import gramadoUrl from '../assets/backgrounds/gramado.jpg'
+import ballUrl from '../assets/sprites/ball.png'
+import userPortraitFUrl from '../assets/sprites/f_portrait.png'
+import userPortraitUrl from '../assets/sprites/s_portrait.png'
 import { fieldName } from '../data/squadNames'
 import type { Tactic } from '../engine/match/tactics'
 import { canDribble, canReceivePass, isKeeperIndex } from '../engine/match/pitchRoles'
+import { facePresentationFor, type FacePresentation } from './faces'
+import type { PlayerGender } from '../state/save'
+import {
+  ballLiftFor,
+  ballPointAt,
+  flightDurationFor,
+  motionForPass,
+  travelProgressFor,
+  type BallMotion,
+} from './liveBallPhysics'
 
 /** Estatísticas VIVAS da mesa — contadas dos eventos reais da simulação. */
 export interface LivePitchStats {
@@ -43,8 +56,14 @@ interface LivePitchProps {
   readonly opponentColor: string
   readonly teamSquad: readonly string[]
   readonly opponentSquad: readonly string[]
+  /** IDs reais mantêm o mesmo rosto usado nas cartas e na escalação. */
+  readonly teamPlayerIds?: readonly string[]
+  readonly opponentPlayerIds?: readonly string[]
+  readonly gender?: PlayerGender
   /** Nome do SEU craque — destacado em amarelo no ataque. */
   readonly userName: string
+  /** Retrato configurado no Perfil para o protagonista. */
+  readonly userFaceUrl?: string | null
   readonly directive: PitchDirective | null
   /** Instrução tática atual — muda o comportamento do bloco em tempo real. */
   readonly tactic: Tactic
@@ -93,6 +112,7 @@ interface SimPlayer {
   name: string
   side: 'team' | 'opponent'
   isUser: boolean
+  face: FacePresentation | null
   base: Vec
   pos: Vec
 }
@@ -107,6 +127,11 @@ interface SimState {
   ballTo: Vec
   ballProgress: number
   ballFlightTime: number
+  ballMotion: BallMotion
+  ballDistance: number
+  ballCurve: number
+  ballRotation: number
+  ballSpinDirection: 1 | -1
   phase: SimPhase
   holdTimer: number
   flashTimer: number
@@ -132,7 +157,11 @@ export const LivePitch = ({
   opponentColor,
   teamSquad,
   opponentSquad,
+  teamPlayerIds = [],
+  opponentPlayerIds = [],
+  gender = 'masculino',
   userName,
+  userFaceUrl,
   directive,
   tactic,
   stats,
@@ -142,6 +171,7 @@ export const LivePitch = ({
   onDirectiveComplete,
 }: LivePitchProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const userFaceImageRef = useRef<HTMLImageElement | null>(null)
   const speedRef = useRef(speed)
   speedRef.current = speed
   const frozenRef = useRef(frozen)
@@ -155,6 +185,21 @@ export const LivePitch = ({
   directiveRef.current = directive
   const onCompleteRef = useRef(onDirectiveComplete)
   onCompleteRef.current = onDirectiveComplete
+
+  useEffect(() => {
+    const source = userFaceUrl ?? (gender === 'feminino' ? userPortraitFUrl : userPortraitUrl)
+    let cancelled = false
+    const image = new Image()
+    image.onload = () => {
+      if (!cancelled) userFaceImageRef.current = image
+    }
+    // Se a versão personalizada falhar, o retrato-base já carregado continua
+    // visível no ref em vez de voltar para a bolinha.
+    image.src = source
+    return () => {
+      cancelled = true
+    }
+  }, [gender, userFaceUrl])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -173,6 +218,9 @@ export const LivePitch = ({
           name: i === userIndex ? userName : teamSquad[i] ?? `#${i}`,
           side: 'team',
           isUser: i === userIndex,
+          face: i === userIndex
+            ? null
+            : facePresentationFor(teamPlayerIds[i] ?? teamSquad[i] ?? `team-${i}`, gender),
           base: { ...base },
           pos: { ...base },
         })
@@ -182,6 +230,7 @@ export const LivePitch = ({
           name: opponentSquad[i] ?? `#${i}`,
           side: 'opponent',
           isUser: false,
+          face: facePresentationFor(opponentPlayerIds[i] ?? opponentSquad[i] ?? `opponent-${i}`, gender),
           base: { x: 1 - base.x, y: 1 - base.y },
           pos: { x: 1 - base.x, y: 1 - base.y },
         })
@@ -197,6 +246,11 @@ export const LivePitch = ({
       ballTo: { ...FORMATION[6] },
       ballProgress: 1,
       ballFlightTime: 0.5,
+      ballMotion: 'ground-pass',
+      ballDistance: 0,
+      ballCurve: 0,
+      ballRotation: 0,
+      ballSpinDirection: 1,
       phase: 'holding',
       holdTimer: 0.4,
       flashTimer: 0,
@@ -209,23 +263,43 @@ export const LivePitch = ({
     }
     simRef.current = sim
 
+    const faceImages = new Map<string, HTMLImageElement>()
+    for (const player of sim.players) {
+      if (!player.face || faceImages.has(player.face.url)) continue
+      const image = new Image()
+      image.src = player.face.url
+      faceImages.set(player.face.url, image)
+    }
+
     const teammatesOf = (side: 'team' | 'opponent'): number[] =>
       sim.players.map((p, i) => (p.side === side ? i : -1)).filter((i) => i >= 0 && canReceivePass(i))
 
     const attackX = (side: 'team' | 'opponent'): number => (side === 'team' ? 1 : 0)
 
-    const startBallFlight = (to: Vec, flightTime: number): void => {
+    /** Bola ao lado do marcador, como se estivesse no pé de apoio. */
+    const ballAtFeet = (player: SimPlayer): Vec => ({
+      x: Math.max(0.01, Math.min(0.99, player.pos.x + (player.side === 'team' ? 0.014 : -0.014))),
+      y: Math.max(0.02, Math.min(0.98, player.pos.y + 0.024)),
+    })
+
+    const startBallFlight = (to: Vec, motion: BallMotion, urgent = false): void => {
       sim.ballFrom = { ...sim.ball }
       sim.ballTo = to
       sim.ballProgress = 0
-      sim.ballFlightTime = flightTime
+      sim.ballDistance = dist(sim.ballFrom, sim.ballTo)
+      sim.ballMotion = motion
+      sim.ballFlightTime = flightDurationFor(sim.ballDistance, motion, urgent)
+      const curveScale = motion === 'shot' ? 0.022 : motion === 'lofted-pass' ? 0.012 : 0.004
+      sim.ballCurve = (Math.random() - 0.5) * curveScale * 2
+      sim.ballSpinDirection = sim.ballTo.y >= sim.ballFrom.y ? 1 : -1
       sim.phase = 'ballMoving'
     }
 
     const passTo = (targetIndex: number, urgent = false): void => {
       sim.holder = targetIndex
-      const flightTime = urgent ? 0.2 + Math.random() * 0.1 : 0.4 + Math.random() * 0.25
-      startBallFlight({ ...sim.players[targetIndex].pos }, flightTime)
+      const target = ballAtFeet(sim.players[targetIndex])
+      const distance = dist(sim.ball, target)
+      startBallFlight(target, motionForPass(distance, urgent), urgent)
     }
 
     /** Escolhe um companheiro: prefere quem está à frente, a distância sã. */
@@ -271,7 +345,7 @@ export const LivePitch = ({
       if (forcedGoal) {
         sim.pendingOutcome = 'goal'
         countShot(side, true)
-        startBallFlight(goalMouth, 0.4)
+        startBallFlight(goalMouth, 'shot', true)
         return
       }
       const outcome = Math.random() < 0.55 ? 'saved' : 'wide'
@@ -281,7 +355,7 @@ export const LivePitch = ({
         outcome === 'wide'
           ? { x: attackX(side), y: Math.random() < 0.5 ? 0.16 : 0.84 }
           : goalMouth
-      startBallFlight(target, 0.38)
+      startBallFlight(target, 'shot', true)
     }
 
     /** Índice do protagonista da entrega: você, ou o atacante central deles. */
@@ -396,7 +470,7 @@ export const LivePitch = ({
       // defesa: goleiro rival fica com a bola; fora: tiro de meta
       const rivalKeeper = side === 'team' ? 11 : 0
       sim.holder = rivalKeeper
-      sim.ball = { ...sim.players[rivalKeeper].pos }
+      sim.ball = ballAtFeet(sim.players[rivalKeeper])
       sim.phase = 'holding'
       sim.holdTimer = 0.6
     }
@@ -405,7 +479,7 @@ export const LivePitch = ({
       // quem sofreu o gol recomeça com a bola no seu volante
       const kicker = sim.lastGoalSide === 'team' ? 17 : 6
       sim.holder = kicker
-      sim.ball = { ...sim.players[kicker].pos }
+      sim.ball = ballAtFeet(sim.players[kicker])
       sim.phase = 'holding'
       sim.holdTimer = 0.7
     }
@@ -497,17 +571,25 @@ export const LivePitch = ({
       })
 
       if (sim.phase === 'ballMoving') {
+        const previousBall = sim.ball
         sim.ballProgress = Math.min(1, sim.ballProgress + dt / sim.ballFlightTime)
-        sim.ball = {
-          x: sim.ballFrom.x + (sim.ballTo.x - sim.ballFrom.x) * sim.ballProgress,
-          y: sim.ballFrom.y + (sim.ballTo.y - sim.ballFrom.y) * sim.ballProgress,
+        if (sim.pendingOutcome === 'none') {
+          // o alvo continua se movimentando: o passe acompanha o pé dele
+          sim.ballTo = ballAtFeet(sim.players[sim.holder])
         }
+        const travelProgress = travelProgressFor(sim.ballProgress, sim.ballMotion)
+        sim.ball = ballPointAt(sim.ballFrom, sim.ballTo, travelProgress, sim.ballCurve)
+        const previousPixel = toPitch(previousBall)
+        const currentPixel = toPitch(sim.ball)
+        const travelledPixels = dist(previousPixel, currentPixel)
+        const spinMultiplier = sim.ballMotion === 'shot' ? 1.35 : sim.ballMotion === 'lofted-pass' ? 0.75 : 1
+        sim.ballRotation += (travelledPixels / 2.7) * spinMultiplier * sim.ballSpinDirection
         if (sim.ballProgress >= 1) {
           if (sim.pendingOutcome !== 'none') {
             sim.lastGoalSide = sim.players[sim.holder].side
             resolveShotOutcome()
           } else {
-            sim.ball = { ...sim.players[sim.holder].pos }
+            sim.ball = ballAtFeet(sim.players[sim.holder])
             sim.phase = 'holding'
             // entrega em andamento: decisões instantâneas até a bola chegar em você
             sim.holdTimer = sim.directiveQueue?.kind === 'deliver'
@@ -516,7 +598,7 @@ export const LivePitch = ({
           }
         }
       } else if (sim.phase === 'holding') {
-        sim.ball = { ...sim.players[sim.holder].pos }
+        sim.ball = ballAtFeet(sim.players[sim.holder])
         sim.holdTimer -= dt
         if (sim.holdTimer <= 0) decide()
       } else if (sim.phase === 'goalFlash') {
@@ -628,6 +710,8 @@ export const LivePitch = ({
       pitchCanvas = buildPitchCanvas(grassTexture)
     }
     grassTexture.src = gramadoUrl
+    const ballTexture = new Image()
+    ballTexture.src = ballUrl
 
     const drawPitch = (): void => {
       ctx.drawImage(pitchCanvas, 0, 0, W, H)
@@ -637,6 +721,7 @@ export const LivePitch = ({
       const pos = toPitch(p.pos)
       const wobble = Math.sin(t * 2 + pos.x) * 0.6
       const color = p.isUser ? USER_COLOR : p.side === 'team' ? teamColor : opponentColor
+      const faceImage = p.isUser ? userFaceImageRef.current : p.face ? faceImages.get(p.face.url) : null
       // sombra
       ctx.beginPath()
       ctx.ellipse(pos.x, pos.y + 5, 4.5, 1.6, 0, 0, Math.PI * 2)
@@ -665,6 +750,38 @@ export const LivePitch = ({
       ctx.strokeStyle = 'rgba(0,0,0,0.45)'
       ctx.lineWidth = 0.6
       ctx.stroke()
+
+      // Retrato dentro do marcador. Enquanto a imagem carrega, o corpo
+      // colorido acima continua sendo um fallback completo.
+      if (faceImage?.complete && faceImage.naturalWidth > 0) {
+        const radius = p.isUser ? 5.7 : 5
+        const diameter = radius * 2
+        const xShift = p.isUser ? 0 : p.face?.xShiftPercent ?? 0
+        const topCrop = p.isUser ? 0 : p.face?.topCropPercent ?? 0
+        const topCropUnits = (diameter * topCrop) / 100
+        ctx.save()
+        ctx.beginPath()
+        ctx.arc(pos.x, pos.y + wobble, radius, 0, Math.PI * 2)
+        ctx.clip()
+        // Mesmo sendo pixel art, aqui o retrato é REDUZIDO de ~100 px para
+        // ~11 px; suavizar preserva olhos e rosto. Pixelado só ajuda ao ampliar.
+        ctx.imageSmoothingEnabled = true
+        ctx.drawImage(
+          faceImage,
+          pos.x - radius + (diameter * xShift) / 100,
+          pos.y + wobble - radius - topCropUnits,
+          diameter,
+          diameter + topCropUnits,
+        )
+        ctx.restore()
+
+        // O aro preserva a leitura imediata de quem joga por cada lado.
+        ctx.beginPath()
+        ctx.arc(pos.x, pos.y + wobble, p.isUser ? 6.3 : 5.5, 0, Math.PI * 2)
+        ctx.strokeStyle = color
+        ctx.lineWidth = p.isUser ? 1.8 : 1.4
+        ctx.stroke()
+      }
     }
 
     const LABEL_MIN_DX = 26
@@ -693,40 +810,75 @@ export const LivePitch = ({
 
     const drawBall = (): void => {
       const pos = toPitch(sim.ball)
-      // voo em arco: a bola sobe no meio do passe (comprimento dita a altura)
-      let lift = 0
+      const lift = sim.phase === 'ballMoving'
+        ? ballLiftFor(sim.ballProgress, sim.ballMotion, sim.ballDistance)
+        : 0
+
       if (sim.phase === 'ballMoving') {
-        const from = toPitch(sim.ballFrom)
-        const to = toPitch(sim.ballTo)
-        const span = Math.min(1, dist(sim.ballFrom, sim.ballTo) / 0.5)
-        lift = Math.sin(sim.ballProgress * Math.PI) * (2 + span * 7)
-        // rastro esmaecendo
-        const trail = ctx.createLinearGradient(from.x, from.y, to.x, to.y)
-        trail.addColorStop(0, 'rgba(255,210,63,0)')
-        trail.addColorStop(1, 'rgba(255,210,63,0.5)')
+        // Rastro acompanha a curva e a altura em vez de cortar caminho reto.
+        const trailLength = sim.ballMotion === 'shot' ? 0.28 : sim.ballMotion === 'lofted-pass' ? 0.2 : 0.1
+        const trailStart = Math.max(0, sim.ballProgress - trailLength)
+        const steps = 7
+        let firstPixel: Vec | null = null
+        let lastPixel: Vec | null = null
         ctx.beginPath()
-        ctx.moveTo(from.x, from.y)
-        ctx.lineTo(pos.x, pos.y)
-        ctx.strokeStyle = trail
-        ctx.lineWidth = 1.5
+        for (let step = 0; step <= steps; step++) {
+          const rawProgress = trailStart + (sim.ballProgress - trailStart) * (step / steps)
+          const travelProgress = travelProgressFor(rawProgress, sim.ballMotion)
+          const point = ballPointAt(sim.ballFrom, sim.ballTo, travelProgress, sim.ballCurve)
+          const pixel = toPitch(point)
+          const pointLift = ballLiftFor(rawProgress, sim.ballMotion, sim.ballDistance)
+          const liftedPixel = { x: pixel.x, y: pixel.y - 1.2 - pointLift }
+          if (step === 0) {
+            ctx.moveTo(liftedPixel.x, liftedPixel.y)
+            firstPixel = liftedPixel
+          } else {
+            ctx.lineTo(liftedPixel.x, liftedPixel.y)
+          }
+          lastPixel = liftedPixel
+        }
+        if (firstPixel && lastPixel) {
+          const trail = ctx.createLinearGradient(firstPixel.x, firstPixel.y, lastPixel.x, lastPixel.y)
+          trail.addColorStop(0, 'rgba(245,240,230,0)')
+          trail.addColorStop(1, sim.ballMotion === 'shot' ? 'rgba(255,210,63,0.68)' : 'rgba(245,240,230,0.42)')
+          ctx.strokeStyle = trail
+          ctx.lineWidth = sim.ballMotion === 'shot' ? 1.6 : 1
+          ctx.stroke()
+        }
+      }
+
+      // A sombra encolhe e perde força conforme a bola sobe.
+      const shadowScale = Math.max(0.42, 1 - lift * 0.055)
+      ctx.beginPath()
+      ctx.ellipse(pos.x, pos.y + 1.5, 3 * shadowScale, 1.25 * shadowScale, 0, 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(0,0,0,${Math.max(0.12, 0.36 - lift * 0.025)})`
+      ctx.fill()
+      const ballY = pos.y - 1.2 - lift
+      const size = 7.2 + Math.min(1, lift / 8) * 1.2
+
+      if (ballTexture.complete && ballTexture.naturalWidth > 0) {
+        ctx.save()
+        ctx.translate(pos.x, ballY)
+        ctx.rotate(sim.ballRotation)
+        ctx.drawImage(ballTexture, -size / 2, -size / 2, size, size)
+        ctx.restore()
+      } else {
+        // Fallback já parece uma bola, não apenas um ponto branco.
+        const shine = ctx.createRadialGradient(pos.x - 1, ballY - 1, 0.4, pos.x, ballY, size / 2)
+        shine.addColorStop(0, '#FFFFFF')
+        shine.addColorStop(1, '#D8D4C8')
+        ctx.beginPath()
+        ctx.arc(pos.x, ballY, size / 2, 0, Math.PI * 2)
+        ctx.fillStyle = shine
+        ctx.fill()
+        ctx.beginPath()
+        ctx.arc(pos.x, ballY, 1.2, 0, Math.PI * 2)
+        ctx.fillStyle = '#171717'
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(0,0,0,0.65)'
+        ctx.lineWidth = 0.7
         ctx.stroke()
       }
-      // sombra no chão (separa a bola do gramado durante o voo)
-      ctx.beginPath()
-      ctx.ellipse(pos.x, pos.y + 1.5, 2.6, 1.1, 0, 0, Math.PI * 2)
-      ctx.fillStyle = `rgba(0,0,0,${0.35 - lift * 0.02})`
-      ctx.fill()
-      const ballY = pos.y - 2 - lift
-      const shine = ctx.createRadialGradient(pos.x - 1, ballY - 1, 0.4, pos.x, ballY, 3.4)
-      shine.addColorStop(0, '#FFFFFF')
-      shine.addColorStop(1, '#D8D4C8')
-      ctx.beginPath()
-      ctx.arc(pos.x, ballY, 3, 0, Math.PI * 2)
-      ctx.fillStyle = shine
-      ctx.fill()
-      ctx.strokeStyle = 'rgba(0,0,0,0.55)'
-      ctx.lineWidth = 1
-      ctx.stroke()
     }
 
     let rafId = 0

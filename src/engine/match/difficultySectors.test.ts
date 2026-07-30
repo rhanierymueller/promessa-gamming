@@ -43,14 +43,14 @@ describe('matchConfigForSectors', () => {
     expect(dominante.playerDecisions).toBeGreaterThan(DEFAULT_MATCH_CONFIG.playerDecisions)
   })
 
-  it('perder o meio-campo nunca zera as decisões', () => {
+  it('perder o meio-campo preserva as decisões básicas', () => {
     const atropelado = matchConfigForSectors(DEFAULT_MATCH_CONFIG, setores(40, 40, 40), setores(95, 95, 95))
-    expect(atropelado.playerDecisions).toBeGreaterThanOrEqual(1)
+    expect(atropelado.playerDecisions).toBe(DEFAULT_MATCH_CONFIG.playerDecisions)
   })
 
-  it('nunca deixa a partida sem nenhum lance jogável', () => {
+  it('perder o meio-campo preserva os chutes básicos', () => {
     const atropelado = matchConfigForSectors(DEFAULT_MATCH_CONFIG, setores(40, 40, 40), setores(95, 95, 95))
-    expect(atropelado.playerShots).toBeGreaterThanOrEqual(1)
+    expect(atropelado.playerShots).toBe(DEFAULT_MATCH_CONFIG.playerShots)
   })
 
   it('duelo travado entre setores fortes segura os dois placares', () => {

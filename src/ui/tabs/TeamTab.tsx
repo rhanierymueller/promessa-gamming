@@ -210,6 +210,8 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
           formation={isMyClub ? save.formation : formationIdFor(squadClub.id)}
           lineup={isMyClub ? save.lineup : starters}
           userIndex={isMyClub ? USER_SQUAD_INDEX : -1}
+          gender={save.appearance.gender}
+          userFaceUrl={isMyClub ? userPortrait : null}
           primaryColor={squadClub.colors.primary}
           editable={isMyClub}
           onFormationChange={(id) => onSaveChange(setFormation(save, id))}

@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'vitest'
+import { clubById } from '../../data/clubs'
 import { createRng } from '../rng'
+import { squadPlayersFor } from '../squad/players'
 import { advanceSeason, computeTable, createSeason } from './season'
-import { seasonScorers } from './scorers'
+import { distribute, seasonScorers } from './scorers'
 import type { SeasonState } from './types'
 
 /**
@@ -105,6 +107,22 @@ describe('artilharia da temporada', () => {
 
     // Assert: o peso do GOL é 0.02 — em uma temporada inteira não deve liderar
     expect(scorers[0].goals).toBeGreaterThan(0)
+  })
+
+  test('o principal finalizador concentra uma fatia de gols digna de craque', () => {
+    const squad = squadPlayersFor(clubById('real-vila')!, 1)
+    const acumulado = new Map<string, number>()
+    const golsPorAmostra = 30
+    const amostras = 200
+
+    for (let seed = 0; seed < amostras; seed++) {
+      for (const [playerId, goals] of distribute(squad, golsPorAmostra, seed)) {
+        acumulado.set(playerId, (acumulado.get(playerId) ?? 0) + goals)
+      }
+    }
+
+    const maiorTotal = Math.max(...acumulado.values())
+    expect(maiorTotal / (golsPorAmostra * amostras)).toBeGreaterThan(0.3)
   })
 
   test('quem marca é gente de verdade do elenco (nome preenchido)', () => {

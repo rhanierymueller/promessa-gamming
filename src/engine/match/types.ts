@@ -56,7 +56,10 @@ export interface MatchState {
 export interface MatchConfig {
   /** Quantos lances jogáveis de cada tipo o jogador recebe. */
   readonly playerShots: number
+  /** Teto de faltas a favor; cada vaga só entra no plano quando a chance acerta. */
   readonly playerFreeKicks: number
+  /** Chance-base de cada falta a favor configurada acontecer. */
+  readonly playerFreeKickChance: number
   readonly playerDecisions: number
   /** Faltas DO adversário que você defende no gol. */
   readonly opponentFreeKicks: number
@@ -66,6 +69,11 @@ export interface MatchConfig {
    * interações, não mais um passo obrigatório de toda partida.
    */
   readonly diceDuelChance: number
+  /**
+   * Quantos especiais (falta a favor ou dados) o plano tenta garantir.
+   * Se os sorteios-base falharem juntos, escolhe um deles pelos seus pesos.
+   */
+  readonly minimumSpecialMoments: number
   /** Chance de cada time marcar em lances que não envolvem o jogador. */
   readonly teamGoalChance: number
   readonly opponentGoalChance: number

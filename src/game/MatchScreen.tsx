@@ -7,17 +7,16 @@ import {
   type PlayerAttributes,
 } from '../engine/career/attributes'
 import {
+  acaoDaJogada,
   DEFENSE_RESULT_LINES,
+  fechoDaDecisao,
   GOLACO_LINE,
   narrationForMoment,
-  DECISION_ASSIST_LINE,
-  DECISION_CHANCE_WASTED_LINE,
-  DECISION_RESULT_LINES,
   SHOT_RESULT_LINES,
   SIM_LINES,
   TACTIC_LINES,
   WALL_BLOCK_LINE,
-  withAssist,
+  withCast,
   withName,
 } from '../data/narration'
 import { simulateToEnd, type AutoPlayEvent, type AutoPlayProbs } from '../engine/match/autoplay'
@@ -64,6 +63,7 @@ import { playStageEvent, stopMatchAudio } from './audio'
 import { startResultsMusic, stopResultsMusic } from './music'
 import { DEFAULT_APPEARANCE, type Competition, type MatchRecord, type PlayerAppearance } from '../state/save'
 import { ClubCrest } from '../ui/ClubCrest'
+import { usePlayerPortrait } from '../ui/usePlayerPortrait'
 import { createLiveStats, LivePitch, type PitchDirective } from './LivePitch'
 import {
   EMPTY_REVEAL,
@@ -230,6 +230,8 @@ export const MatchScreen = ({
   opponentDivision = -1,
   onExit,
 }: MatchScreenProps) => {
+  const userPortrait = usePlayerPortrait(appearance)
+
   // elenco com o SEU craque dentro — a força do time muda com a escalação
   const teamPlayers = useMemo(() => {
     const squad = squadWithSignings(squadPlayersFor(club, careerYear, appearance.gender), signings, careerYear)
@@ -310,12 +312,67 @@ export const MatchScreen = ({
     () => effectiveLineup.map((squadIndex) => teamPlayers[squadIndex]?.name ?? `#${squadIndex}`),
     [effectiveLineup, teamPlayers],
   )
+  const teamPlayerIds = useMemo(
+    () => effectiveLineup.map((squadIndex) => teamPlayers[squadIndex]?.id ?? `team-${squadIndex}`),
+    [effectiveLineup, teamPlayers],
+  )
   const userIndex = Math.max(0, effectiveLineup.indexOf(USER_SQUAD_INDEX))
-  const opponentSquad = useMemo(() => {
+
+  /**
+   * Os homens de frente do SEU time, para dar nome ao gol do companheiro.
+   *
+   * Ordena pelo x do desenho tático, então quem está mais adiantado vem
+   * primeiro. Descarta o slot 0 (goleiro) e o seu próprio: sem isso a
+   * assistência creditava o gol ao goleiro, que é o primeiro do vetor.
+   */
+  const finishers = useMemo(() => {
+    const layout = FORMATIONS[formation].layout
+    const candidatos = teamSquad
+      .map((nome, slot) => ({ nome, slot, x: layout[slot]?.x ?? 0 }))
+      .filter(({ slot }) => slot !== 0 && slot !== userIndex)
+      .sort((a, b) => b.x - a.x)
+      .slice(0, 3)
+      .map(({ nome }) => nome)
+    return candidatos.length > 0 ? candidatos : ['o companheiro']
+  }, [teamSquad, formation, userIndex])
+  const opponentPitchPlayers = useMemo(() => {
     // os nomes em campo são os da MELHOR escalação do rival, não os 11 primeiros
     const squad = rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender)
-    return bestLineup(squad, FORMATIONS['4-3-3']).map((index) => squad[index].name)
+    return bestLineup(squad, FORMATIONS['4-3-3']).map((index) => squad[index])
   }, [opponent, opponentDivision, careerYear, appearance.gender])
+  const opponentSquad = useMemo(
+    () => opponentPitchPlayers.map((player) => player.name),
+    [opponentPitchPlayers],
+  )
+  const opponentPlayerIds = useMemo(
+    () => opponentPitchPlayers.map((player) => player.id),
+    [opponentPitchPlayers],
+  )
+
+  /**
+   * Os atacantes DELES, para o contra-ataque ter autor.
+   *
+   * `opponentSquad` sai na ordem dos slots do 4-3-3, então os três últimos são
+   * a linha de frente. "Eles marcaram" é legenda; "Emerson apareceu sozinho na
+   * área" é narração.
+   */
+  const rivalStrikers = useMemo(
+    () => (opponentSquad.length >= 3 ? opponentSquad.slice(-3) : ['o camisa 9 deles']),
+    [opponentSquad],
+  )
+
+  /** Elenco do lance: a mesma variação sempre escolhe os mesmos coadjuvantes. */
+  const castFor = (variation: number) => ({
+    name: playerName,
+    mate: finishers[Math.abs(variation) % finishers.length],
+    rival: rivalStrikers[Math.abs(variation) % rivalStrikers.length],
+  })
+
+  /** Narração do plano já preenchida com os nomes desta partida. */
+  const narrateMoment = (moment: ReturnType<typeof currentMoment>): string => {
+    const variation = 'templateId' in moment ? moment.templateId : moment.minute
+    return withCast(narrationForMoment(moment), castFor(variation))
+  }
 
   // contadores VIVOS: tudo que aparece no resumo aconteceu no campo
   const liveStatsRef = useRef(createLiveStats())
@@ -382,7 +439,7 @@ export const MatchScreen = ({
     if (!moment) return
     pendingMomentRef.current = null
     setDirective(null)
-    pushLine({ minute: moment.minute, text: narrationForMoment(moment), tone: 'you' })
+    pushLine({ minute: moment.minute, text: narrateMoment(moment), tone: 'you' })
     if (moment.kind === 'playerDecision') setMode('decision')
     else if (moment.kind === 'opponentFreeKick') setMode('defense')
     else if (moment.kind === 'diceDuel') setMode('dice')
@@ -480,7 +537,7 @@ export const MatchScreen = ({
           // a engine avança agora (o cursor não pode esperar), a TELA espera a bola entrar
           choreographGoal(isOurs ? 'team' : 'opponent', {
             minute: moment.minute,
-            text: narrationForMoment(moment),
+            text: narrateMoment(moment),
             tone: isOurs ? 'good' : 'bad',
           })
         } else {
@@ -493,7 +550,7 @@ export const MatchScreen = ({
         setMatch(advanceAuto(match, roll.value))
         return
       }
-      pushLine({ minute: moment.minute, text: narrationForMoment(moment), tone: 'normal' })
+      pushLine({ minute: moment.minute, text: narrateMoment(moment), tone: 'normal' })
       setMatch(advance(match))
       return
     }
@@ -512,7 +569,10 @@ export const MatchScreen = ({
         const side = goalRoll.value
         choreographGoal(side, {
           minute: Math.floor(clock),
-          text: side === 'team' ? TACTIC_LINES.extraTeamGoal : TACTIC_LINES.extraOpponentGoal,
+          text: withCast(
+            side === 'team' ? TACTIC_LINES.extraTeamGoal : TACTIC_LINES.extraOpponentGoal,
+            castFor(Math.floor(clock)),
+          ),
           tone: side === 'team' ? 'good' : 'bad',
         })
         setMatch(applyExtraGoal(match, side))
@@ -527,12 +587,13 @@ export const MatchScreen = ({
   }
 
   const simLineFor = (event: AutoPlayEvent): LogLine => {
+    const cast = castFor(event.minute)
     switch (event.kind) {
       case 'playerShot':
       case 'playerFreeKick':
         return {
           minute: event.minute,
-          text: withName(event.success ? SIM_LINES.shotGoal : SIM_LINES.shotMiss, playerName),
+          text: withCast(event.success ? SIM_LINES.shotGoal : SIM_LINES.shotMiss, cast),
           tone: event.success ? 'good' : 'bad',
         }
       case 'playerDecision': {
@@ -544,18 +605,18 @@ export const MatchScreen = ({
           contra: { text: SIM_LINES.decisionCounter, tone: 'bad' as const },
         }
         const linha = linhas[event.desfecho ?? 'nada']
-        return { minute: event.minute, text: withName(linha.text, playerName), tone: linha.tone }
+        return { minute: event.minute, text: withCast(linha.text, cast), tone: linha.tone }
       }
       case 'opponentFreeKick':
         return {
           minute: event.minute,
-          text: withName(event.success ? SIM_LINES.defenseSave : SIM_LINES.defenseConcede, playerName),
+          text: withCast(event.success ? SIM_LINES.defenseSave : SIM_LINES.defenseConcede, cast),
           tone: event.success ? 'good' : 'bad',
         }
       case 'teamGoal':
-        return { minute: event.minute, text: SIM_LINES.planTeamGoal, tone: 'good' }
+        return { minute: event.minute, text: withCast(SIM_LINES.planTeamGoal, cast), tone: 'good' }
       default:
-        return { minute: event.minute, text: SIM_LINES.planOpponentGoal, tone: 'bad' }
+        return { minute: event.minute, text: withCast(SIM_LINES.planOpponentGoal, cast), tone: 'bad' }
     }
   }
 
@@ -640,38 +701,45 @@ export const MatchScreen = ({
     decisionRngRef.current = next
     const moment = currentMoment(match)
     const { desfecho, notaDelta } = outcome.resolucao
-    const stats = liveStatsRef.current
-
     const marcouPraMim = desfecho === 'gol'
     const marcouPeloTime = desfecho === 'chance' && outcome.assistConvertida
     const sofreu = desfecho === 'contra'
-
-    if (marcouPraMim || marcouPeloTime) {
-      stats.teamShots += 1
-      stats.teamOnTarget += 1
-    } else if (sofreu) {
-      stats.oppShots += 1
-      stats.oppOnTarget += 1
+    const cast = castFor(next.seed)
+    const action: LogLine = {
+      minute: moment.minute,
+      text: withCast(acaoDaJogada(outcome.jogada.id, desfecho), cast),
+      tone:
+        desfecho === 'gol' || desfecho === 'chance'
+          ? 'good'
+          : desfecho === 'nada'
+            ? 'normal'
+            : 'bad',
     }
+    const closingTemplate = fechoDaDecisao(
+      desfecho,
+      outcome.assistConvertida,
+      next.seed,
+    )
+    const closing = closingTemplate ? withCast(closingTemplate, cast) : null
+
+    // Primeira batida: explica imediatamente o que o jogador acabou de fazer.
+    pushLine(action)
 
     if (marcouPraMim || marcouPeloTime || sofreu) {
-      const finalizador = marcouPeloTime ? teamSquad[0] ?? 'o companheiro' : playerName
       choreographGoal(sofreu ? 'opponent' : 'team', {
         minute: moment.minute,
-        text: marcouPeloTime
-          ? withAssist(DECISION_ASSIST_LINE, playerName, finalizador)
-          : withName(DECISION_RESULT_LINES[desfecho], playerName),
+        text: closing ?? action.text,
         tone: sofreu ? 'bad' : 'good',
       })
-    } else {
+    } else if (closing) {
+      // Chance criada e desperdiçada: não há gol para coreografar, então o
+      // segundo grito entra já na sequência da ação.
       pushLine({
         minute: moment.minute,
-        text:
-          desfecho === 'chance'
-            ? withName(DECISION_CHANCE_WASTED_LINE, playerName)
-            : withName(DECISION_RESULT_LINES[desfecho], playerName),
-        tone: desfecho === 'chance' ? 'normal' : desfecho === 'nada' ? 'normal' : 'bad',
+        text: closing,
+        tone: 'normal',
       })
+      liveStatsRef.current.teamShots += 1
     }
 
     setMatch(
@@ -823,21 +891,35 @@ export const MatchScreen = ({
         />
       ) : (
         <>
-          <LivePitch
-            tactic={tactic}
-            stats={liveStatsRef.current}
-            teamLayout={FORMATIONS[formation].layout}
-            userIndex={userIndex}
-            speed={speed}
-            teamColor={club.colors.primary}
-            opponentColor={opponent.colors.primary}
-            teamSquad={teamSquad}
-            opponentSquad={opponentSquad}
-            userName={playerName}
-            directive={directive}
-            frozen={mode === 'decision'}
-            onDirectiveComplete={onDirectiveComplete}
-          />
+          <div className={`live-pitch-stage${mode === 'decision' ? ' live-pitch-stage-decision' : ''}`}>
+            <LivePitch
+              tactic={tactic}
+              stats={liveStatsRef.current}
+              teamLayout={FORMATIONS[formation].layout}
+              userIndex={userIndex}
+              speed={speed}
+              teamColor={club.colors.primary}
+              opponentColor={opponent.colors.primary}
+              teamSquad={teamSquad}
+              opponentSquad={opponentSquad}
+              teamPlayerIds={teamPlayerIds}
+              opponentPlayerIds={opponentPlayerIds}
+              gender={appearance.gender}
+              userName={playerName}
+              userFaceUrl={userPortrait}
+              directive={directive}
+              frozen={mode === 'decision'}
+              onDirectiveComplete={onDirectiveComplete}
+            />
+            {mode === 'decision' && (
+              <DecisionChallenge
+                intro={narrateMoment(currentMoment(match))}
+                rng={decisionRngRef.current}
+                contexto={contextoDaDecisao}
+                onResolved={onDecisionResolved}
+              />
+            )}
+          </div>
 
           <div className="live-panel">
             <div className="live-control">
@@ -904,7 +986,7 @@ export const MatchScreen = ({
         />
       </div>
 
-      <div className="match-log match-log-live" role="log">
+      <div className="match-log match-log-live" role="log" aria-live="polite" aria-relevant="additions text">
         <span className="match-log-title">Narração</span>
         {log.length === 0 && <p className="match-log-empty">A bola vai rolar…</p>}
         {log
@@ -935,15 +1017,6 @@ export const MatchScreen = ({
             </div>
           </div>
         </div>
-      )}
-
-      {mode === 'decision' && (
-        <DecisionChallenge
-          intro={narrationForMoment(currentMoment(match))}
-          rng={decisionRngRef.current}
-          contexto={contextoDaDecisao}
-          onResolved={onDecisionResolved}
-        />
       )}
 
       {mode === 'summary' && (

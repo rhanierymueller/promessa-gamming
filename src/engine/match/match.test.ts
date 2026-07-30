@@ -6,7 +6,12 @@ import { DEFAULT_MATCH_CONFIG } from './config'
  * e placar. O dado é um lance jogável que interrompe esse caminho e tem
  * cobertura própria em engine/dice/duel.test.ts.
  */
-const CFG = { ...DEFAULT_MATCH_CONFIG, diceDuelChance: 0 }
+const CFG = {
+  ...DEFAULT_MATCH_CONFIG,
+  diceDuelChance: 0,
+  // testes determinísticos de contagem mantêm a única vaga de falta presente
+  playerFreeKickChance: 1,
+}
 import {
   advance,
   applyDecider,
@@ -343,14 +348,11 @@ describe('lance de dados na partida', () => {
   }
 
   test('aparece às vezes, não em toda partida', () => {
-    // Assert: nem raro demais nem em todo jogo — é uma variação, não uma regra
+    // O fallback de variedade aumenta a frequência-base de 30%, sem garantir
+    // que seja sempre o dado: às vezes o especial escolhido é a falta.
     const freq = frequenciaDoDado()
-    expect(freq).toBeGreaterThan(0.15)
+    expect(freq).toBeGreaterThan(0.35)
     expect(freq).toBeLessThan(0.6)
-  })
-
-  test('a frequência segue a chance configurada', () => {
-    expect(Math.abs(frequenciaDoDado() - DEFAULT_MATCH_CONFIG.diceDuelChance)).toBeLessThan(0.08)
   })
 
   test('nunca cai mais de um lance de dados na mesma partida', () => {
@@ -365,6 +367,56 @@ describe('lance de dados na partida', () => {
     for (let seed = 0; seed < 50; seed++) {
       expect(startMatch(seed, semDado).plan.some((m) => m.kind === 'diceDuel')).toBe(false)
     }
+  })
+})
+
+describe('falta a favor na partida', () => {
+  /** Em quantas partidas de 800 a falta perigosa apareceu. */
+  const frequenciaDaFalta = (): number => {
+    let comFalta = 0
+    for (let seed = 0; seed < 800; seed++) {
+      const match = startMatch(seed, DEFAULT_MATCH_CONFIG)
+      if (match.plan.some((moment) => moment.kind === 'playerFreeKick')) comFalta++
+    }
+    return comFalta / 800
+  }
+
+  test('aparece às vezes, sem ser garantida em toda rodada', () => {
+    const frequency = frequenciaDaFalta()
+    expect(frequency).toBeGreaterThan(0.55)
+    expect(frequency).toBeLessThan(0.8)
+  })
+
+  test('com chance zero não inclui falta a favor', () => {
+    const semFalta = { ...DEFAULT_MATCH_CONFIG, playerFreeKickChance: 0 }
+    for (let seed = 0; seed < 100; seed++) {
+      expect(startMatch(seed, semFalta).plan.some((moment) => moment.kind === 'playerFreeKick')).toBe(false)
+    }
+  })
+})
+
+describe('variedade mínima de minigames', () => {
+  test('toda partida tem falta a favor ou duelo de dados', () => {
+    for (let seed = 0; seed < 800; seed++) {
+      const plan = startMatch(seed, DEFAULT_MATCH_CONFIG).plan
+      const hasFreeKick = plan.some((moment) => moment.kind === 'playerFreeKick')
+      const hasDice = plan.some((moment) => moment.kind === 'diceDuel')
+      expect(hasFreeKick || hasDice).toBe(true)
+    }
+  })
+
+  test('falta e dados continuam aparecendo juntos em algumas partidas', () => {
+    let withBoth = 0
+    for (let seed = 0; seed < 800; seed++) {
+      const plan = startMatch(seed, DEFAULT_MATCH_CONFIG).plan
+      if (
+        plan.some((moment) => moment.kind === 'playerFreeKick') &&
+        plan.some((moment) => moment.kind === 'diceDuel')
+      ) {
+        withBoth++
+      }
+    }
+    expect(withBoth).toBeGreaterThan(50)
   })
 })
 

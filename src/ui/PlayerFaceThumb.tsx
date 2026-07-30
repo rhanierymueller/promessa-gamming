@@ -1,5 +1,5 @@
 import { initialsOf } from '../engine/squad/initials'
-import { faceUrlFor } from '../game/faces'
+import { facePresentationFor } from '../game/faces'
 import type { PlayerGender } from '../state/save'
 
 /**
@@ -18,11 +18,25 @@ interface PlayerFaceThumbProps {
 }
 
 export const PlayerFaceThumb = ({ playerId, name, gender }: PlayerFaceThumbProps) => {
-  const url = faceUrlFor(playerId, gender)
+  const presentation = facePresentationFor(playerId, gender)
   return (
     <span className="face-thumb" aria-hidden="true">
       <span className="face-thumb-initials">{initialsOf(name)}</span>
-      {url && <img className="face-thumb-img" src={url} alt="" loading="lazy" decoding="async" />}
+      {presentation && (
+        <img
+          className="face-thumb-img"
+          src={presentation.url}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          style={{
+            transform: `translateX(${presentation.xShiftPercent}%)`,
+            clipPath: presentation.topCropPercent > 0
+              ? `inset(${presentation.topCropPercent}% 0 0)`
+              : undefined,
+          }}
+        />
+      )}
     </span>
   )
 }

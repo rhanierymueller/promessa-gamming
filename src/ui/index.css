@@ -305,27 +305,73 @@ h1 {
   position: absolute;
   inset: 0;
   z-index: 3;
-  background: rgba(16, 12, 26, 0.94);
+  background:
+    linear-gradient(180deg, rgba(16, 12, 26, 0.9), rgba(16, 12, 26, 0.97)),
+    radial-gradient(circle at 50% 20%, rgba(255, 210, 63, 0.08), transparent 45%);
+  backdrop-filter: blur(2px);
   border-radius: 6px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: safe center;
   gap: 10px;
   padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .decision-intro {
-  margin: 0;
+  width: min(100%, 620px);
+  margin: 0 auto;
   text-align: center;
   font-size: 14px;
   font-weight: 700;
   line-height: 1.5;
+  text-wrap: balance;
 }
 
 .decision-options {
   display: flex;
   flex-direction: column;
   gap: 7px;
+  width: min(100%, 620px);
+  margin: 0 auto;
+}
+
+.decision-probability-legend {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  width: min(100%, 620px);
+  margin: 0 auto;
+}
+
+.decision-legend-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid rgba(156, 147, 179, 0.16);
+  border-radius: 5px;
+  background: rgba(16, 12, 26, 0.55);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.decision-legend-item strong {
+  display: block;
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+}
+
+.decision-legend-dot {
+  width: 7px;
+  height: 7px;
+  margin-top: 3px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
 }
 
 .decision-option {
@@ -391,8 +437,42 @@ h1 {
 .decision-cria { color: var(--text); }
 .decision-risco { color: var(--hot); }
 
+.decision-variance-legend {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  width: min(100%, 620px);
+  margin: 0 auto;
+  color: var(--muted);
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+
+.decision-variance-title {
+  color: var(--text);
+}
+
+.decision-variance-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.decision-variance-swatch {
+  width: 3px;
+  height: 13px;
+  border-radius: 2px;
+}
+
+.decision-variance-alta { background: var(--hot); }
+.decision-variance-media { background: var(--accent); }
+.decision-variance-baixa { background: var(--line); }
+
 .decision-hint {
-  margin: 0;
+  width: min(100%, 620px);
+  margin: 0 auto;
   text-align: center;
   font-size: 10.5px;
   color: var(--muted);
@@ -401,14 +481,47 @@ h1 {
 
 /* telas estreitas: o nome da jogada vai pra cima e os números pra baixo */
 @media (max-width: 420px) {
+  .decision-overlay {
+    padding: 12px;
+  }
+
+  .decision-intro {
+    font-size: 13px;
+  }
+
   .decision-option {
     flex-direction: column;
     align-items: flex-start;
     gap: 5px;
+    padding: 7px 10px;
+    font-size: 11.5px;
   }
 
   .decision-meta {
     gap: 7px;
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+
+  .decision-probability-legend {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .decision-legend-item {
+    padding: 4px 7px;
+  }
+
+  .decision-legend-item strong {
+    display: inline;
+    margin-right: 3px;
+  }
+}
+
+@media (max-width: 559px) {
+  /* O campo 16:9 sozinho é baixo demais para cinco escolhas legíveis. */
+  .live-pitch-stage-decision {
+    min-height: min(500px, 76dvh);
   }
 }
 
@@ -1251,6 +1364,15 @@ h1 {
   display: block;
 }
 
+.live-pitch-stage {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #100c1a;
+}
+
 /*
  * Controles do banco: rótulo EM CIMA do grupo e todos os grupos com a mesma
  * largura. Lado a lado eles ficavam desalinhados — cada rótulo tinha um
@@ -1323,8 +1445,13 @@ h1 {
 }
 
 .match-log-live {
-  min-height: 110px;
-  max-height: 130px;
+  min-height: 120px;
+  max-height: 160px;
+  gap: 6px;
+  padding: 10px;
+  background:
+    linear-gradient(145deg, rgba(255, 210, 63, 0.035), transparent 48%),
+    var(--card);
 }
 
 .match-log-title {
@@ -1349,10 +1476,54 @@ h1 {
   color: var(--muted);
 }
 
+.match-log-live .log-line {
+  position: relative;
+  padding: 8px 10px 8px 44px;
+  border: 1px solid rgba(156, 147, 179, 0.14);
+  border-left: 2px solid var(--line);
+  border-radius: 5px;
+  background: rgba(16, 12, 26, 0.48);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.match-log-live .log-line:first-of-type {
+  border-color: rgba(255, 210, 63, 0.34);
+  background: rgba(255, 210, 63, 0.055);
+}
+
+.match-log-live .log-minute {
+  position: absolute;
+  top: 8px;
+  left: 9px;
+  width: 27px;
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.match-log-live .log-good { border-left-color: var(--accent); }
+.match-log-live .log-bad { border-left-color: var(--hot); }
+.match-log-live .log-you { border-left-color: #a99bdd; }
+
 /* No celular, o lance (chute/defesa) toma a tela sozinho, como sempre foi. */
 .match-in-lance .live-stats,
 .match-in-lance .match-log-live {
   display: none;
+}
+
+/* No fluxo de uma coluna, o relato acompanha o campo antes dos números e comandos. */
+@media (max-width: 1023px) {
+  .match > .live-pitch-stage,
+  .match > .stage,
+  .match > .dice-lance {
+    order: 1;
+  }
+
+  .match > .match-log-live { order: 2; }
+  .match > .live-stats { order: 3; }
+  .match > .live-panel { order: 4; }
 }
 
 .wo-note {
@@ -2082,7 +2253,7 @@ h1 {
     column-gap: 16px;
   }
 
-  .match-live-layout .live-pitch {
+  .match-live-layout .live-pitch-stage {
     grid-area: pitch;
     align-self: start;
   }
@@ -2665,10 +2836,79 @@ h1 {
 
 .board-player {
   cursor: pointer;
+  outline: none;
 }
 
-.board-player:hover circle {
+.board-player-token {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 150ms ease, filter 150ms ease;
+}
+
+.board-player-halo {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.board-player-ring {
+  transition: filter 140ms ease, stroke 140ms ease, stroke-width 140ms ease;
+}
+
+.board-player:is(:hover, :focus-visible) .board-player-token {
+  transform: translateY(-2px) scale(1.16);
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.75));
+}
+
+.board-player:is(:hover, :focus-visible) .board-player-halo {
+  opacity: 0.3;
+}
+
+.board-player:is(:hover, :focus-visible) .board-player-ring {
   stroke: var(--accent);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 4px rgba(255, 210, 63, 0.55));
+}
+
+.board-player-name,
+.board-player-position {
+  transition: fill 150ms ease, font-weight 150ms ease;
+}
+
+.board-player:is(:hover, :focus-visible) .board-player-name {
+  fill: var(--accent);
+  font-weight: 800;
+}
+
+.board-player:is(:hover, :focus-visible) .board-player-position {
+  fill: #ffffff;
+}
+
+.board-player-face {
+  pointer-events: none;
+}
+
+.board-player-face-user {
+  image-rendering: pixelated;
+}
+
+.board-player-overall {
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+}
+
+.board-player-initials {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-player-token,
+  .board-player-halo,
+  .board-player-ring,
+  .board-player-name,
+  .board-player-position {
+    transition: none;
+  }
 }
 
 @media (min-width: 1024px) {

@@ -46,13 +46,40 @@ const buildPlan = (rng: RngState, config: MatchConfig): RngResult<readonly Match
 
   addMoments(config.commentaryMoments, (minute, templateId) => ({ kind: 'commentary', minute, templateId }))
   addMoments(config.playerShots, (minute, templateId) => ({ kind: 'playerShot', minute, templateId }))
-  addMoments(config.playerFreeKicks, (minute, templateId) => ({ kind: 'playerFreeKick', minute, templateId }))
+
+  // Especiais variam, mas não podem sumir juntos e deixar a partida sem graça.
+  const freeKickRoll = rollCount(draft.rng, config.playerFreeKickChance, config.playerFreeKicks)
+  draft = { ...draft, rng: freeKickRoll.next }
+  const diceRoll = rollCount(draft.rng, config.diceDuelChance, 1)
+  draft = { ...draft, rng: diceRoll.next }
+
+  let freeKicks = freeKickRoll.value
+  let dice = diceRoll.value
+  const missingSpecials = Math.max(0, config.minimumSpecialMoments - freeKicks - dice)
+
+  for (let i = 0; i < missingSpecials; i++) {
+    const canAddFreeKick = config.playerFreeKicks > freeKicks && config.playerFreeKickChance > 0
+    const canAddDice = dice === 0 && config.diceDuelChance > 0
+    if (!canAddFreeKick && !canAddDice) break
+
+    if (canAddFreeKick && canAddDice) {
+      const choice = nextFloat(draft.rng)
+      draft = { ...draft, rng: choice.next }
+      const freeKickWeight = config.playerFreeKickChance
+      const diceWeight = config.diceDuelChance
+      if (choice.value < freeKickWeight / (freeKickWeight + diceWeight)) freeKicks++
+      else dice++
+    } else if (canAddFreeKick) {
+      freeKicks++
+    } else {
+      dice++
+    }
+  }
+
+  addMoments(freeKicks, (minute, templateId) => ({ kind: 'playerFreeKick', minute, templateId }))
   addMoments(config.playerDecisions, (minute, templateId) => ({ kind: 'playerDecision', minute, templateId }))
   addMoments(config.opponentFreeKicks, (minute, templateId) => ({ kind: 'opponentFreeKick', minute, templateId }))
-  // no máximo um por partida, e só quando o sorteio manda
-  const dice = rollCount(draft.rng, config.diceDuelChance, 1)
-  draft = { ...draft, rng: dice.next }
-  addMoments(dice.value, (minute, templateId) => ({ kind: 'diceDuel', minute, templateId }))
+  addMoments(dice, (minute, templateId) => ({ kind: 'diceDuel', minute, templateId }))
 
   const teamGoals = rollCount(draft.rng, config.teamGoalChance, config.maxTeamGoals)
   draft = { ...draft, rng: teamGoals.next }

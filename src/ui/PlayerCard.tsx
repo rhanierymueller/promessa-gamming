@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { initialsOf } from '../engine/squad/initials'
 import { ovrClass } from '../engine/squad/overallTier'
 import type { SquadPlayer } from '../engine/squad/players'
-import { faceUrlFor } from '../game/faces'
+import { facePresentationFor } from '../game/faces'
 import { MAX_SQUAD_PLAYER_NAME } from '../state/save'
 import { OverallStars } from './OverallStars'
 import type { PlayerGender } from '../state/save'
@@ -36,7 +36,8 @@ const PlayerFace = ({
   // o retrato do craque é pixel art com fundo vazado: cabe inteiro e sem
   // suavização; os do elenco são pinturas 256×256 que preenchem a moldura
   const isUserPortrait = Boolean(userFaceUrl)
-  const url = userFaceUrl ?? faceUrlFor(player.id, gender)
+  const presentation = isUserPortrait ? null : facePresentationFor(player.id, gender)
+  const url = userFaceUrl ?? presentation?.url ?? null
   const initials = initialsOf(player.name)
 
   return (
@@ -48,6 +49,12 @@ const PlayerFace = ({
           alt=""
           aria-hidden="true"
           loading="lazy"
+          style={presentation ? {
+            transform: `translateX(${presentation.xShiftPercent}%)`,
+            clipPath: presentation.topCropPercent > 0
+              ? `inset(${presentation.topCropPercent}% 0 0)`
+              : undefined,
+          } : undefined}
         />
       ) : (
         <span className="player-face-initials" aria-hidden="true">{initials}</span>

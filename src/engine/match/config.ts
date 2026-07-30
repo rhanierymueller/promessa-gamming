@@ -1,11 +1,14 @@
 import type { MatchConfig } from './types'
 
 export const DEFAULT_MATCH_CONFIG: MatchConfig = {
-  playerShots: 2,
+  playerShots: 1,
+  // falta perigosa é ocasião especial, não compromisso em toda rodada
   playerFreeKicks: 1,
+  playerFreeKickChance: 0.45,
   playerDecisions: 2,
   opponentFreeKicks: 1,
   diceDuelChance: 0.3,
+  minimumSpecialMoments: 1,
   /*
    * Estas duas foram CORTADAS quando a decisão passou a marcar gol (0.40 e
    * 0.35 antes). A decisão não soma gol em cima do sorteio: ela absorve parte

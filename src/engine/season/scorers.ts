@@ -38,6 +38,15 @@ const finishingFactor = (player: SquadPlayer): number => 0.5 + (player.attrs.fin
 const weightOf = (player: SquadPlayer): number =>
   (POSITION_WEIGHT[player.position] ?? 1) * finishingFactor(player)
 
+/**
+ * Um time de verdade costuma ter uma referência ofensiva. Sem esse foco, os
+ * gols dos 18 jogadores ficavam diluídos demais e o líder da IA terminava uma
+ * liga de 13 rodadas com cerca de 8 gols, mesmo quando o protagonista passava
+ * dos 20. O melhor peso ofensivo do elenco recebe esta concentração adicional;
+ * os gols totais do clube continuam rigorosamente iguais aos da tabela.
+ */
+const STAR_SCORER_MULTIPLIER = 2.5
+
 /** Semente estável por clube: a artilharia não muda a cada renderização. */
 /** Semente estável por clube/seleção — compartilhada com a artilharia de copa. */
 export const clubSeed = (seasonSeed: number, clubId: string): number => {
@@ -59,6 +68,11 @@ export const distribute = (
   const tally = new Map<string, number>()
   if (goals <= 0 || squad.length === 0) return tally
   const weights = squad.map(weightOf)
+  const starIndex = weights.reduce(
+    (bestIndex, weight, index) => weight > weights[bestIndex] ? index : bestIndex,
+    0,
+  )
+  weights[starIndex] *= STAR_SCORER_MULTIPLIER
   const total = weights.reduce((sum, value) => sum + value, 0)
   let rng = createRng(seed)
   for (let i = 0; i < goals; i++) {

@@ -23,13 +23,15 @@ import { rollMicroGoal } from './tactics'
  *
  * A ideia da mudança é que a decisão ABSORVA gol do sorteio, não some por cima.
  * Depois de cortar teamGoalChance (0.40 → 0.25), opponentGoalChance (0.35 →
- * 0.32) e as taxas de lance corrido, a medição com o perfil equilibrado deu:
+ * 0.32) e as taxas de lance corrido, a primeira medição equilibrada deu:
  *
  *     gols meus  2.426   gols deles 1.886   V/E/D 50.8 / 20.6 / 28.6
  *
- * contra 2.418 / 1.866 e 50.9 / 21.9 / 27.2 antes. A média e o equilíbrio
- * ficaram onde estavam, e a fatia do placar que sai do pé do jogador subiu de
- * 42% para 68%.
+ * contra 2.418 / 1.866 e 50.9 / 21.9 / 27.2 antes. As rodadas seguintes
+ * tornaram a falta ocasional e garantiram um especial entre falta/dados para
+ * a partida nunca ficar sem minigames. Em 20.000 partidas, o estado atual
+ * mediu 2.053 × 1.967 com um chute normal por partida, e 62% dos gols do time
+ * saindo de gol ou assistência do protagonista.
  *
  * A faixa é larga de propósito. Ela não existe para fixar um número exato, e
  * sim para acusar quando o placar SAI DA REALIDADE do jogo — os três perfis de
@@ -114,7 +116,7 @@ describe('calibragem do placar', () => {
 
   it('a maior parte do placar passa a sair do pé do jogador', () => {
     const { meus, doMeuPe } = medidas.get('equilibrado')!
-    // antes da mudança eram ~42% (só os chutes); a decisão levou a ~68%
+    // antes das decisões eram ~42%; com o conjunto atual ficam ~62%
     expect(doMeuPe / meus).toBeGreaterThan(0.6)
   })
 

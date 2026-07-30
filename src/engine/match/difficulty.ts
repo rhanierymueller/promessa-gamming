@@ -113,7 +113,8 @@ export const matchConfigForSectors = (
 ): MatchConfig => {
   const edges = matchupEdges(mine, theirs)
   const travado = 1 - tightness(mine, theirs) * TIGHT_GOAL_CUT
-  // meio melhor constrói mais: mais lances jogáveis para você
+  // meio melhor constrói mais; meio pior dificulta o lance, mas não remove a
+  // quantidade básica de minigames — diversão não pode ser punição tática
   const extraMoments = Math.round(edges.midfield * MID_MOMENT_SWING)
   return {
     ...base,
@@ -127,8 +128,11 @@ export const matchConfigForSectors = (
       MIN_CHANCE,
       MAX_OPPONENT_CHANCE,
     ),
-    playerShots: Math.max(1, base.playerShots + extraMoments),
-    playerDecisions: Math.max(1, base.playerDecisions + Math.round(edges.midfield * MID_DECISION_SWING)),
+    playerShots: Math.max(base.playerShots, base.playerShots + extraMoments),
+    playerDecisions: Math.max(
+      base.playerDecisions,
+      base.playerDecisions + Math.round(edges.midfield * MID_DECISION_SWING),
+    ),
   }
 }
 

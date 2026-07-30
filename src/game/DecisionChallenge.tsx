@@ -77,8 +77,26 @@ export const DecisionChallenge = ({ intro, rng, contexto, onResolved }: Decision
   }
 
   return (
-    <div className="decision-overlay">
-      <p className="decision-intro">{intro}</p>
+    <div
+      className="decision-overlay"
+      role="dialog"
+      aria-labelledby="decision-intro"
+    >
+      <p className="decision-intro" id="decision-intro">{intro}</p>
+      <div className="decision-probability-legend" aria-label="Significado das probabilidades">
+        <span className="decision-legend-item decision-gol">
+          <span className="decision-legend-dot" aria-hidden="true" />
+          <span><strong>MARCA</strong> você faz o gol</span>
+        </span>
+        <span className="decision-legend-item decision-cria">
+          <span className="decision-legend-dot" aria-hidden="true" />
+          <span><strong>CRIA CHANCE</strong> companheiro finaliza</span>
+        </span>
+        <span className="decision-legend-item decision-risco">
+          <span className="decision-legend-dot" aria-hidden="true" />
+          <span><strong>SOFRE GOL</strong> risco no contra-ataque</span>
+        </span>
+      </div>
       <div className="decision-options">
         {opcoes.map(({ jogada, dist }) => {
           const label = jogadaLabel(jogada.id)
@@ -92,8 +110,9 @@ export const DecisionChallenge = ({ intro, rng, contexto, onResolved }: Decision
               onClick={() => escolher(jogada)}
               aria-label={
                 `${label}. Atributo ${ATTRIBUTE_LABELS[jogada.atributo]}. ` +
-                `${gol}% de chance de gol, ${cria}% de criar a chance, ` +
-                `${risco}% de risco de tomar gol.`
+                `${gol}% de chance de você marcar, ` +
+                `${cria}% de criar uma finalização para um companheiro, ` +
+                `${risco}% de risco de sofrer gol no contra-ataque.`
               }
             >
               <span className="decision-label">{label}</span>
@@ -102,18 +121,24 @@ export const DecisionChallenge = ({ intro, rng, contexto, onResolved }: Decision
                   {ATTRIBUTE_ABBR[jogada.atributo]}
                 </span>
                 <span className="decision-stat decision-gol">
-                  <span className="decision-stat-key">GOL</span> {gol}%
+                  <span className="decision-stat-key">MARCA</span> {gol}%
                 </span>
                 <span className="decision-stat decision-cria">
-                  <span className="decision-stat-key">CRIA</span> {cria}%
+                  <span className="decision-stat-key">CRIA CHANCE</span> {cria}%
                 </span>
                 <span className="decision-stat decision-risco">
-                  <span className="decision-stat-key" aria-hidden="true">⚠</span> {risco}%
+                  <span className="decision-stat-key">SOFRE GOL</span> {risco}%
                 </span>
               </span>
             </button>
           )
         })}
+      </div>
+      <div className="decision-variance-legend" aria-label="Significado da cor da borda">
+        <span className="decision-variance-title">Borda da jogada:</span>
+        <span><i className="decision-variance-swatch decision-variance-alta" /> ousada</span>
+        <span><i className="decision-variance-swatch decision-variance-media" /> equilibrada</span>
+        <span><i className="decision-variance-swatch decision-variance-baixa" /> segura</span>
       </div>
       <p className="decision-hint">
         Sem pressa — o lance espera. Jogada ousada rende mais nota, e nota vira treino.

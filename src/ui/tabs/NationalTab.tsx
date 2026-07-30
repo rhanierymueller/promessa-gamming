@@ -237,6 +237,8 @@ export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
             formation={save.nationalFormation}
             lineup={save.nationalLineup}
             userIndex={squad.findIndex((player) => player.id === USER_PLAYER_ID)}
+            gender={save.appearance.gender}
+            userFaceUrl={userPortrait}
             primaryColor={nation.colors.primary}
             editable
             onFormationChange={(formation) => onSaveChange(setNationalFormation(save, formation))}
