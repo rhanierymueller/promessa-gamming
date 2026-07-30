@@ -87,6 +87,20 @@ interface LivePitchProps {
   readonly onDirectiveComplete?: (id: number) => void
 }
 
+/**
+ * Segundos que a mesa segura a bola no pé do protagonista depois de entregá-la,
+ * esperando o mini-game assumir. Alto de propósito: quem manda descongelar é a
+ * tela, não o relógio.
+ *
+ * Só sai deste valor quando uma ordem nova chega — e ela SEMPRE corta a espera
+ * (ver a captura de diretiva em `update`). Se algum caminho deixar esta espera
+ * de pé, a coreografia do gol perde para o failsafe de reveal do MatchScreen e
+ * o placar sobe antes de a bola entrar.
+ */
+const HOLD_UNTIL_MINIGAME = 9
+/** Tempo até a mesa reagir a uma ordem nova: quase imediato. */
+const DIRECTIVE_PICKUP_SECONDS = 0.08
+
 const W = 360
 const H = 232
 const PITCH_TOP = 8
@@ -377,7 +391,7 @@ export const LivePitch = ({
             sim.completedDirectiveId = queue.id
             onCompleteRef.current?.(queue.id)
           }
-          sim.holdTimer = 9 // congela com a bola no pé até o mini-game assumir
+          sim.holdTimer = HOLD_UNTIL_MINIGAME
           return
         }
         if (side === queue.side) {
@@ -490,9 +504,16 @@ export const LivePitch = ({
       if (directive && directive.id !== sim.lastDirectiveId) {
         sim.lastDirectiveId = directive.id
         sim.directiveQueue = directive
-        // entrega: corta qualquer "pensamento" em andamento — o lance é agora
-        if (directive.kind === 'deliver' && sim.phase === 'holding') {
-          sim.holdTimer = Math.min(sim.holdTimer, 0.08)
+        /*
+         * QUALQUER ordem nova corta o "pensamento" em andamento — não só a
+         * entrega. Enquanto isto checava `kind === 'deliver'`, a ordem de GOL
+         * chegava com o holdTimer ainda em HOLD_UNTIL_MINIGAME (9s, gravado ao
+         * entregar a bola e congelado junto com o campo durante a decisão).
+         * A coreografia só começava 9s depois e sempre perdia para o failsafe
+         * de 9000 ms: o placar e a narração subiam com a bola parada no pé.
+         */
+        if (sim.phase === 'holding') {
+          sim.holdTimer = Math.min(sim.holdTimer, DIRECTIVE_PICKUP_SECONDS)
         }
       }
 

@@ -117,8 +117,6 @@ const presentationsOf = (modules: Record<string, string>): readonly FacePresenta
 const MALE_FACES = presentationsOf(maleModules)
 const FEMALE_FACES = presentationsOf(femaleModules)
 
-export const FACE_URLS: readonly string[] = MALE_FACES.map((face) => face.url)
-export const FACE_URLS_F: readonly string[] = FEMALE_FACES.map((face) => face.url)
 
 const facesFor = (gender: PlayerGender): readonly FacePresentation[] =>
   gender === 'feminino' ? FEMALE_FACES : MALE_FACES

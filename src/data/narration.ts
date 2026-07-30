@@ -147,6 +147,16 @@ export const DICE_DUEL_TEMPLATES: readonly string[] = [
 type AcaoDaJogada = {
   /** A jogada saiu como você queria. */
   readonly bem: string
+  /**
+   * Variante de `bem` quando quem MARCA é você.
+   *
+   * As jogadas de armação entregam a bola ao {mate} já na primeira batida, e
+   * aí o fecho "GOOOOL DE {name}!" contradizia o que acabou de ser narrado.
+   * Só existe onde `bem` seria incoerente com o desfecho.
+   */
+  readonly golSeu?: string
+  /** Variante de `bem` quando quem finaliza é o companheiro (rebote, sobra). */
+  readonly criouChance?: string
   /** Saiu, mas não deu em nada. */
   readonly neutro: string
   /** Perdeu a bola. */
@@ -156,21 +166,25 @@ type AcaoDaJogada = {
 export const JOGADA_ACOES: Record<JogadaId, AcaoDaJogada> = {
   'driblar-zaga': {
     bem: '{name} encara o zagueiro, passa por dentro e a área abre!',
+    criouChance: '{name} encara o zagueiro e passa por dentro. A bola sobra limpa para {mate}!',
     neutro: '{name} tenta o drible, a zaga fecha e a bola sai pela linha de fundo.',
     mal: 'O zagueiro adivinhou o drible e tirou o pé de {name}. Bola deles.',
   },
   'caneta-zagueiro': {
     bem: 'CANETA! {name} passa a bola entre as pernas do marcador e entra na área!',
+    criouChance: 'CANETA! {name} entra na área e rola para {mate}, na medida!',
     neutro: 'A caneta de {name} bate na canela do zagueiro e a sobra fica com o goleiro.',
     mal: 'A caneta não passou. O zagueiro roubou e saiu jogando.',
   },
   'voleio-de-fora': {
     bem: '{name} não deixa a bola cair e pega de voleio — saiu FORTE!',
+    criouChance: '{name} pega de voleio, o goleiro espalma e a sobra cai em {mate}!',
     neutro: '{name} pega de voleio e manda por cima do travessão. Quase.',
     mal: '{name} erra o tempo do voleio, chuta o ar e a bola passa direto.',
   },
   'girar-e-finalizar': {
     bem: '{name} gira em cima do marcador e já sai batendo!',
+    criouChance: '{name} gira e bate. O goleiro dá rebote e {mate} aparece!',
     neutro: '{name} gira, bate torto e a bola vai pra arquibancada.',
     mal: '{name} demorou no giro e o volante deles chegou junto. Perdeu.',
   },
@@ -181,46 +195,55 @@ export const JOGADA_ACOES: Record<JogadaId, AcaoDaJogada> = {
   },
   'toque-de-primeira': {
     bem: '{name} toca de primeira para {mate}, no tempo exato. Jogada armada!',
+    golSeu: '{name} toca de primeira, segue a jogada e recebe de volta na cara do gol!',
     neutro: '{name} toca de primeira, mas a bola sai forte e ninguém alcança.',
     mal: 'O toque de {name} saiu fraco e o marcador chegou primeiro.',
   },
   'lancamento-nas-costas': {
     bem: '{name} vê o buraco e lança nas costas da zaga. {mate} dispara!',
+    golSeu: '{name} lança nas costas da zaga e ele mesmo aparece na segunda onda!',
     neutro: 'O lançamento de {name} passa longo e morre no tiro de meta.',
     mal: 'O zagueiro leu o lançamento de {name} e cortou de cabeça.',
   },
   'cruzamento-rasteiro': {
     bem: '{name} cruza rasteiro. A bola passa pela pequena área e chega em {mate}!',
+    golSeu: '{name} cruza rasteiro, a zaga corta mal e a bola volta no pé dele!',
     neutro: 'A bola de {name} atravessa a área inteira e ninguém apareceu.',
     mal: 'O cruzamento de {name} bate no primeiro marcador e volta.',
   },
   'chutar-de-fora': {
     bem: '{name} arruma o corpo e mete de fora — vai com veneno!',
+    criouChance: '{name} mete de fora, o goleiro solta e a bola fica com {mate}!',
     neutro: '{name} chuta de longe e a bola sobe demais. Tiro de meta.',
     mal: 'A perna de {name} foi travada na hora do chute e a bola sobrou pra eles.',
   },
   'segunda-trave': {
     bem: '{name} cobra na segunda trave e encontra {mate} livre!',
+    golSeu: '{name} cobra na segunda trave, a defesa afasta curto e ele pega a sobra!',
     neutro: 'A cobrança de {name} passa por todo mundo e sai do outro lado.',
     mal: '{name} bate mal e a defesa afasta com folga.',
   },
   'devolver-capitao': {
     bem: '{name} devolve pro capitão e já sobe pra receber de novo.',
+    golSeu: '{name} devolve pro capitão, sobe em velocidade e recebe de volta na área!',
     neutro: '{name} devolve, o time recompõe e o jogo recomeça de trás.',
     mal: 'A devolução de {name} saiu curta e deu pressão em cima.',
   },
   'segurar-a-bola': {
     bem: '{name} segura a bola, espera o apoio e o time chega junto.',
+    golSeu: '{name} segura, espera o apoio chegar e sai de frente para o gol!',
     neutro: '{name} protege a bola de costas e o juiz manda seguir.',
     mal: '{name} segurou demais e levou o carrinho por trás.',
   },
   'cavar-a-falta': {
     bem: '{name} entra na frente do zagueiro e GANHA a falta! Bola parada boa.',
+    golSeu: '{name} ganha a falta na entrada e pega a própria cobrança de rebote!',
     neutro: '{name} procura o contato, o juiz manda seguir e o lance morre.',
     mal: 'O juiz não comprou: {name} caiu sozinho e a bola é deles.',
   },
   'recuar-pro-goleiro': {
     bem: '{name} recua pro goleiro sem pressa. O time inteiro respira.',
+    golSeu: '{name} recua, o time sai tocando de trás e devolve nele lá na frente!',
     neutro: 'Bola no goleiro, jogo reiniciado lá de trás.',
     mal: 'O recuo de {name} saiu no meio da área! Que sufoco.',
   },
@@ -293,7 +316,8 @@ export const jogadaLabel = (id: JogadaId): string => JOGADA_LABELS[id]
  */
 export const acaoDaJogada = (id: JogadaId, desfecho: Desfecho): string => {
   const acoes = JOGADA_ACOES[id]
-  if (desfecho === 'gol' || desfecho === 'chance') return acoes.bem
+  if (desfecho === 'gol') return acoes.golSeu ?? acoes.bem
+  if (desfecho === 'chance') return acoes.criouChance ?? acoes.bem
   if (desfecho === 'nada') return acoes.neutro
   return acoes.mal
 }
