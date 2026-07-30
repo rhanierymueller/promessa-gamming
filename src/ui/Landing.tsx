@@ -87,8 +87,8 @@ export const Landing = ({ hasSave, onPlay }: LandingProps) => {
     <div className="landing" ref={rootRef}>
       <nav className="landing-nav">
         <span className="landing-brand">PROMESSA</span>
-        <button className="btn landing-nav-cta" onClick={onPlay}>
-          <Play size={14} aria-hidden="true" /> Jogar
+        <button type="button" className="landing-nav-cta" onClick={onPlay}>
+          <Play size={13} aria-hidden="true" /> Jogar
         </button>
       </nav>
 

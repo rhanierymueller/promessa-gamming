@@ -1,6 +1,6 @@
-import { ArrowLeft } from 'lucide-react'
 import type { ReactNode } from 'react'
 import portraitSprite from '../../assets/sprites/s_portrait.png'
+import { GateBackdrop } from './GateBackdrop'
 import '../styles/auth.css'
 
 /**
@@ -34,17 +34,7 @@ export const AuthScene = ({
   children,
 }: AuthSceneProps) => (
   <div className="gate">
-    <div className="gate-bg" aria-hidden="true" />
-    <div className="gate-dark" aria-hidden="true" />
-    <div className="gate-beam" aria-hidden="true" />
-
-    <span className="gate-place">{place}</span>
-
-    {onBack && (
-      <button type="button" className="gate-back" disabled={isBackDisabled} onClick={onBack}>
-        <ArrowLeft size={13} aria-hidden="true" /> Voltar
-      </button>
-    )}
+    <GateBackdrop place={place} onBack={onBack} isBackDisabled={isBackDisabled} />
 
     <div className="badge">
       <div className="badge-cord" aria-hidden="true" />

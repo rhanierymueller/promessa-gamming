@@ -485,14 +485,11 @@ export const App = () => {
     )
   }
 
+  // a ficha de inscrição é tela cheia como a portaria: sem shell, sem cabeçalho repetido
   if (gate === 'signup' || !save || !club) {
     return (
-      <main className="shell">
+      <>
         <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
-        <header className="header">
-          <p className="eyebrow">Promessa</p>
-          <h1>Promessa</h1>
-        </header>
         <CharacterCreate
           onCreated={(created) => {
             updateSave(created)
@@ -500,8 +497,7 @@ export const App = () => {
           }}
           onBack={() => setGate('auth')}
         />
-        <footer className="footer">PROMESSA · em desenvolvimento</footer>
-      </main>
+      </>
     )
   }
 

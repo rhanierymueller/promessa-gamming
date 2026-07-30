@@ -1,6 +1,6 @@
 import { KeyRound, LogIn } from 'lucide-react'
 import { useState } from 'react'
-import { AuthField } from './auth/AuthField'
+import { GateField } from './auth/GateField'
 import { AuthScene } from './auth/AuthScene'
 import { updatePassword } from '../online/account'
 import { validateNewPassword, type PasswordResetErrors } from '../state/passwordReset'
@@ -69,7 +69,7 @@ export const PasswordReset = ({ onDone, onCancel }: PasswordResetProps) => {
       subtitle="Escolha a senha nova da conta. A antiga deixa de valer na hora."
     >
       <div className="badge-fields">
-        <AuthField
+        <GateField
           label="Nova senha"
           value={password}
           onChange={setPassword}
@@ -77,7 +77,7 @@ export const PasswordReset = ({ onDone, onCancel }: PasswordResetProps) => {
           autoComplete="new-password"
           error={errors.password}
         />
-        <AuthField
+        <GateField
           label="Confirmar nova senha"
           value={confirmPassword}
           onChange={setConfirmPassword}

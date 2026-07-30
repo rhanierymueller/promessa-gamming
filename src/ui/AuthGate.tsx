@@ -1,6 +1,6 @@
 import { KeyRound, LogIn, UserPlus } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { AuthField } from './auth/AuthField'
+import { GateField } from './auth/GateField'
 import { AuthScene } from './auth/AuthScene'
 import { currentSessionEmail, requestPasswordReset, signInAccount } from '../online/account'
 import { isOnlineAvailable } from '../online/leagues'
@@ -118,7 +118,7 @@ export const AuthGate = ({ hasSave, onEnter, onSignup, onBack, initialNotice }: 
         isBackDisabled={isSubmitting}
       >
         <div className="badge-fields">
-          <AuthField
+          <GateField
             label="E-mail"
             value={email}
             onChange={setEmail}
@@ -175,7 +175,7 @@ export const AuthGate = ({ hasSave, onEnter, onSignup, onBack, initialNotice }: 
       )}
 
       <div className="badge-fields">
-        <AuthField
+        <GateField
           label="E-mail"
           value={email}
           onChange={setEmail}
@@ -183,7 +183,7 @@ export const AuthGate = ({ hasSave, onEnter, onSignup, onBack, initialNotice }: 
           autoComplete="email"
           placeholder="voce@email.com"
         />
-        <AuthField
+        <GateField
           label="Senha"
           value={password}
           onChange={setPassword}

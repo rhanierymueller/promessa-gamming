@@ -1,23 +1,27 @@
 import { useId } from 'react'
 
 /**
- * Um campo da credencial: rótulo carimbado e a linha datilografada onde o
- * jogador escreve. Nada de caixa com borda — o campo pertence ao objeto.
+ * Um campo dos documentos da portaria: rótulo carimbado e a linha
+ * datilografada onde o jogador escreve. Nada de caixa com borda — o campo
+ * pertence ao papel. Serve a credencial (login) e a ficha de inscrição.
  */
 
-interface AuthFieldProps {
+interface GateFieldProps {
   readonly label: string
-  readonly value: string
+  readonly value: string | number
   readonly onChange: (value: string) => void
-  readonly type: 'email' | 'password'
-  readonly autoComplete: string
+  readonly type: 'text' | 'email' | 'password' | 'number'
+  readonly autoComplete?: string
   readonly placeholder?: string
   readonly error?: string
   /** Enter no campo dispara o envio, como já era antes. */
   readonly onSubmit?: () => void
+  readonly maxLength?: number
+  readonly min?: number
+  readonly max?: number
 }
 
-export const AuthField = ({
+export const GateField = ({
   label,
   value,
   onChange,
@@ -26,7 +30,10 @@ export const AuthField = ({
   placeholder,
   error,
   onSubmit,
-}: AuthFieldProps) => {
+  maxLength,
+  min,
+  max,
+}: GateFieldProps) => {
   const id = useId()
   const errorId = `${id}-erro`
 
@@ -40,6 +47,9 @@ export const AuthField = ({
         value={value}
         autoComplete={autoComplete}
         placeholder={placeholder}
+        maxLength={maxLength}
+        min={min}
+        max={max}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
         onChange={(event) => onChange(event.target.value)}

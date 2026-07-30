@@ -1,5 +1,8 @@
-import { ArrowLeft, Minus, Plus, TriangleAlert } from 'lucide-react'
+import { Minus, Plus, Stamp, TriangleAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { GateBackdrop } from './auth/GateBackdrop'
+import { GateField } from './auth/GateField'
+import './styles/create.css'
 import {
   ATTRIBUTE_KEYS,
   ATTRIBUTE_LABELS,
@@ -124,242 +127,255 @@ export const CharacterCreate = ({ onCreated, onBack }: CharacterCreateProps) => 
   const fieldError = (key: keyof RegistrationErrors): string | undefined => errors[key]
 
   return (
-    <div className="create">
-      {onBack && (
-        <button
-          className="btn btn-secondary btn-icon auth-back create-back"
-          disabled={isSubmitting}
-          onClick={onBack}
-        >
-          <ArrowLeft size={14} aria-hidden="true" /> Voltar
-        </button>
-      )}
-      <h2 className="create-title">Crie a sua promessa</h2>
+    <div className="gate gate-tall">
+      <GateBackdrop
+        place="Portaria · inscrição"
+        onBack={onBack}
+        isBackDisabled={isSubmitting}
+      />
 
-      <section className="create-section">
-        <h3 className="create-section-title">O atleta</h3>
-      <div className="create-grid">
-        <label className="create-field">
-          <span className="create-label">Nome do craque</span>
-          <input
-            className="create-input"
-            type="text"
-            value={playerName}
-            maxLength={MAX_PLAYER_NAME}
-            placeholder="Como a torcida vai te chamar?"
-            onChange={(event) => setPlayerName(event.target.value)}
-          />
-          {fieldError('playerName') && <span className="create-error">{fieldError('playerName')}</span>}
-        </label>
-
-        <label className="create-field">
-          <span className="create-label">Idade ({PLAYER_MIN_AGE}-{PLAYER_MAX_AGE})</span>
-          <input
-            className="create-input create-input-age"
-            type="number"
-            min={PLAYER_MIN_AGE}
-            max={PLAYER_MAX_AGE}
-            value={playerAge}
-            onChange={(event) => setPlayerAge(Number(event.target.value))}
-          />
-          {fieldError('playerAge') && <span className="create-error">{fieldError('playerAge')}</span>}
-        </label>
-      </div>
-
-      </section>
-
-      <section className="create-section">
-        <h3 className="create-section-title">O clube</h3>
-      <label className="create-field">
-        <span className="create-label">Nome do SEU time (entra na Série D)</span>
-        <input
-          className="create-input"
-          type="text"
-          value={teamName}
-          maxLength={MAX_CLUB_NAME}
-          placeholder="Ex.: Galáticos FC"
-          onChange={(event) => setTeamName(event.target.value)}
-        />
-        {fieldError('teamName') && <span className="create-error">{fieldError('teamName')}</span>}
-      </label>
-
-      </section>
-
-      <section className="create-section">
-        <h3 className="create-section-title">Em campo</h3>
-      <span className="create-label">Sua posição (goleiro não — você é craque de linha)</span>
-      <div className="create-nations">
-        {POSITIONS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            className={`nation-chip${option.id === position ? ' nation-chip-active' : ''}`}
-            onClick={() => setPosition(option.id)}
-          >
-            <strong>{option.id}</strong> {option.label}
-          </button>
-        ))}
-      </div>
-
-      <span className="create-label">Gênero</span>
-      <div className="create-gender">
-        {([['masculino', 'Masculino'], ['feminino', 'Feminino']] as const).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={`nation-chip${id === gender ? ' nation-chip-active' : ''}`}
-            onClick={() => setGender(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <p className="create-warning">
-        <TriangleAlert size={13} aria-hidden="true" />
-        Escolha com calma: o gênero <strong>não pode ser trocado depois</strong>. Ele define a
-        arte do seu atleta, os nomes de todo o mundo do jogo e a narração das partidas.
-      </p>
-
-      <span className="create-label">Nacionalidade (seleção que pode te convocar)</span>
-      <div className="create-nations">
-        {PLAYABLE_NATIONS.map((nation) => (
-          <button
-            key={nation.id}
-            type="button"
-            className={`nation-chip${nation.id === nationalityId ? ' nation-chip-active' : ''}`}
-            onClick={() => setNationalityId(nation.id)}
-          >
-            <NationFlag nationId={nation.id} size={18} title={`Bandeira de ${nation.name}`} />
-            {nation.name}
-          </button>
-        ))}
-      </div>
-
-      </section>
-
-      <section className="create-section">
-        <h3 className="create-section-title">Atributos</h3>
-      <span className="create-label">
-        Distribua seus pontos — restam <strong className="create-points">{remaining}</strong>
-      </span>
-      <div className="create-attrs">
-        {ATTRIBUTE_KEYS.map((key) => (
-          <div key={key} className="create-attr-row">
-            <span className="create-attr-name">{ATTRIBUTE_LABELS[key]}</span>
-            <div className="create-attr-controls">
-              <button
-                type="button"
-                className="attr-btn"
-                onClick={() => bump(key, -1)}
-                disabled={attributes[key] <= DEFAULT_ATTRIBUTES[key]}
-                aria-label={`Diminuir ${ATTRIBUTE_LABELS[key]}`}
-              >
-                <Minus size={13} />
-              </button>
-              <span className="create-attr-value">{attributes[key]}</span>
-              <button
-                type="button"
-                className="attr-btn"
-                onClick={() => bump(key, 1)}
-                disabled={remaining <= 0 || attributes[key] >= MAX_ATTR_LEVEL}
-                aria-label={`Aumentar ${ATTRIBUTE_LABELS[key]}`}
-              >
-                <Plus size={13} />
-              </button>
-            </div>
+      <div className="ficha">
+        <header className="ficha-head">
+          <div>
+            <span className="ficha-org">Federação · temporada de estreia</span>
+            <h1 className="ficha-title">Ficha de inscrição</h1>
           </div>
-        ))}
-      </div>
-      {fieldError('attributes') && <span className="create-error">{fieldError('attributes')}</span>}
+          <span className="ficha-num">
+            Form. 01
+            <br />
+            Série D
+          </span>
+        </header>
 
-      </section>
+        <section className="ficha-sec">
+          <div className="ficha-sec-head">
+            <span className="ficha-sec-num">01</span>
+            <h2 className="ficha-sec-title">O atleta</h2>
+          </div>
+          <div className="ficha-grid">
+            <GateField
+              label="Nome do craque"
+              value={playerName}
+              onChange={setPlayerName}
+              type="text"
+              maxLength={MAX_PLAYER_NAME}
+              placeholder="Como a torcida vai te chamar?"
+              error={fieldError('playerName')}
+            />
+            <GateField
+              label={`Idade (${PLAYER_MIN_AGE}-${PLAYER_MAX_AGE})`}
+              value={playerAge}
+              onChange={(value) => setPlayerAge(Number(value))}
+              type="number"
+              min={PLAYER_MIN_AGE}
+              max={PLAYER_MAX_AGE}
+              error={fieldError('playerAge')}
+            />
+          </div>
+        </section>
 
-      <section className="create-section">
-      {sessionEmail !== null && (
-        <p className="muted">Conta conectada: <strong>{sessionEmail}</strong></p>
-      )}
-
-      {sessionEmail === null && (
-      <>
-      <h3 className="create-section-title">Sua conta</h3>
-      <div className="create-grid">
-        <label className="create-field">
-          <span className="create-label">E-mail</span>
-          <input
-            className="create-input"
-            type="email"
-            value={email}
-            autoComplete="email"
-            placeholder="voce@email.com"
-            onChange={(event) => setEmail(event.target.value)}
-          />
-          {fieldError('email') && <span className="create-error">{fieldError('email')}</span>}
-        </label>
-        <label className="create-field">
-          <span className="create-label">Nome de usuário (único)</span>
-          <input
-            className="create-input"
+        <section className="ficha-sec">
+          <div className="ficha-sec-head">
+            <span className="ficha-sec-num">02</span>
+            <h2 className="ficha-sec-title">O clube</h2>
+          </div>
+          <GateField
+            label="Nome do seu time (entra na Série D)"
+            value={teamName}
+            onChange={setTeamName}
             type="text"
-            value={username}
-            autoComplete="username"
-            placeholder="craque_10"
-            onChange={(event) => setUsername(event.target.value)}
+            maxLength={MAX_CLUB_NAME}
+            placeholder="Ex.: Galáticos FC"
+            error={fieldError('teamName')}
           />
-          {fieldError('username') && <span className="create-error">{fieldError('username')}</span>}
-        </label>
-        <label className="create-field">
-          <span className="create-label">Senha</span>
-          <input
-            className="create-input"
-            type="password"
-            value={password}
-            autoComplete="new-password"
-            onChange={(event) => setPassword(event.target.value)}
-          />
-          {fieldError('password') && <span className="create-error">{fieldError('password')}</span>}
-        </label>
-        <label className="create-field">
-          <span className="create-label">Confirmar senha</span>
-          <input
-            className="create-input"
-            type="password"
-            value={confirmPassword}
-            autoComplete="new-password"
-            onChange={(event) => setConfirmPassword(event.target.value)}
-          />
-          {fieldError('confirmPassword') && <span className="create-error">{fieldError('confirmPassword')}</span>}
-        </label>
-      </div>
-      </>
-      )}
-      </section>
+        </section>
 
-      <label className="create-consent">
-        <input
-          type="checkbox"
-          checked={acceptedTerms}
-          onChange={(event) => setAcceptedTerms(event.target.checked)}
-        />
-        <span>
-          Li e aceito os{' '}
-          <button type="button" className="legal-link" onClick={() => setShowLegal(true)}>
-            termos de uso e a política de privacidade
+        <section className="ficha-sec">
+          <div className="ficha-sec-head">
+            <span className="ficha-sec-num">03</span>
+            <h2 className="ficha-sec-title">Em campo</h2>
+          </div>
+
+          <p className="ficha-hint">Sua posição — goleiro não, você é craque de linha.</p>
+          <div className="ficha-chips">
+            {POSITIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={`ficha-chip${option.id === position ? ' ficha-chip-on' : ''}`}
+                aria-pressed={option.id === position}
+                onClick={() => setPosition(option.id)}
+              >
+                <strong>{option.id}</strong> {option.label}
+              </button>
+            ))}
+          </div>
+
+          <p className="ficha-hint" style={{ marginTop: 18 }}>Gênero</p>
+          <div className="ficha-chips">
+            {([['masculino', 'Masculino'], ['feminino', 'Feminino']] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={`ficha-chip${id === gender ? ' ficha-chip-on' : ''}`}
+                aria-pressed={id === gender}
+                onClick={() => setGender(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="ficha-warn">
+            <TriangleAlert size={14} aria-hidden="true" />
+            <span>
+              Escolha com calma: o gênero <strong>não pode ser trocado depois</strong>. Ele define
+              a arte do seu atleta, os nomes de todo o mundo do jogo e a narração das partidas.
+            </span>
+          </p>
+
+          <p className="ficha-hint" style={{ marginTop: 18 }}>
+            Nacionalidade — a seleção que pode te convocar.
+          </p>
+          <div className="ficha-chips">
+            {PLAYABLE_NATIONS.map((nation) => (
+              <button
+                key={nation.id}
+                type="button"
+                className={`ficha-chip${nation.id === nationalityId ? ' ficha-chip-on' : ''}`}
+                aria-pressed={nation.id === nationalityId}
+                onClick={() => setNationalityId(nation.id)}
+              >
+                <NationFlag nationId={nation.id} size={16} title={`Bandeira de ${nation.name}`} />
+                {nation.name}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="ficha-sec">
+          <div className="ficha-sec-head">
+            <span className="ficha-sec-num">04</span>
+            <h2 className="ficha-sec-title">Atributos</h2>
+          </div>
+
+          <span className={`ficha-points${remaining === 0 ? ' ficha-points-zero' : ''}`}>
+            restam <b>{remaining}</b> pontos
+          </span>
+
+          <div className="ficha-attrs">
+            {ATTRIBUTE_KEYS.map((key) => (
+              <div key={key} className="ficha-attr">
+                <span className="ficha-attr-name">{ATTRIBUTE_LABELS[key]}</span>
+                <span className="ficha-attr-lead" aria-hidden="true" />
+                <span className="ficha-attr-ctl">
+                  <button
+                    type="button"
+                    className="ficha-step"
+                    onClick={() => bump(key, -1)}
+                    disabled={attributes[key] <= DEFAULT_ATTRIBUTES[key]}
+                    aria-label={`Diminuir ${ATTRIBUTE_LABELS[key]}`}
+                  >
+                    <Minus size={13} />
+                  </button>
+                  <span className="ficha-attr-val">{attributes[key]}</span>
+                  <button
+                    type="button"
+                    className="ficha-step"
+                    onClick={() => bump(key, 1)}
+                    disabled={remaining <= 0 || attributes[key] >= MAX_ATTR_LEVEL}
+                    aria-label={`Aumentar ${ATTRIBUTE_LABELS[key]}`}
+                  >
+                    <Plus size={13} />
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+          {fieldError('attributes') && (
+            <span className="field-error">{fieldError('attributes')}</span>
+          )}
+        </section>
+
+        <section className="ficha-sec">
+          <div className="ficha-sec-head">
+            <span className="ficha-sec-num">05</span>
+            <h2 className="ficha-sec-title">Sua conta</h2>
+          </div>
+
+          {sessionEmail !== null ? (
+            <p className="ficha-account">
+              Conta já conectada: <strong>{sessionEmail}</strong>
+            </p>
+          ) : (
+            <div className="ficha-grid ficha-grid-2">
+              <GateField
+                label="E-mail"
+                value={email}
+                onChange={setEmail}
+                type="email"
+                autoComplete="email"
+                placeholder="voce@email.com"
+                error={fieldError('email')}
+              />
+              <GateField
+                label="Nome de usuário (único)"
+                value={username}
+                onChange={setUsername}
+                type="text"
+                autoComplete="username"
+                placeholder="craque_10"
+                error={fieldError('username')}
+              />
+              <GateField
+                label="Senha"
+                value={password}
+                onChange={setPassword}
+                type="password"
+                autoComplete="new-password"
+                error={fieldError('password')}
+              />
+              <GateField
+                label="Confirmar senha"
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                type="password"
+                autoComplete="new-password"
+                error={fieldError('confirmPassword')}
+              />
+            </div>
+          )}
+        </section>
+
+        <label className="ficha-consent">
+          <input
+            type="checkbox"
+            checked={acceptedTerms}
+            onChange={(event) => setAcceptedTerms(event.target.checked)}
+          />
+          <span>
+            Li e aceito os{' '}
+            <button type="button" className="ficha-link" onClick={() => setShowLegal(true)}>
+              termos de uso e a política de privacidade
+            </button>
+            .
+          </span>
+        </label>
+
+        {showLegal && <Legal onClose={() => setShowLegal(false)} />}
+
+        {serverError && <p className="gate-alert" role="alert">{serverError}</p>}
+
+        <div className="ficha-actions">
+          <button
+            className="gate-btn"
+            disabled={isSubmitting || !acceptedTerms}
+            onClick={() => void submit()}
+          >
+            <Stamp size={15} aria-hidden="true" />
+            {isSubmitting ? 'Registrando…' : 'Assinar e entrar em campo'}
           </button>
-          .
-        </span>
-      </label>
-
-      {showLegal && <Legal onClose={() => setShowLegal(false)} />}
-
-      {serverError && <p className="crest-error" role="alert">{serverError}</p>}
-
-      <button
-        className="btn"
-        disabled={isSubmitting || !acceptedTerms}
-        onClick={() => void submit()}
-      >
-        {isSubmitting ? 'Criando…' : 'Começar a carreira ▸'}
-      </button>
+        </div>
+      </div>
     </div>
   )
 }
