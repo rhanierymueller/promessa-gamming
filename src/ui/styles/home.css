@@ -269,6 +269,38 @@
   box-shadow: 0 0 12px rgba(255, 210, 63, 0.9);
 }
 
+/* ---------- desktop: a grade de duas colunas passa a valer ---------- */
+
+/*
+ * O index.css já monta .tab-panel como grade de duas colunas no computador,
+ * mas manda quase tudo ocupar 1 / -1 — então a grade não fazia nada e a
+ * página descia numa coluna só, com metade da tela vazia. Aqui o que é
+ * dominante (identidade e compromisso) segue inteiro e o resto divide.
+ */
+@media (min-width: 1024px) {
+  .shell-tabs .tab-panel {
+    align-items: start;
+  }
+
+  .shell-tabs .tab-panel > .training-section {
+    grid-column: 1 / 2;
+  }
+
+  .shell-tabs .tab-panel > .news-center {
+    grid-column: 2 / -1;
+  }
+
+  /* meia largura: 2×2 respira melhor que quatro cartões espremidos */
+  .shell-tabs .tab-panel > .training-section .training-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .shell-tabs .tab-panel > .training-section .training-art {
+    height: 118px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tab-panel .training-card {
     transition: none;
