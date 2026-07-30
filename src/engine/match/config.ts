@@ -6,8 +6,14 @@ export const DEFAULT_MATCH_CONFIG: MatchConfig = {
   playerDecisions: 2,
   opponentFreeKicks: 1,
   diceDuelChance: 0.3,
-  teamGoalChance: 0.4,
-  opponentGoalChance: 0.35,
+  /*
+   * Estas duas foram CORTADAS quando a decisão passou a marcar gol (0.40 e
+   * 0.35 antes). A decisão não soma gol em cima do sorteio: ela absorve parte
+   * dele. A média da partida fica onde estava — o que muda é de onde o gol vem.
+   * Medido em src/engine/match/calibration.test.ts.
+   */
+  teamGoalChance: 0.25,
+  opponentGoalChance: 0.32,
   maxTeamGoals: 2,
   maxOpponentGoals: 2,
   commentaryMoments: 3,

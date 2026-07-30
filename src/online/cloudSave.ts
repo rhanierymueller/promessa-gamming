@@ -1,6 +1,6 @@
 import { parseSave, type PlayerSave } from '../state/save'
 import { getClient } from './leagues'
-import { chooseSave, type SaveWinner } from './syncPolicy'
+import { resolveSync, type SaveWinner } from './syncPolicy'
 
 /**
  * Carreira na nuvem: sobe a cada gravação e desce ao entrar na conta, para o
@@ -37,20 +37,39 @@ export const pushSave = async (save: PlayerSave): Promise<boolean> => {
   return !error
 }
 
-/** Busca a carreira guardada. null = nuvem vazia, sem conta ou indisponível. */
-export const pullSave = async (): Promise<PlayerSave | null> => {
+/**
+ * O que a nuvem respondeu.
+ *
+ * Distinguir `vazia` de `ilegivel` não é purismo: um `null` para os dois casos
+ * abria um caminho de PERDA DE CARREIRA. Nuvem ilegível virava "nuvem
+ * atrasada", o `syncSave` empurrava o save local por cima e a carreira mais
+ * nova do outro aparelho desaparecia em silêncio — e o módulo falha calado de
+ * propósito, então ninguém era avisado.
+ */
+export type PullResult =
+  | { readonly kind: 'save'; readonly save: PlayerSave }
+  /** Conta existe e não tem nada gravado ainda. É seguro subir o local. */
+  | { readonly kind: 'vazia' }
+  /** Tem dado gravado, mas o parse rejeitou. NUNCA sobrescrever. */
+  | { readonly kind: 'ilegivel' }
+  /** Sem conta, sem cliente ou sem rede. Não dá para concluir nada. */
+  | { readonly kind: 'indisponivel' }
+
+export const pullSave = async (): Promise<PullResult> => {
   const client = getClient()
   const userId = await currentUserId()
-  if (!client || !userId) return null
+  if (!client || !userId) return { kind: 'indisponivel' }
   const { data, error } = await client
     .from(TABLE)
     .select('data')
     .eq('user_id', userId)
     .maybeSingle()
-  if (error || !data?.data) return null
+  if (error) return { kind: 'indisponivel' }
+  if (!data?.data) return { kind: 'vazia' }
   // passa pelo parse normal: save da nuvem é dado externo como qualquer outro,
   // e pode ter sido gravado por uma versão diferente do jogo
-  return parseSave(JSON.stringify(data.data))
+  const parsed = parseSave(JSON.stringify(data.data))
+  return parsed ? { kind: 'save', save: parsed } : { kind: 'ilegivel' }
 }
 
 export interface SyncResult {
@@ -63,20 +82,25 @@ export interface SyncResult {
  * Junta o save do aparelho com o da nuvem. Vence o mais recente; se a nuvem
  * estiver vazia, a carreira local sobe — é o caso de quem já jogava antes de
  * a sincronização existir.
+ *
+ * Só ESCREVE na nuvem quando dá para afirmar que ela está atrás ou vazia.
+ * Nuvem ilegível ou indisponível mantém a carreira local valendo no aparelho e
+ * não toca no que está gravado lá: apagar a carreira de outro aparelho é pior
+ * que ficar dessincronizado até a próxima gravação.
  */
 export const syncSave = async (local: PlayerSave | null): Promise<SyncResult> => {
-  const cloud = await pullSave()
-  const winner = chooseSave({
+  const pulled = await pullSave()
+  const cloud = pulled.kind === 'save' ? pulled.save : null
+
+  // toda a decisão perigosa vive em syncPolicy, que é puro e testado
+  const decision = resolveSync({
     localSavedAt: local ? local.savedAt : null,
+    cloud: pulled.kind,
     cloudSavedAt: cloud ? cloud.savedAt : null,
   })
-  if (winner === 'local' && local) {
-    // a nuvem está atrás (ou vazia): manda a local para lá
-    await pushSave(local)
-    return { winner, save: local }
-  }
-  if (winner === 'cloud') return { winner, save: cloud }
-  return { winner, save: local }
+
+  if (decision.pushLocal && local) await pushSave(local)
+  return { winner: decision.winner, save: decision.useCloud ? cloud : local }
 }
 
 /**

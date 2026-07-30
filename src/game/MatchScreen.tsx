@@ -60,7 +60,7 @@ import { momentumFor, rollAutoGoal, rollMicroGoal, TACTIC_LABELS, type Tactic } 
 import type { ContextoDaJogada } from '../engine/decision/context'
 import type { MatchState } from '../engine/match/types'
 
-import { stopMatchAudio } from './audio'
+import { playStageEvent, stopMatchAudio } from './audio'
 import { startResultsMusic, stopResultsMusic } from './music'
 import { DEFAULT_APPEARANCE, type Competition, type MatchRecord, type PlayerAppearance } from '../state/save'
 import { ClubCrest } from '../ui/ClubCrest'
@@ -118,7 +118,7 @@ interface MatchScreenProps {
    */
   readonly decisive?: boolean
   readonly attributes?: PlayerAttributes
-  /** Perks de RPG do craque — afetam lances, passes e momentum. */
+  /** Perks de RPG do craque — afetam lances, decisões e momentum. */
   readonly perks?: readonly PerkId[]
   /** Moral do craque (0-100) — desloca a nota inicial da partida. */
   readonly morale?: number
@@ -355,6 +355,14 @@ export const MatchScreen = ({
 
   const applyReveal = (next: Reveal): void => {
     if (next.lines.length === 0) return
+    /*
+     * O gol da mesa tática entrava MUDO. `playStageEvent` só era disparado de
+     * dentro do ShotStage e do DiceDuelStage, então gol de plano, de lance
+     * corrido e agora de decisão apareciam no placar sem torcida nem jingle,
+     * enquanto o gol de chute tinha os dois. A infra de áudio já está de pé —
+     * faltava o disparo.
+     */
+    playStageEvent('goal')
     setReveal(next.state)
     setLog((current) => [...current, ...next.lines])
   }
