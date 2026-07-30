@@ -100,10 +100,28 @@
   will-change: transform;
 }
 
-.hero-kicker {
-  width: clamp(120px, 17vw, 230px);
+/*
+ * Os dois quadros do chute ficam empilhados no mesmo ponto e trocam por
+ * opacidade — sem piscada de carregamento. A altura sai da altura natural de
+ * cada quadro vezes a mesma unidade, que é como o jogo escala o atleta: assim
+ * o corpo não muda de tamanho quando o quadro troca.
+ */
+.hero-striker {
+  --hero-u: clamp(0.92px, 0.135vw, 1.76px);
+  width: auto;
   left: clamp(2%, 6vw, 12%);
   bottom: 8%;
+  /* gira em torno do pé de apoio, como o follow-through de verdade */
+  transform-origin: 32% 100%;
+}
+
+.hero-kicker {
+  height: calc(120 * var(--hero-u));
+}
+
+.hero-follow {
+  height: calc(127 * var(--hero-u));
+  opacity: 0;
 }
 
 .hero-keeper {
@@ -715,7 +733,10 @@
     transform: none;
     transition: none;
   }
-  .hero-sprite,
+  /*
+   * .hero-sprite fica de fora: sem movimento o próprio script congela o lance
+   * antes do contato, e um transform: none aqui jogaria a bola para longe do pé.
+   */
   .landing-hint,
   .led-live::before,
   .exit-sprite,
