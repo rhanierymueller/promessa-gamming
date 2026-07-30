@@ -1,17 +1,12 @@
-import { FastForward, Star, TriangleAlert } from 'lucide-react'
+import { FastForward, TriangleAlert } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Club } from '../data/clubs'
-import {
-  DEFAULT_ATTRIBUTES,
-  trainingPointsForRating,
-  type PlayerAttributes,
-} from '../engine/career/attributes'
+import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../engine/career/attributes'
 import {
   acaoDaJogada,
   DEFENSE_RESULT_LINES,
   fechoDaDecisao,
   GOLACO_LINE,
-  narrationForMoment,
   SHOT_RESULT_LINES,
   SIM_LINES,
   TACTIC_LINES,
@@ -19,7 +14,7 @@ import {
   withCast,
   withName,
 } from '../data/narration'
-import { simulateToEnd, type AutoPlayEvent, type AutoPlayProbs } from '../engine/match/autoplay'
+import { simulateToEnd, type AutoPlayProbs } from '../engine/match/autoplay'
 import { FORMATIONS, type FormationId, type PlayerFieldPosition } from '../engine/squad/formation'
 import { squadWithSignings, type Signing } from '../engine/market/market'
 import { rivalSquadFor } from '../engine/market/aiTransfers'
@@ -76,6 +71,9 @@ import {
 } from './goalReveal'
 import type { LogLine } from './logLine'
 import { DecisionChallenge, type DecisionOutcome } from './DecisionChallenge'
+import { LiveStat } from './LiveStat'
+import { createMatchNarrator } from './matchNarrator'
+import { MatchSummary, type MatchOutcome } from './MatchSummary'
 import { ShotStage, type RoundSummary } from './ShotStage'
 
 /** Minutos de jogo por segundo real, na velocidade 1x. */
@@ -152,59 +150,10 @@ const KEEPER_QUALITY_LIGA = 0.55
 const KEEPER_QUALITY_COPA = 0.65
 const KEEPER_QUALITY_PER_STAR = 0.03
 
-type MatchOutcome = 'win' | 'draw' | 'loss'
-
-const OUTCOME_LABEL: Record<MatchOutcome, string> = {
-  win: 'Vitória',
-  draw: 'Empate',
-  loss: 'Derrota',
-}
-
-interface LiveStatProps {
-  readonly label: string
-  readonly mine: number
-  readonly theirs: number
-  readonly suffix?: string
-  /** Detalhe entre parênteses, tipo quantos chutes foram no gol. */
-  readonly mineNote?: string
-  readonly theirsNote?: string
-}
-
-/** Uma linha de comparação: seu número, a fatia visual e o do adversário. */
-const LiveStat = ({ label, mine, theirs, suffix = '', mineNote, theirsNote }: LiveStatProps) => {
-  const total = mine + theirs
-  // sem nada acontecendo ainda, a barra fica no meio em vez de zerada
-  const share = total === 0 ? 50 : Math.round((mine / total) * 100)
-  return (
-    <div className="live-stat">
-      <strong className="live-stat-value">
-        {mine}{suffix}
-        {mineNote && <em>({mineNote})</em>}
-      </strong>
-      <span className="live-stat-mid">
-        <span className="live-stat-label">{label}</span>
-        <span className="live-stat-bar">
-          <span className="live-stat-fill" style={{ width: `${share}%` }} />
-        </span>
-      </span>
-      <strong className="live-stat-value live-stat-value-opp">
-        {theirsNote && <em>({theirsNote})</em>}
-        {theirs}{suffix}
-      </strong>
-    </div>
-  )
-}
 
 const keeperQualityFor = (competition: Competition, opponentStrength: number): number =>
   (competition === 'selecao' ? KEEPER_QUALITY_COPA : KEEPER_QUALITY_LIGA) +
   opponentStrength * KEEPER_QUALITY_PER_STAR
-
-const ratingVerdict = (rating: number): string => {
-  if (rating >= 8.5) return 'Atuação de gala. A várzea tem um craque.'
-  if (rating >= 7) return 'Grande jogo. O olheiro anotou seu nome.'
-  if (rating >= 5.5) return 'Jogo honesto. Dá pra mais.'
-  return 'Dia difícil. Amanhã tem treino.'
-}
 
 export const MatchScreen = ({
   seed,
@@ -361,18 +310,10 @@ export const MatchScreen = ({
     [opponentSquad],
   )
 
-  /** Elenco do lance: a mesma variação sempre escolhe os mesmos coadjuvantes. */
-  const castFor = (variation: number) => ({
-    name: playerName,
-    mate: finishers[Math.abs(variation) % finishers.length],
-    rival: rivalStrikers[Math.abs(variation) % rivalStrikers.length],
-  })
-
-  /** Narração do plano já preenchida com os nomes desta partida. */
-  const narrateMoment = (moment: ReturnType<typeof currentMoment>): string => {
-    const variation = 'templateId' in moment ? moment.templateId : moment.minute
-    return withCast(narrationForMoment(moment), castFor(variation))
-  }
+  const { castFor, narrateMoment, simLineFor } = useMemo(
+    () => createMatchNarrator({ playerName, finishers, rivalStrikers }),
+    [playerName, finishers, rivalStrikers],
+  )
 
   // contadores VIVOS: tudo que aparece no resumo aconteceu no campo
   const liveStatsRef = useRef(createLiveStats())
@@ -584,40 +525,6 @@ export const MatchScreen = ({
     if (next === tactic) return
     setTactic(next)
     pushLine({ minute: Math.floor(clock), text: TACTIC_LINES.changed[next], tone: 'normal' })
-  }
-
-  const simLineFor = (event: AutoPlayEvent): LogLine => {
-    const cast = castFor(event.minute)
-    switch (event.kind) {
-      case 'playerShot':
-      case 'playerFreeKick':
-        return {
-          minute: event.minute,
-          text: withCast(event.success ? SIM_LINES.shotGoal : SIM_LINES.shotMiss, cast),
-          tone: event.success ? 'good' : 'bad',
-        }
-      case 'playerDecision': {
-        const linhas = {
-          gol: { text: SIM_LINES.decisionGoal, tone: 'good' as const },
-          chance: { text: SIM_LINES.decisionChance, tone: 'good' as const },
-          nada: { text: SIM_LINES.decisionNothing, tone: 'normal' as const },
-          perdeu: { text: SIM_LINES.decisionLost, tone: 'bad' as const },
-          contra: { text: SIM_LINES.decisionCounter, tone: 'bad' as const },
-        }
-        const linha = linhas[event.desfecho ?? 'nada']
-        return { minute: event.minute, text: withCast(linha.text, cast), tone: linha.tone }
-      }
-      case 'opponentFreeKick':
-        return {
-          minute: event.minute,
-          text: withCast(event.success ? SIM_LINES.defenseSave : SIM_LINES.defenseConcede, cast),
-          tone: event.success ? 'good' : 'bad',
-        }
-      case 'teamGoal':
-        return { minute: event.minute, text: withCast(SIM_LINES.planTeamGoal, cast), tone: 'good' }
-      default:
-        return { minute: event.minute, text: withCast(SIM_LINES.planOpponentGoal, cast), tone: 'bad' }
-    }
   }
 
   /** Simula o resto da partida: lances do jogador viram rolagens pelos atributos. */
@@ -1020,113 +927,18 @@ export const MatchScreen = ({
       )}
 
       {mode === 'summary' && (
-        <div className="match-summary">
-          <div className="summary-content">
-          <div className="summary-header">
-            <h2>Fim de jogo</h2>
-          </div>
-
-          <div className="summary-scoreline">
-            <span className="summary-side">
-              <ClubCrest club={club} customUrl={crestUrls[club.id]} size={44} />
-              <span className="summary-team">{club.abbr}</span>
-            </span>
-            <span className="summary-score">
-              {match.score.team}
-              <em>×</em>
-              {match.score.opponent}
-            </span>
-            <span className="summary-side">
-              <ClubCrest club={opponent} customUrl={crestUrls[opponent.id]} size={44} />
-              <span className="summary-team">{opponent.abbr}</span>
-            </span>
-          </div>
-
-          <span className={`summary-result summary-result-${outcome}`}>{OUTCOME_LABEL[outcome]}</span>
-
-
-          <div className="match-rating">
-            <span className="match-rating-value">{finalRating.toFixed(1)}</span>
-            <span className="match-rating-label">sua nota</span>
-          </div>
-          <p className="match-verdict">“{ratingVerdict(finalRating)}”</p>
-
-          <div className="facts-table">
-            <div className="facts-row facts-head">
-              <span>{club.abbr}</span>
-              <span />
-              <span>{opponent.abbr}</span>
-            </div>
-            <div className="facts-row">
-              <span>{match.score.team}</span>
-              <span>Gols</span>
-              <span>{match.score.opponent}</span>
-            </div>
-            <div className="facts-row">
-              <span>{possessionPct}%</span>
-              <span>Posse de bola</span>
-              <span>{100 - possessionPct}%</span>
-            </div>
-            <div className="facts-row">
-              <span>{liveStatsRef.current.teamShots}</span>
-              <span>Finalizações</span>
-              <span>{liveStatsRef.current.oppShots}</span>
-            </div>
-            <div className="facts-row">
-              <span>{liveStatsRef.current.teamOnTarget}</span>
-              <span>No gol</span>
-              <span>{liveStatsRef.current.oppOnTarget}</span>
-            </div>
-            <div className="facts-row">
-              <span>
-                {liveStatsRef.current.teamShots > 0
-                  ? Math.round((liveStatsRef.current.teamOnTarget / liveStatsRef.current.teamShots) * 100)
-                  : 0}%
-              </span>
-              <span>Pontaria</span>
-              <span>
-                {liveStatsRef.current.oppShots > 0
-                  ? Math.round((liveStatsRef.current.oppOnTarget / liveStatsRef.current.oppShots) * 100)
-                  : 0}%
-              </span>
-            </div>
-            <div className="facts-row">
-              <span>{Math.max(0, liveStatsRef.current.oppOnTarget - match.score.opponent)}</span>
-              <span>Defesas</span>
-              <span>{Math.max(0, liveStatsRef.current.teamOnTarget - match.score.team)}</span>
-            </div>
-          </div>
-
-          <div className={`facts-motm${bestPlayer.isUser ? ' facts-motm-user' : ''}`}>
-            <Star size={14} aria-hidden="true" /> Craque do jogo: <strong>{bestPlayer.name}</strong>
-            {bestPlayer.isUser ? ' — você!' : ''}
-          </div>
-
-          <div className="summary-you">
-            <span className="card-label">Seu jogo</span>
-            <div className="stat-grid summary-you-grid">
-              <div className="stat"><span className="stat-value">{match.stats.goals}</span><span className="stat-label">gols</span></div>
-              <div className="stat"><span className="stat-value">{match.stats.shots}</span><span className="stat-label">finalizações</span></div>
-              <div className="stat"><span className="stat-value">{match.stats.assists}</span><span className="stat-label">assistências</span></div>
-              <div className="stat"><span className="stat-value">{match.stats.decisionsGood}/{match.stats.decisions}</span><span className="stat-label">decisões certas</span></div>
-              <div className="stat">
-                <span className="stat-value">
-                  {match.stats.golacos > 0 ? match.stats.golacos : displayRating(match.rating).toFixed(1)}
-                </span>
-                <span className="stat-label">{match.stats.golacos > 0 ? 'golaços' : 'nota'}</span>
-              </div>
-            </div>
-          </div>
-
-          {trainingPointsForRating(displayRating(match.rating)) > 0 && (
-            <p className="match-training">
-              +{trainingPointsForRating(displayRating(match.rating))} pontos de treino
-            </p>
-          )}
-
-          <button className="btn summary-continue" onClick={finishMatch}>Continuar ▸</button>
-          </div>
-        </div>
+        <MatchSummary
+          club={club}
+          opponent={opponent}
+          crestUrls={crestUrls}
+          match={match}
+          finalRating={finalRating}
+          outcome={outcome}
+          bestPlayer={bestPlayer}
+          possessionPct={possessionPct}
+          liveStats={liveStatsRef.current}
+          onContinue={finishMatch}
+        />
       )}
     </div>
   )
