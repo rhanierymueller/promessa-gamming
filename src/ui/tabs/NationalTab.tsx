@@ -26,6 +26,7 @@ import { PlayerCardModal } from '../PlayerCard'
 import { usePlayerPortrait } from '../usePlayerPortrait'
 import { tournamentScorers } from '../../engine/tournament/tournamentScorers'
 import { SquadBoard } from '../SquadBoard'
+import '../styles/national.css'
 
 /**
  * A aba da competição de seleções. Só existe enquanto você está convocado —
