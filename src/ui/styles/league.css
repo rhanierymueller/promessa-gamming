@@ -1,0 +1,181 @@
+/* ---------- liga: tabela, artilharia e subabas ---------- */
+
+/*
+ * Continua a língua das outras telas: canto reto, rótulo com ponto de luz,
+ * número que importa em manchete condensada, e o dourado reservado para o que
+ * é seu. Vale para todas as abas que usam subabas, cartões e tabelas.
+ */
+
+/* ---------- subabas ---------- */
+
+/*
+ * Eram uma bandeja cinza arredondada com a ativa virando um bloco dourado
+ * chapado — o mesmo problema do header antigo da landing: berra e não combina
+ * com nada. Agora é uma linha, e a ativa acende embaixo.
+ */
+.tab-panel .subtabs {
+  gap: 0;
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab-panel .subtab {
+  position: relative;
+  padding: 11px 6px;
+  border-radius: 0;
+  color: var(--steel);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.tab-panel .subtab:hover {
+  color: var(--text);
+}
+
+.tab-panel .subtab-active {
+  background: none;
+  color: var(--accent);
+}
+
+.tab-panel .subtab-active::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(255, 210, 63, 0.85);
+}
+
+.tab-panel .subtab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+/* ---------- cartões: mesmo canto das telas novas ---------- */
+
+.tab-panel .card {
+  border-radius: 4px;
+  border-color: #2b2242;
+}
+
+/* ---------- tabela de classificação ---------- */
+
+.tab-panel .league-table {
+  gap: 1px;
+}
+
+.tab-panel .table-row {
+  padding: 5px 8px;
+  border-radius: 2px;
+}
+
+.tab-panel .table-head {
+  color: var(--steel);
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+}
+
+/* zebra discreta: em vinte linhas o olho perde a régua sem ela */
+.tab-panel .league-table .table-row:nth-of-type(even):not(.table-player) {
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.tab-panel .table-pos {
+  color: var(--steel);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * O SEU time. Antes era um banho dourado com contorno, igualzinho ao destaque
+ * de líder — na primeira colocação os dois viravam a mesma coisa e não dava
+ * para saber qual era o seu.
+ */
+.tab-panel .table-player {
+  background: linear-gradient(90deg, rgba(255, 210, 63, 0.16), rgba(255, 210, 63, 0.04));
+  outline: none;
+  font-weight: 400;
+}
+
+.tab-panel .table-player .table-club-name {
+  color: var(--accent);
+}
+
+.tab-panel .table-you {
+  flex-shrink: 0;
+  margin-left: 7px;
+  padding: 1px 5px;
+  border: 1px solid rgba(255, 210, 63, 0.5);
+  color: var(--accent);
+  font-size: 8.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* o número que decide a temporada */
+.tab-panel .table-points {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.tab-panel .table-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- artilharia ---------- */
+
+.tab-panel .scorer-row {
+  padding: 5px 8px;
+  border-radius: 2px;
+}
+
+.tab-panel .scorer-list .scorer-row:nth-of-type(even):not(.scorer-row-user) {
+  background: rgba(255, 255, 255, 0.022);
+}
+
+.tab-panel .scorer-row-user {
+  background: linear-gradient(90deg, rgba(255, 210, 63, 0.16), rgba(255, 210, 63, 0.04));
+  outline: none;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.tab-panel .scorer-row-user .scorer-name {
+  color: var(--accent);
+}
+
+.tab-panel .scorer-pos {
+  font-family: var(--display);
+  font-size: 14px;
+  color: var(--steel);
+}
+
+.tab-panel .scorer-face {
+  border-radius: 3px;
+  border-color: #322850;
+}
+
+.tab-panel .scorer-club {
+  color: var(--steel);
+}
+
+.tab-panel .scorer-goals {
+  font-family: var(--display);
+  font-size: 21px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+/* ---------- nota de rodapé da tabela ---------- */
+
+.tab-panel .table-note {
+  color: var(--steel);
+  font-size: 11px;
+}

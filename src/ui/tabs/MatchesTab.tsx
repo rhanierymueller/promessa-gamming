@@ -12,6 +12,7 @@ import { ClubCrest } from '../ClubCrest'
 import { faceUrlFor } from '../../game/faces'
 import { usePlayerPortrait } from '../usePlayerPortrait'
 import { NationFlag } from '../NationFlag'
+import '../styles/league.css'
 
 interface MatchesTabProps {
   readonly save: PlayerSave
@@ -118,6 +119,8 @@ export const MatchesTab = ({ save }: MatchesTabProps) => {
                   <span className="table-club">
                     <ClubCrest club={displayClub(save, club)} customUrl={save.customClubCrests[club.id]} size={16} />
                     <span className="table-club-name">{clubDisplayName(save, club.id)}</span>
+                    {/* na liderança, o destaque do seu time se confundia com o do líder */}
+                    {isPlayer && <span className="table-you">você</span>}
                   </span>
                   <span className="table-form" aria-label="Últimas cinco partidas">
                     {recentForm(season, row.clubId, 5).map((result, formIndex) => (
