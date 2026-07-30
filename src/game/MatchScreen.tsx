@@ -10,11 +10,14 @@ import {
   DEFENSE_RESULT_LINES,
   GOLACO_LINE,
   narrationForMoment,
-  PASS_RESULT_LINES,
+  DECISION_ASSIST_LINE,
+  DECISION_CHANCE_WASTED_LINE,
+  DECISION_RESULT_LINES,
   SHOT_RESULT_LINES,
   SIM_LINES,
   TACTIC_LINES,
   WALL_BLOCK_LINE,
+  withAssist,
   withName,
 } from '../data/narration'
 import { simulateToEnd, type AutoPlayEvent, type AutoPlayProbs } from '../engine/match/autoplay'
@@ -40,7 +43,7 @@ import {
   applyDecider,
   applyDiceResult,
   applyExtraGoal,
-  applyPassResult,
+  applyDecisionResult,
   applyShotResult,
   currentMoment,
   isFinished,
@@ -52,9 +55,11 @@ import { pickBestPlayer } from '../engine/match/facts'
 import { capRatingByResult, displayRating } from '../engine/match/rating'
 import { DEFAULT_MORALE, moraleRatingBonus } from '../engine/career/events'
 import { captainMomentum, type PerkId } from '../engine/career/perks'
+import { matchupEdges, tightness } from '../engine/match/sectorDuel'
 import { momentumFor, rollAutoGoal, rollMicroGoal, TACTIC_LABELS, type Tactic } from '../engine/match/tactics'
+import type { ContextoDaJogada } from '../engine/decision/context'
 import type { MatchState } from '../engine/match/types'
-import type { PassResolution } from '../engine/pass/pass'
+
 import { stopMatchAudio } from './audio'
 import { startResultsMusic, stopResultsMusic } from './music'
 import { DEFAULT_APPEARANCE, type Competition, type MatchRecord, type PlayerAppearance } from '../state/save'
@@ -70,7 +75,7 @@ import {
   type Reveal,
 } from './goalReveal'
 import type { LogLine } from './logLine'
-import { PassChallenge } from './PassChallenge'
+import { DecisionChallenge, type DecisionOutcome } from './DecisionChallenge'
 import { ShotStage, type RoundSummary } from './ShotStage'
 
 /** Minutos de jogo por segundo real, na velocidade 1x. */
@@ -89,18 +94,15 @@ const GOAL_REVEAL_FAILSAFE_MS = 9000
 /** Simulação automática: quem treinou converte mais (atributos 1-10). */
 const AUTO_SHOT_BASE = 0.25
 const AUTO_SHOT_PER_LEVEL = 0.03
-const AUTO_PASS_BASE = 0.5
-const AUTO_PASS_PER_LEVEL = 0.04
 const AUTO_SAVE_BASE = 0.3
 const AUTO_SAVE_PER_LEVEL = 0.04
 
 const autoProbsFor = (attrs: PlayerAttributes): AutoPlayProbs => ({
   shotGoal: AUTO_SHOT_BASE + attrs.finalizacao * AUTO_SHOT_PER_LEVEL,
-  passComplete: AUTO_PASS_BASE + attrs.passe * AUTO_PASS_PER_LEVEL,
   defenseSave: AUTO_SAVE_BASE + attrs.defesa * AUTO_SAVE_PER_LEVEL,
 })
 
-type MatchMode = 'intro' | 'live' | 'handoff' | 'shot' | 'pass' | 'defense' | 'dice' | 'summary'
+type MatchMode = 'intro' | 'live' | 'handoff' | 'shot' | 'decision' | 'defense' | 'dice' | 'summary'
 
 interface MatchScreenProps {
   readonly seed: number
@@ -283,6 +285,10 @@ export const MatchScreen = ({
     return { ...byRatings, baseRating: byRatings.baseRating + moraleRatingBonus(morale) }
   }, [mySectors, theirSectors, morale])
   const [match, setMatch] = useState<MatchState>(() => startMatch(seed, config))
+
+  const edges = useMemo(() => matchupEdges(mySectors, theirSectors), [mySectors, theirSectors])
+  const travamento = useMemo(() => tightness(mySectors, theirSectors), [mySectors, theirSectors])
+
   /* a nota que vale é a limitada pelo resultado: empate não dá 10 */
   const finalRating = capRatingByResult(
     displayRating(match.rating),
@@ -333,7 +339,7 @@ export const MatchScreen = ({
     [seed, match.score.team, match.score.opponent, match.rating, playerName, teamSquad, opponentSquad],
   )
 
-  const passRngRef = useRef<RngState>(createRng((seed ^ 0x5bd1e995) >>> 0))
+  const decisionRngRef = useRef<RngState>(createRng((seed ^ 0x5bd1e995) >>> 0))
   const tacticRngRef = useRef<RngState>(createRng((seed ^ 0x2545f491) >>> 0))
   const directiveIdRef = useRef(1)
   const nextMicroRef = useRef(MICRO_EVERY_MINUTES)
@@ -369,7 +375,7 @@ export const MatchScreen = ({
     pendingMomentRef.current = null
     setDirective(null)
     pushLine({ minute: moment.minute, text: narrationForMoment(moment), tone: 'you' })
-    if (moment.kind === 'playerDecision') setMode('pass')
+    if (moment.kind === 'playerDecision') setMode('decision')
     else if (moment.kind === 'opponentFreeKick') setMode('defense')
     else if (moment.kind === 'diceDuel') setMode('dice')
     else setMode('shot')
@@ -521,12 +527,17 @@ export const MatchScreen = ({
           text: withName(event.success ? SIM_LINES.shotGoal : SIM_LINES.shotMiss, playerName),
           tone: event.success ? 'good' : 'bad',
         }
-      case 'playerDecision':
-        return {
-          minute: event.minute,
-          text: withName(event.success ? SIM_LINES.passOk : SIM_LINES.passFail, playerName),
-          tone: event.success ? 'good' : 'bad',
+      case 'playerDecision': {
+        const linhas = {
+          gol: { text: SIM_LINES.decisionGoal, tone: 'good' as const },
+          chance: { text: SIM_LINES.decisionChance, tone: 'good' as const },
+          nada: { text: SIM_LINES.decisionNothing, tone: 'normal' as const },
+          perdeu: { text: SIM_LINES.decisionLost, tone: 'bad' as const },
+          contra: { text: SIM_LINES.decisionCounter, tone: 'bad' as const },
         }
+        const linha = linhas[event.desfecho ?? 'nada']
+        return { minute: event.minute, text: withName(linha.text, playerName), tone: linha.tone }
+      }
       case 'opponentFreeKick':
         return {
           minute: event.minute,
@@ -546,7 +557,14 @@ export const MatchScreen = ({
     if (mode !== 'live') return
     // a força dos elencos pesa: simular contra time melhor tem que ser difícil
     const probs = autoProbsForSectors(autoProbsFor(attributes), mySectors, theirSectors)
-    const result = simulateToEnd(match, config, probs, tacticRngRef.current)
+    // o técnico assume as decisões — mesma distribuição, escolha por perfil
+    const result = simulateToEnd(
+      match,
+      config,
+      probs,
+      { contexto: contextoDaDecisao, perfil: 'equilibrado' },
+      tacticRngRef.current,
+    )
     tacticRngRef.current = result.next
     const stats = liveStatsRef.current
     for (const event of result.value.events) {
@@ -595,19 +613,62 @@ export const MatchScreen = ({
     setMode('live')
   }
 
-  const onPassResolved = (resolution: PassResolution, next: RngState, timedOut: boolean): void => {
-    passRngRef.current = next
+  /** Contexto que a decisão lê: atributos, perks, postura, embalo e confronto. */
+  const contextoDaDecisao: ContextoDaJogada = {
+    attributes,
+    perks,
+    tatica: tactic,
+    momentum: captainMomentum(momentumFor(displayRating(match.rating)), perks),
+    edges,
+    travamento,
+  }
+
+  /**
+   * Fecha a decisão. Diferente do passe que existia aqui, o desfecho pode MEXER
+   * NO PLACAR — e quando mexe, o gol passa pela coreografia do campo em vez de
+   * o número pular na hora, igual a qualquer outro gol da partida.
+   */
+  const onDecisionResolved = (outcome: DecisionOutcome, next: RngState): void => {
+    decisionRngRef.current = next
     const moment = currentMoment(match)
-    pushLine({
-      minute: moment.minute,
-      text: timedOut
-        ? PASS_RESULT_LINES.timeout[0]
-        : resolution.completed
-          ? PASS_RESULT_LINES.completed[0]
-          : PASS_RESULT_LINES.failed[0],
-      tone: resolution.completed ? 'good' : 'bad',
-    })
-    setMatch(applyPassResult(match, resolution.completed, resolution.ratingDelta, config))
+    const { desfecho, notaDelta } = outcome.resolucao
+    const stats = liveStatsRef.current
+
+    const marcouPraMim = desfecho === 'gol'
+    const marcouPeloTime = desfecho === 'chance' && outcome.assistConvertida
+    const sofreu = desfecho === 'contra'
+
+    if (marcouPraMim || marcouPeloTime) {
+      stats.teamShots += 1
+      stats.teamOnTarget += 1
+    } else if (sofreu) {
+      stats.oppShots += 1
+      stats.oppOnTarget += 1
+    }
+
+    if (marcouPraMim || marcouPeloTime || sofreu) {
+      const finalizador = marcouPeloTime ? teamSquad[0] ?? 'o companheiro' : playerName
+      choreographGoal(sofreu ? 'opponent' : 'team', {
+        minute: moment.minute,
+        text: marcouPeloTime
+          ? withAssist(DECISION_ASSIST_LINE, playerName, finalizador)
+          : withName(DECISION_RESULT_LINES[desfecho], playerName),
+        tone: sofreu ? 'bad' : 'good',
+      })
+    } else {
+      pushLine({
+        minute: moment.minute,
+        text:
+          desfecho === 'chance'
+            ? withName(DECISION_CHANCE_WASTED_LINE, playerName)
+            : withName(DECISION_RESULT_LINES[desfecho], playerName),
+        tone: desfecho === 'chance' ? 'normal' : desfecho === 'nada' ? 'normal' : 'bad',
+      })
+    }
+
+    setMatch(
+      applyDecisionResult(match, desfecho, notaDelta, outcome.assistConvertida, config),
+    )
     setMode('live')
   }
 
@@ -766,6 +827,7 @@ export const MatchScreen = ({
             opponentSquad={opponentSquad}
             userName={playerName}
             directive={directive}
+            frozen={mode === 'decision'}
             onDirectiveComplete={onDirectiveComplete}
           />
 
@@ -867,13 +929,12 @@ export const MatchScreen = ({
         </div>
       )}
 
-      {mode === 'pass' && (
-        <PassChallenge
+      {mode === 'decision' && (
+        <DecisionChallenge
           intro={narrationForMoment(currentMoment(match))}
-          rng={passRngRef.current}
-          passeLevel={attributes.passe}
-          perks={perks}
-          onResolved={onPassResolved}
+          rng={decisionRngRef.current}
+          contexto={contextoDaDecisao}
+          onResolved={onDecisionResolved}
         />
       )}
 
@@ -965,7 +1026,8 @@ export const MatchScreen = ({
             <div className="stat-grid summary-you-grid">
               <div className="stat"><span className="stat-value">{match.stats.goals}</span><span className="stat-label">gols</span></div>
               <div className="stat"><span className="stat-value">{match.stats.shots}</span><span className="stat-label">finalizações</span></div>
-              <div className="stat"><span className="stat-value">{match.stats.passesCompleted}/{match.stats.passes}</span><span className="stat-label">passes certos</span></div>
+              <div className="stat"><span className="stat-value">{match.stats.assists}</span><span className="stat-label">assistências</span></div>
+              <div className="stat"><span className="stat-value">{match.stats.decisionsGood}/{match.stats.decisions}</span><span className="stat-label">decisões certas</span></div>
               <div className="stat">
                 <span className="stat-value">
                   {match.stats.golacos > 0 ? match.stats.golacos : displayRating(match.rating).toFixed(1)}

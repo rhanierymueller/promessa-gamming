@@ -299,22 +299,22 @@ h1 {
 .log-bad { color: var(--hot); }
 .log-you { color: var(--text); font-weight: 700; }
 
-/* ---------- passe ---------- */
+/* ---------- decisão ---------- */
 
-.pass-overlay {
+.decision-overlay {
   position: absolute;
   inset: 0;
   z-index: 3;
-  background: rgba(16, 12, 26, 0.92);
+  background: rgba(16, 12, 26, 0.94);
   border-radius: 6px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 14px;
-  padding: 20px;
+  gap: 10px;
+  padding: 16px;
 }
 
-.pass-intro {
+.decision-intro {
   margin: 0;
   text-align: center;
   font-size: 14px;
@@ -322,57 +322,95 @@ h1 {
   line-height: 1.5;
 }
 
-.pass-timebar {
-  height: 6px;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.pass-timebar-fill {
-  height: 100%;
-  background: var(--accent);
-  transition: width 50ms linear;
-}
-
-.pass-options {
+.decision-options {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 7px;
 }
 
-.pass-option {
+.decision-option {
   font-family: var(--mono);
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--line);
+  border-left-width: 3px;
   border-radius: 6px;
-  padding: 12px 14px;
-  font-size: 13px;
+  padding: 9px 12px;
+  font-size: 12.5px;
   cursor: pointer;
   text-align: left;
 }
 
-.pass-option:hover {
+.decision-option:hover {
   border-color: var(--accent);
 }
 
-.pass-option:focus-visible {
+.decision-option:focus-visible {
   outline: 3px solid var(--hot);
   outline-offset: 2px;
 }
 
-.pass-meta {
+/* a faixa de variância só colore a borda: a informação que decide são os números */
+.decision-alta { border-left-color: var(--hot); }
+.decision-media { border-left-color: var(--accent); }
+.decision-baixa { border-left-color: var(--line); }
+
+.decision-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.decision-meta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   font-size: 11px;
-  color: var(--muted);
   white-space: nowrap;
 }
 
-.pass-audacious .pass-meta { color: var(--hot); }
+.decision-attr {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+.decision-stat-key {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+}
+
+.decision-gol { color: var(--accent); }
+.decision-cria { color: var(--text); }
+.decision-risco { color: var(--hot); }
+
+.decision-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* telas estreitas: o nome da jogada vai pra cima e os números pra baixo */
+@media (max-width: 420px) {
+  .decision-option {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .decision-meta {
+    gap: 7px;
+  }
+}
 
 /* ---------- resumo ---------- */
 

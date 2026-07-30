@@ -54,6 +54,17 @@ interface LivePitchProps {
   readonly teamLayout?: readonly { readonly x: number; readonly y: number }[]
   /** Índice do seu craque no desenho (slot da formação escolhida). */
   readonly userIndex?: number
+  /**
+   * Congela a mesa: o desenho continua, o jogo para.
+   *
+   * O lance de decisão não tem cronômetro, e o overlay dele NÃO desmonta o
+   * campo (diferente de chute, defesa e dado). Sem congelar, o jogo seguiria
+   * rodando por baixo enquanto o jogador pensa: a posse e as finalizações
+   * inflariam junto com o tempo de reflexão, o `holdTimer` expiraria e o seu
+   * jogador entregaria a bola sozinho — o adversário podia até finalizar com o
+   * menu ainda aberto.
+   */
+  readonly frozen?: boolean
   readonly onDirectiveComplete?: (id: number) => void
 }
 
@@ -127,11 +138,14 @@ export const LivePitch = ({
   stats,
   teamLayout = FORMATION,
   userIndex = USER_FORMATION_INDEX,
+  frozen = false,
   onDirectiveComplete,
 }: LivePitchProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const speedRef = useRef(speed)
   speedRef.current = speed
+  const frozenRef = useRef(frozen)
+  frozenRef.current = frozen
   const tacticRef = useRef(tactic)
   tacticRef.current = tactic
   const statsRef = useRef(stats)
@@ -718,7 +732,11 @@ export const LivePitch = ({
     let rafId = 0
     let lastTs = 0
     const loop = (ts: number): void => {
-      const dt = Math.min(0.05, (ts - lastTs) / 1000 || 0.016) * speedRef.current
+      // dt zero congela a física, os timers e os contadores; o desenho segue.
+      // lastTs continua avançando para descongelar não entregar um salto de dt.
+      const dt = frozenRef.current
+        ? 0
+        : Math.min(0.05, (ts - lastTs) / 1000 || 0.016) * speedRef.current
       lastTs = ts
       update(dt)
       drawPitch()
