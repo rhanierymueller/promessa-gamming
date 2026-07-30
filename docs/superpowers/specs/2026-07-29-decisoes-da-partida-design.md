@@ -180,12 +180,23 @@ A jogada segura dá nota positiva em `nada` porque manter a posse não é fracas
 
 Com 2 decisões por partida, o catálogo entrega entre **+0.30 e +0.66** gols do jogador e **+0.02 e +0.32** do adversário, dependendo de quão ousado ele joga (piso = sempre a jogada mais segura, teto = sempre a mais ousada). Calibrando pelo perfil equilibrado:
 
-| Canal | Hoje | Proposto |
+| Canal | Antes | Calibrado |
 |---|---|---|
-| `teamGoalChance` | 0.40 | ~0.245 |
-| `microOurGoal` | 0.012 | ~0.0074 |
-| `opponentGoalChance` | 0.35 | ~0.298 |
-| `microTheirGoal` | 0.012 | ~0.0102 |
+| `teamGoalChance` | 0.40 | **0.25** |
+| `microOurGoal` (equilibrado) | 0.012 | **0.0075** |
+| `opponentGoalChance` | 0.35 | **0.32** |
+| `microTheirGoal` (equilibrado) | 0.012 | **0.011** |
+
+Resultado medido depois da calibragem, perfil equilibrado:
+
+| | Antes | Depois | Alvo |
+|---|---|---|---|
+| Gols meus | 2.418 | **2.426** | 2.418 |
+| Gols deles | 1.866 | **1.886** | 1.866 |
+| V/E/D | 50.9/21.9/27.2 | **50.8/20.6/28.6** | — |
+| Fatia do seu pé | 42% | **68%** | >60% |
+
+Os três perfis abrem o placar de propósito: cauteloso 2.208 × 1.798, ousado 2.543 × 2.103.
 
 O corte é **proporcional nos dois canais**, não concentrado em um. Tirar tudo do `teamGoalChance` o levaria a ~0.13 e os gols automáticos do time praticamente desapareceriam da narração — a partida perderia a sensação de que existe um jogo em volta do jogador. Espalhar mantém os dois canais vivos, só menores.
 
@@ -266,12 +277,17 @@ Efeito colateral aceito: uma partida pendente em andamento no momento do deploy 
 
 | Arquivo | Responsabilidade | ~linhas |
 |---|---|---|
-| `outcomes.ts` | tipo `Desfecho`, `Faixa` e contratos | 40 |
-| `catalog.ts` | as 14 jogadas | 130 |
-| `weights.ts` | multiplicadores e normalização | 80 |
-| `draw.ts` | sorteio das 5 com espalhamento garantido | 60 |
-| `resolve.ts` | sorteio único sobre a cumulativa | 60 |
-| `assist.ts` | rolagem da chance contra o ataque do elenco | 40 |
+| `outcomes.ts` | tipo `Desfecho`, `Faixa`, `Modificadores` | 60 |
+| `catalog.ts` | as 14 jogadas | 90 |
+| `weights.ts` | multiplicadores e normalização | 115 |
+| `nota.ts` | nota por desfecho e faixa | 30 |
+| `draw.ts` | sorteio das 5 com faixa garantida | 50 |
+| `resolve.ts` | sorteio único sobre a cumulativa | 50 |
+| `assist.ts` | rolagem da chance contra o ataque do elenco | 30 |
+| `context.ts` | perk/tática/setor → multiplicadores | 45 |
+| `profile.ts` | escolha do técnico e da sonda de calibragem | 25 |
+
+`context.ts` existe para manter `weights.ts` puro — o cálculo não conhece perk, tática nem setor, só números — e para evitar ciclo de import entre `decision` e `match`. `profile.ts` é compartilhado entre a simulação e a calibragem: os dois precisam concordar sobre como um jogador não-humano escolhe.
 
 Mais `src/game/DecisionChallenge.tsx` no lugar de `PassChallenge.tsx`, e os textos em `narration.ts`.
 
@@ -291,7 +307,29 @@ Mais `src/game/DecisionChallenge.tsx` no lugar de `PassChallenge.tsx`, e os text
 
 O teste de calibragem é o que protege o balanceamento a longo prazo: mexer num peso do catálogo no futuro sem desregular o placar em silêncio.
 
-## 12. Fora de escopo
+## 12. O que a auditoria mudou no plano
+
+Uma auditoria de cinco frentes no código existente, mais um crítico de completude, levantou 358 pontos de impacto e 22 achados que nenhuma frente tinha visto. Seis mudaram o desenho:
+
+**Tirar o cronômetro destravou dois bugs que ele escondia.** `isLance` em `MatchScreen` cobria só `shot`, `defense` e `dice`, então o `<LivePitch>` ficava montado e rodando por baixo do overlay de decisão. Com cronômetro de 6s o dano era invisível; sem cronômetro, quem pensasse dois minutos inflaria posse e finalizações do resumo proporcionalmente ao tempo de reflexão. Pior: `holdTimer = 9` era calibrado contra esse cronômetro e decrementa por `dt` já multiplicado pela velocidade — 2,25s no 4x. Quando expirava, o jogador entregava a bola e o adversário podia finalizar com o menu aberto.
+
+Solução: prop `frozen` no `LivePitch`, com `dt = 0`. O desenho continua, a física, os timers e os contadores param. Congelar em vez de desmontar mantém o campo visível — o jogo literalmente para enquanto você pensa.
+
+**Um erro no código novo custava uma carreira.** Qualquer exceção no caminho da partida subia ao `ErrorBoundary`, cuja saída prática é recarregar; no boot, `loadSaveChargingForfeit` encontrava a partida pendente e cobrava W.O. 3×0 com nota 3, gravado. Um bug nosso virava derrota definitiva. Corrigido na raiz: `componentDidCatch` limpa a pendência. Um crash não é abandono de partida. Com isso a guarda de `applyDecisionResult` pode lançar como todas as outras do arquivo.
+
+**Caminho de perda silenciosa de carreira na nuvem.** `pullSave` devolvia `null` tanto para "nuvem vazia" quanto para "não consegui parsear". `syncSave` lia isso como nuvem atrasada e empurrava o save local por cima — a carreira mais nova de outro aparelho desaparecia sem aviso, porque o módulo falha calado de propósito. Adicionar `assists` ao save entrava direto nesse caminho de risco. Corrigido: `PullResult` distingue `save` / `vazia` / `ilegivel` / `indisponivel`, e a decisão foi para `syncPolicy.ts` (puro, 100% de cobertura). Só escreve na nuvem quando dá para afirmar que ela está atrás ou vazia.
+
+**As funções de base não tinham teste.** `applyExtraGoal`, `applyDiceResult`, `advanceAuto`, `matchConfigForSectors` e `autoProbsForSectors` — o caminho vivo da partida e justamente de onde a decisão ia derivar — estavam em 0%. Cobertas antes de mexer. `engine/match` saiu de 83.84% (3,84 pontos do corte de 80% do `vite.config.ts`) para 99.42%.
+
+**O `default` do switch da simulação era um catch-all.** Remover um `case` de momento jogável não daria erro de compilação: cairia no `advance()` e explodiria em runtime dentro do clique de "Simular até o fim". Trocado por guarda de exaustividade com `never`.
+
+**Contagem dupla do `passe`.** O atributo já chega à partida por outro caminho: alimenta `attrs.pas` do seu jogador → overall → ratings de setor → `teamGoalChance` e probabilidades de simulação. A sobreposição é real mas indireta e pequena (um jogador na média de um setor). Não é descontada de propósito — subtrair um efeito difuso custaria legibilidade e continuaria sendo estimativa. Quem responde pelo resultado é a sonda de calibragem, que mede de ponta a ponta. Documentado em `context.ts`.
+
+Mais dois de acabamento: o gol da mesa tática entrava **mudo** (`playStageEvent` só era disparado do `ShotStage` e do `DiceDuelStage`), e `withName` tinha um marcador só, sem como nomear quem passou e quem finalizou numa assistência.
+
+E um achado sem relação com a feature: `src/assets/audio/songs/promessa-meus-dados.json` estava rastreado no git com o e-mail real do usuário — um export de "Baixar meus dados" commitado por engano. Removido, com o padrão no `.gitignore`. O histórico anterior ainda o contém.
+
+## 13. Fora de escopo
 
 - Novos modos de marcar gol (pênalti, cabeceio, rebote, 1x1 com o goleiro) — discutidos e postergados.
 - Mudar a posição do craque para filtrar quais lances ele recebe.
