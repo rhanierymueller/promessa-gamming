@@ -111,7 +111,7 @@ export const FriendsLeagues = ({ save }: FriendsLeaguesProps) => {
 
   if (!isOnlineAvailable()) {
     return (
-      <div className="card">
+      <div className="card friends-panel">
         <span className="card-label">Liga de amigos</span>
         <p className="muted">O modo online não está configurado nesta instalação.</p>
       </div>
@@ -120,7 +120,7 @@ export const FriendsLeagues = ({ save }: FriendsLeaguesProps) => {
 
   return (
     <>
-      <div className="card">
+      <div className="card friends-panel">
         <span className="card-label">Suas ligas de amigos</span>
         {leagues.length === 0 && status !== 'loading' && (
           <p className="muted">Crie uma liga e mande o código pros amigos — ou entre com um código.</p>
@@ -172,7 +172,7 @@ export const FriendsLeagues = ({ save }: FriendsLeaguesProps) => {
       </div>
 
       {selected && (
-        <div className="card">
+        <div className="card friends-panel">
           <span className="card-label">
             {selected.name} · ranking da semana
           </span>

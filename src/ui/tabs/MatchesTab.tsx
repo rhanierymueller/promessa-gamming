@@ -243,7 +243,9 @@ export const MatchesTab = ({ save }: MatchesTabProps) => {
                     {record.playerGoals > 0 && (
                       <span className="history-goals">{record.playerGoals} {record.playerGoals === 1 ? 'gol' : 'gols'}</span>
                     )}
-                    <span className={`history-rating${gala ? ' history-gala' : ''}`}>
+                    <span
+                      className={`history-rating${gala ? ' history-gala' : record.rating < 6 ? ' history-poor' : ''}`}
+                    >
                       {record.rating.toFixed(1)}
                     </span>
                   </span>

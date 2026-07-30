@@ -52,9 +52,16 @@
   box-shadow: 0 0 12px rgba(255, 210, 63, 0.85);
 }
 
+/*
+ * Foco sem parecer defeito: o anel de 2px em volta da aba virava um retângulo
+ * dourado chapado que competia com o próprio marcador de ativa. Aqui o foco
+ * acende a aba por dentro e engrossa o filete.
+ */
 .tab-panel .subtab:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -3px;
+  outline: none;
+  color: var(--text);
+  background: rgba(255, 210, 63, 0.1);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 /* ---------- cartões: mesmo canto das telas novas ---------- */
@@ -178,4 +185,130 @@
 .tab-panel .table-note {
   color: var(--steel);
   font-size: 11px;
+}
+
+/* ---------- calendário ---------- */
+
+/*
+ * Eram 42 caixas iguais com borda própria: um mês vazio virava uma grade de
+ * ruído, e o único dia que importava não se destacava de nada. Agora o mês é
+ * um campo quase liso e só o que tem jogo acende.
+ */
+.tab-panel .cal-day {
+  min-height: 54px;
+  border-radius: 2px;
+  border-color: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.tab-panel .cal-day-empty {
+  background: none;
+}
+
+.tab-panel .cal-day-num {
+  color: var(--steel);
+  opacity: 0.75;
+}
+
+.tab-panel .cal-day-match {
+  border-color: #322850;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-panel .cal-day-next {
+  border-color: var(--accent);
+  background: rgba(255, 210, 63, 0.07);
+  box-shadow:
+    inset 0 0 0 1px var(--accent),
+    0 0 22px rgba(255, 210, 63, 0.16);
+}
+
+.tab-panel .cal-day-next .cal-day-num {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.tab-panel .cal-weekday {
+  color: var(--steel);
+  opacity: 1;
+  letter-spacing: 0.2em;
+}
+
+.tab-panel .cal-month {
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.tab-panel .cal-nav-btn {
+  border-radius: 2px;
+}
+
+/* ---------- retrospecto ---------- */
+
+/*
+ * Os seis números eram todos dourados e do mesmo tamanho: seis destaques é
+ * nenhum destaque. O dourado agora fica só na nota, que é o número sobre
+ * VOCÊ; vitória e derrota falam por cor; o resto é informação de apoio.
+ */
+.tab-panel .history-summary .stat-value {
+  font-family: var(--display);
+  font-size: 27px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.tab-panel .history-summary .stat:nth-child(1) .stat-value {
+  color: #7ee08a;
+}
+
+.tab-panel .history-summary .stat:nth-child(3) .stat-value {
+  color: var(--hot);
+}
+
+.tab-panel .history-summary .stat:nth-child(6) .stat-value {
+  color: var(--accent);
+}
+
+.tab-panel .history-summary .stat-label {
+  color: var(--steel);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+}
+
+/* ---------- lista de partidas ---------- */
+
+.tab-panel .history-rating {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+/* jogo para esquecer: a nota baixa também precisa saltar */
+.tab-panel .history-poor {
+  color: var(--hot);
+}
+
+.tab-panel .history-comp {
+  color: var(--steel);
+}
+
+/* ---------- ligas de amigos ---------- */
+
+/*
+ * É um formulário: esticado em 1060px os campos ficam absurdos, e sozinho na
+ * primeira coluna deixava metade da tela vazia. Centralizado numa largura de
+ * leitura resolve os dois.
+ */
+@media (min-width: 1024px) {
+  .shell-tabs .tab-panel > .friends-panel {
+    grid-column: 1 / -1;
+    width: min(100%, 560px);
+    margin: 0 auto;
+  }
 }
