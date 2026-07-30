@@ -37,6 +37,16 @@ const FOOT_Y = 0.9
 const LEAN_BACK = -9.2
 const LEAN_SWING = 17
 const LEAN_FOLLOW = 4.6
+/** Ponto do lance em que as luvas encontram a bola. */
+const SAVE_AT = 0.88
+/** Onde ficam as luvas dentro da caixa do goleiro, em fração dela. */
+const GLOVE_X = 0.12
+const GLOVE_Y = 0.28
+/** Espalmada: para onde a bola sai depois da defesa, em fração da tela. */
+const REBOUND_X = 0.2
+const REBOUND_Y = -0.12
+/** Largura da janela do impacto, em fração do lance. */
+const IMPACT_SPAN = 0.05
 
 export const Landing = ({ hasSave, onPlay }: LandingProps) => {
   const rootRef = useRef<HTMLDivElement>(null)
@@ -61,10 +71,16 @@ export const Landing = ({ hasSave, onPlay }: LandingProps) => {
       const progress = isStill ? 0 : Math.min(1, y / (window.innerHeight * KICK_SCROLL_SPAN))
       const dive = Math.max(0, (progress - DIVE_START) / (1 - DIVE_START))
 
-      // goleiro mergulha para baixo e para dentro, girando no ar
+      // o baque da defesa: pico no instante em que a luva toca a bola
+      const impact = Math.max(0, 1 - Math.abs(progress - SAVE_AT) / IMPACT_SPAN)
+
+      // goleiro mergulha para baixo e para dentro, girando no ar, e leva o
+      // tranco da bola quando espalma
       const keeperDx = -dive * keeper.offsetWidth * 0.28
       const keeperDy = dive * keeper.offsetHeight * 0.34
-      keeper.style.transform = `translate(${keeperDx}px, ${keeperDy}px) rotate(${dive * 14}deg) scaleX(-1)`
+      keeper.style.transform =
+        `translate(${keeperDx + impact * 7}px, ${keeperDy - impact * 4}px) ` +
+        `rotate(${dive * 14 + impact * 5}deg) scaleX(-1)`
 
       // o chute de verdade: o corpo recua, encontra a bola e gira no
       // follow-through, trocando de quadro no contato — como na partida
@@ -77,17 +93,26 @@ export const Landing = ({ hasSave, onPlay }: LandingProps) => {
       kicker.style.transform = step
       follow.style.transform = step
 
-      // bola: colada no pé até o contato, depois a curva até a luva
-      // (offsetLeft/Top ignoram transforms, então medem a posição de repouso)
+      // bola: colada no pé até o contato, curva até a LUVA (e não até um ponto
+      // qualquer da borda do goleiro), e espalmada para fora depois da defesa.
+      // offsetLeft/Top ignoram transforms, então medem a posição de repouso.
       const restX = kicker.offsetLeft + kicker.offsetWidth * FOOT_X - ball.offsetLeft - ball.offsetWidth / 2
       const restY = kicker.offsetTop + kicker.offsetHeight * FOOT_Y - ball.offsetTop - ball.offsetHeight / 2
-      const flight = Math.max(0, (progress - CONTACT) / (1 - CONTACT))
-      const targetX = keeper.offsetLeft + keeperDx - ball.offsetWidth * 0.3
-      const targetY = keeper.offsetTop + keeperDy + keeper.offsetHeight * 0.3
+      const gloveX = keeper.offsetLeft + keeperDx + keeper.offsetWidth * GLOVE_X
+      const gloveY = keeper.offsetTop + keeperDy + keeper.offsetHeight * GLOVE_Y
+      const targetX = gloveX - ball.offsetLeft - ball.offsetWidth / 2
+      const targetY = gloveY - ball.offsetTop - ball.offsetHeight / 2
+
+      const flight = Math.min(1, Math.max(0, (progress - CONTACT) / (SAVE_AT - CONTACT)))
+      const rebound = Math.max(0, (progress - SAVE_AT) / (1 - SAVE_AT))
       const arc = Math.sin(flight * Math.PI) * window.innerHeight * BALL_ARC_HEIGHT
-      const dx = restX + (targetX - ball.offsetLeft - restX) * flight
-      const dy = restY + (targetY - ball.offsetTop - restY) * flight - arc
-      ball.style.transform = `translate(${dx}px, ${dy}px) rotate(${flight * 540}deg)`
+      const dx = restX + (targetX - restX) * flight + rebound * window.innerWidth * REBOUND_X
+      const dy = restY + (targetY - restY) * flight - arc + rebound * window.innerHeight * REBOUND_Y
+      // achatada no baque, como bola que bate na luva
+      const squash = 1 + impact * 0.16
+      ball.style.transform =
+        `translate(${dx}px, ${dy}px) rotate(${flight * 540 + rebound * 260}deg) ` +
+        `scale(${squash}, ${2 - squash})`
     }
     render()
     if (isStill) return
