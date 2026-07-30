@@ -13,7 +13,8 @@ export type MatchMoment =
   | { readonly kind: 'opponentGoal'; readonly minute: number; readonly templateId: number }
   | { readonly kind: 'playerShot'; readonly minute: number; readonly templateId: number }
   | { readonly kind: 'playerFreeKick'; readonly minute: number; readonly templateId: number }
-  | { readonly kind: 'playerPass'; readonly minute: number; readonly templateId: number }
+  /** Decisão: você escolhe entre cinco jogadas, e a escolha mexe no placar. */
+  | { readonly kind: 'playerDecision'; readonly minute: number; readonly templateId: number }
   | { readonly kind: 'opponentFreeKick'; readonly minute: number; readonly templateId: number }
   /** Lance decisivo no dado: dividida na área, e a sorte resolve. */
   | { readonly kind: 'diceDuel'; readonly minute: number; readonly templateId: number }
@@ -22,7 +23,7 @@ export type MatchMoment =
 export type PlayerMomentKind =
   | 'playerShot'
   | 'playerFreeKick'
-  | 'playerPass'
+  | 'playerDecision'
   | 'opponentFreeKick'
   | 'diceDuel'
 
@@ -35,8 +36,12 @@ export interface PlayerStats {
   readonly shots: number
   readonly goals: number
   readonly golacos: number
-  readonly passes: number
-  readonly passesCompleted: number
+  /** Quantas decisões o jogador tomou na partida. */
+  readonly decisions: number
+  /** Quantas resolveram bem: gol seu ou chance criada. */
+  readonly decisionsGood: number
+  /** Chances criadas que o time converteu. */
+  readonly assists: number
 }
 
 export interface MatchState {
@@ -52,7 +57,7 @@ export interface MatchConfig {
   /** Quantos lances jogáveis de cada tipo o jogador recebe. */
   readonly playerShots: number
   readonly playerFreeKicks: number
-  readonly playerPasses: number
+  readonly playerDecisions: number
   /** Faltas DO adversário que você defende no gol. */
   readonly opponentFreeKicks: number
   /**

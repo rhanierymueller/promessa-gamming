@@ -12,7 +12,7 @@ import { autoProbsForSectors, matchConfigForSectors, type AutoProbInput } from '
 const setores = (def: number, mei: number, ata: number): SectorRatings => ({ def, mei, ata })
 
 const IGUAIS = setores(70, 70, 70)
-const BASE: AutoProbInput = { shotGoal: 0.34, passComplete: 0.62, defenseSave: 0.42 }
+const BASE: AutoProbInput = { shotGoal: 0.34, defenseSave: 0.42 }
 
 describe('matchConfigForSectors', () => {
   it('confronto igual mantém as chances perto da base', () => {
@@ -31,9 +31,21 @@ describe('matchConfigForSectors', () => {
     expect(solido.opponentGoalChance).toBeLessThan(DEFAULT_MATCH_CONFIG.opponentGoalChance)
   })
 
-  it('ganhar o meio-campo rende mais lances jogáveis', () => {
+  it('ganhar o meio-campo rende mais chutes', () => {
     const dominante = matchConfigForSectors(DEFAULT_MATCH_CONFIG, setores(70, 95, 70), setores(70, 55, 70))
     expect(dominante.playerShots).toBeGreaterThan(DEFAULT_MATCH_CONFIG.playerShots)
+  })
+
+  it('ganhar o meio-campo rende mais DECISÕES', () => {
+    // a decisão é o lance de construção: antes era o único que mexia no placar
+    // sem a dificuldade poder modulá-lo
+    const dominante = matchConfigForSectors(DEFAULT_MATCH_CONFIG, setores(70, 95, 70), setores(70, 55, 70))
+    expect(dominante.playerDecisions).toBeGreaterThan(DEFAULT_MATCH_CONFIG.playerDecisions)
+  })
+
+  it('perder o meio-campo nunca zera as decisões', () => {
+    const atropelado = matchConfigForSectors(DEFAULT_MATCH_CONFIG, setores(40, 40, 40), setores(95, 95, 95))
+    expect(atropelado.playerDecisions).toBeGreaterThanOrEqual(1)
   })
 
   it('nunca deixa a partida sem nenhum lance jogável', () => {
@@ -65,18 +77,12 @@ describe('autoProbsForSectors', () => {
   it('confronto igual mantém as probabilidades perto da base', () => {
     const probs = autoProbsForSectors(BASE, IGUAIS, IGUAIS)
     expect(probs.shotGoal).toBeCloseTo(BASE.shotGoal, 5)
-    expect(probs.passComplete).toBeCloseTo(BASE.passComplete, 5)
     expect(probs.defenseSave).toBeCloseTo(BASE.defenseSave, 5)
   })
 
   it('ataque melhor que a defesa deles converte mais chutes', () => {
     const probs = autoProbsForSectors(BASE, setores(70, 70, 95), setores(55, 70, 70))
     expect(probs.shotGoal).toBeGreaterThan(BASE.shotGoal)
-  })
-
-  it('meio melhor completa mais passes', () => {
-    const probs = autoProbsForSectors(BASE, setores(70, 95, 70), setores(70, 55, 70))
-    expect(probs.passComplete).toBeGreaterThan(BASE.passComplete)
   })
 
   it('defesa melhor que o ataque deles salva mais', () => {

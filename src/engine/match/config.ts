@@ -3,7 +3,7 @@ import type { MatchConfig } from './types'
 export const DEFAULT_MATCH_CONFIG: MatchConfig = {
   playerShots: 2,
   playerFreeKicks: 1,
-  playerPasses: 2,
+  playerDecisions: 2,
   opponentFreeKicks: 1,
   diceDuelChance: 0.3,
   teamGoalChance: 0.4,

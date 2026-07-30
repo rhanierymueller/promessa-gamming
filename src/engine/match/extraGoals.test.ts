@@ -3,10 +3,10 @@ import { DEFAULT_MATCH_CONFIG } from './config'
 import {
   advance,
   advanceAuto,
+  applyDecisionResult,
   applyDefenseResult,
   applyDiceResult,
   applyExtraGoal,
-  applyPassResult,
   applyShotResult,
   currentMoment,
   isFinished,
@@ -29,8 +29,8 @@ const avancarAte = (state: MatchState, kind: MatchMoment['kind']): MatchState =>
     const moment = currentMoment(atual)
     if (moment.kind === 'playerShot' || moment.kind === 'playerFreeKick') {
       atual = applyShotResult(atual, 'save', false, CFG)
-    } else if (moment.kind === 'playerPass') {
-      atual = applyPassResult(atual, true, 0, CFG)
+    } else if (moment.kind === 'playerDecision') {
+      atual = applyDecisionResult(atual, 'nada', 0, false, CFG)
     } else if (moment.kind === 'opponentFreeKick') {
       atual = applyDefenseResult(atual, true, CFG)
     } else if (moment.kind === 'diceDuel') {
@@ -136,8 +136,8 @@ describe('advanceAuto', () => {
       state = isPlayerMoment(moment)
         ? moment.kind === 'playerShot' || moment.kind === 'playerFreeKick'
           ? applyShotResult(state, 'save', false, CFG)
-          : moment.kind === 'playerPass'
-            ? applyPassResult(state, true, 0, CFG)
+          : moment.kind === 'playerDecision'
+            ? applyDecisionResult(state, 'nada', 0, false, CFG)
             : moment.kind === 'opponentFreeKick'
               ? applyDefenseResult(state, true, CFG)
               : applyDiceResult(state, true, CFG)
@@ -148,9 +148,9 @@ describe('advanceAuto', () => {
 })
 
 describe('guardas dos lances jogáveis', () => {
-  it('applyPassResult recusa momento que não é de passe', () => {
+  it('applyDecisionResult recusa momento que não é de decisão', () => {
     const state = avancarAte(startMatch(1, CFG), 'playerShot')
-    expect(() => applyPassResult(state, true, 0, CFG)).toThrow(/fora de hora/)
+    expect(() => applyDecisionResult(state, 'nada', 0, false, CFG)).toThrow(/fora de hora/)
   })
 
   it('applyDefenseResult recusa momento que não é falta do adversário', () => {

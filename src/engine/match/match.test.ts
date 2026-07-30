@@ -11,7 +11,7 @@ import {
   advance,
   applyDecider,
   applyDefenseResult,
-  applyPassResult,
+  applyDecisionResult,
   applyShotResult,
   currentMoment,
   isFinished,
@@ -22,15 +22,15 @@ import {
 import { displayRating } from './rating'
 import type { MatchState } from './types'
 
-/** Joga a partida inteira: gol em todo chute, acerto em todo passe. */
+/** Joga a partida inteira: gol em todo chute, decisão sempre bem resolvida. */
 const playPerfectMatch = (state: MatchState): MatchState => {
   let current = state
   while (!isFinished(current)) {
     const moment = currentMoment(current)
     if (moment.kind === 'playerShot' || moment.kind === 'playerFreeKick') {
       current = applyShotResult(current, 'goal', false, CFG)
-    } else if (moment.kind === 'playerPass') {
-      current = applyPassResult(current, true, 0.5, CFG)
+    } else if (moment.kind === 'playerDecision') {
+      current = applyDecisionResult(current, 'chance', 0.5, false, CFG)
     } else if (moment.kind === 'opponentFreeKick') {
       current = applyDefenseResult(current, true, CFG)
     } else {
@@ -59,7 +59,7 @@ describe('startMatch', () => {
     // Assert
     expect(match.plan.filter((m) => m.kind === 'playerShot')).toHaveLength(CFG.playerShots)
     expect(match.plan.filter((m) => m.kind === 'playerFreeKick')).toHaveLength(CFG.playerFreeKicks)
-    expect(match.plan.filter((m) => m.kind === 'playerPass')).toHaveLength(CFG.playerPasses)
+    expect(match.plan.filter((m) => m.kind === 'playerDecision')).toHaveLength(CFG.playerDecisions)
     expect(match.plan.filter((m) => m.kind === 'opponentFreeKick')).toHaveLength(CFG.opponentFreeKicks)
   })
 
@@ -99,7 +99,7 @@ describe('advance', () => {
       if (moment.kind === 'teamGoal') expectedTeam++
       if (moment.kind === 'opponentGoal') expectedOpponent++
       if (moment.kind === 'playerShot' || moment.kind === 'playerFreeKick') state = applyShotResult(state, 'miss', false, CFG)
-      else if (moment.kind === 'playerPass') state = applyPassResult(state, false, -0.4, CFG)
+      else if (moment.kind === 'playerDecision') state = applyDecisionResult(state, 'perdeu', -0.4, false, CFG)
       else if (moment.kind === 'opponentFreeKick') state = applyDefenseResult(state, true, CFG)
       else state = advance(state)
     }
@@ -119,13 +119,13 @@ describe('advance', () => {
   })
 })
 
-describe('applyShotResult e applyPassResult', () => {
-  const atFirstMoment = (kind: 'playerShot' | 'playerPass', seed = 42): MatchState => {
+describe('applyShotResult e applyDecisionResult', () => {
+  const atFirstMoment = (kind: 'playerShot' | 'playerDecision', seed = 42): MatchState => {
     let state = startMatch(seed, CFG)
     while (currentMoment(state).kind !== kind) {
       const moment = currentMoment(state)
       if (moment.kind === 'playerShot' || moment.kind === 'playerFreeKick') state = applyShotResult(state, 'save', false, CFG)
-      else if (moment.kind === 'playerPass') state = applyPassResult(state, true, 0, CFG)
+      else if (moment.kind === 'playerDecision') state = applyDecisionResult(state, 'nada', 0, false, CFG)
       else if (moment.kind === 'opponentFreeKick') state = applyDefenseResult(state, true, CFG)
       else state = advance(state)
     }
@@ -158,22 +158,95 @@ describe('applyShotResult e applyPassResult', () => {
     expect(after.rating).toBeLessThan(before.rating)
   })
 
-  test('passe certo conta nas estatísticas e aplica o delta na nota', () => {
+  test('decisão conta nas estatísticas e aplica o delta na nota', () => {
     // Arrange
-    const before = atFirstMoment('playerPass')
+    const before = atFirstMoment('playerDecision')
 
     // Act
-    const after = applyPassResult(before, true, 0.5, CFG)
+    const after = applyDecisionResult(before, 'chance', 0.5, false, CFG)
 
     // Assert
-    expect(after.stats.passes).toBe(1)
-    expect(after.stats.passesCompleted).toBe(1)
+    expect(after.stats.decisions).toBe(1)
+    expect(after.stats.decisionsGood).toBe(1)
     expect(after.rating).toBeCloseTo(Math.min(CFG.maxRating, before.rating + 0.5))
+  })
+
+  test('gol de decisão soma no placar e nos gols do jogador', () => {
+    // Arrange
+    const before = atFirstMoment('playerDecision')
+
+    // Act
+    const after = applyDecisionResult(before, 'gol', 1.2, false, CFG)
+
+    // Assert
+    expect(after.score.team).toBe(before.score.team + 1)
+    expect(after.stats.goals).toBe(before.stats.goals + 1)
+    expect(after.stats.assists).toBe(0)
+  })
+
+  test('chance convertida é assistência, não gol do jogador', () => {
+    // Arrange
+    const before = atFirstMoment('playerDecision')
+
+    // Act
+    const after = applyDecisionResult(before, 'chance', 0.5, true, CFG)
+
+    // Assert
+    expect(after.score.team).toBe(before.score.team + 1)
+    expect(after.stats.goals).toBe(before.stats.goals)
+    expect(after.stats.assists).toBe(1)
+  })
+
+  test('criar a chance conta como decisão boa mesmo se o time desperdiça', () => {
+    // Arrange
+    const before = atFirstMoment('playerDecision')
+
+    // Act
+    const after = applyDecisionResult(before, 'chance', 0.5, false, CFG)
+
+    // Assert: o erro do companheiro não é falha de quem inventou a jogada
+    expect(after.stats.decisionsGood).toBe(1)
+    expect(after.score).toEqual(before.score)
+    expect(after.stats.assists).toBe(0)
+  })
+
+  test('contra-ataque sofrido soma para o adversário', () => {
+    // Arrange
+    const before = atFirstMoment('playerDecision')
+
+    // Act
+    const after = applyDecisionResult(before, 'contra', -1, false, CFG)
+
+    // Assert
+    expect(after.score.opponent).toBe(before.score.opponent + 1)
+    expect(after.score.team).toBe(before.score.team)
+    expect(after.stats.decisionsGood).toBe(0)
+  })
+
+  test('perder a bola custa nota e não mexe no placar', () => {
+    // Arrange
+    const before = atFirstMoment('playerDecision')
+
+    // Act
+    const after = applyDecisionResult(before, 'perdeu', -0.6, false, CFG)
+
+    // Assert
+    expect(after.score).toEqual(before.score)
+    expect(after.rating).toBeLessThan(before.rating)
+    expect(after.stats.decisions).toBe(1)
+  })
+
+  test('aplicar decisão fora do momento de decisão é erro de programação', () => {
+    // Arrange
+    const state = atFirstMoment('playerShot')
+
+    // Act & Assert
+    expect(() => applyDecisionResult(state, 'gol', 1, false, CFG)).toThrow(/fora de hora/)
   })
 
   test('aplicar resultado de chute num momento de passe é erro de programação', () => {
     // Arrange
-    const state = atFirstMoment('playerPass')
+    const state = atFirstMoment('playerDecision')
 
     // Act & Assert
     expect(() => applyShotResult(state, 'goal', false, CFG)).toThrow(/fora de hora/)
@@ -186,7 +259,7 @@ describe('applyDefenseResult', () => {
     while (currentMoment(state).kind !== 'opponentFreeKick') {
       const moment = currentMoment(state)
       if (moment.kind === 'playerShot' || moment.kind === 'playerFreeKick') state = applyShotResult(state, 'save', false, CFG)
-      else if (moment.kind === 'playerPass') state = applyPassResult(state, true, 0, CFG)
+      else if (moment.kind === 'playerDecision') state = applyDecisionResult(state, 'nada', 0, false, CFG)
       else state = advance(state)
     }
     return state
@@ -240,7 +313,7 @@ describe('partida completa', () => {
     while (!isFinished(disaster)) {
       const moment = currentMoment(disaster)
       if (moment.kind === 'playerShot' || moment.kind === 'playerFreeKick') disaster = applyShotResult(disaster, 'miss', false, CFG)
-      else if (moment.kind === 'playerPass') disaster = applyPassResult(disaster, false, -2, CFG)
+      else if (moment.kind === 'playerDecision') disaster = applyDecisionResult(disaster, 'perdeu', -2, false, CFG)
       else if (moment.kind === 'opponentFreeKick') disaster = applyDefenseResult(disaster, false, CFG)
       else disaster = advance(disaster)
     }
@@ -303,8 +376,8 @@ describe('desempate no lance dos dados', () => {
       const moment = currentMoment(state)
       if (moment.kind === 'playerShot' || moment.kind === 'playerFreeKick') {
         state = applyShotResult(state, 'miss', false, CFG)
-      } else if (moment.kind === 'playerPass') {
-        state = applyPassResult(state, false, 0, CFG)
+      } else if (moment.kind === 'playerDecision') {
+        state = applyDecisionResult(state, 'nada', 0, false, CFG)
       } else if (moment.kind === 'opponentFreeKick') {
         state = applyDefenseResult(state, true, CFG)
       } else {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { autoProbsForEdge } from './difficulty'
 
-const BASE = { shotGoal: 0.55, passComplete: 0.86, defenseSave: 0.66 }
+const BASE = { shotGoal: 0.55, defenseSave: 0.66 }
 
 describe('a força do adversário pesa na simulação', () => {
   test('contra time mais fraco, você converte mais', () => {
@@ -26,7 +26,7 @@ describe('a força do adversário pesa na simulação', () => {
   test('o favorito nunca vira imbatível', () => {
     const folgado = autoProbsForEdge(BASE, 99, 30)
     expect(folgado.shotGoal).toBeLessThanOrEqual(0.92)
-    expect(folgado.passComplete).toBeLessThanOrEqual(0.92)
+    expect(folgado.defenseSave).toBeLessThanOrEqual(0.92)
   })
 
   test('quanto maior a diferença, maior o efeito', () => {

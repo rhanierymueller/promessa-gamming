@@ -369,7 +369,7 @@ export const MatchScreen = ({
     pendingMomentRef.current = null
     setDirective(null)
     pushLine({ minute: moment.minute, text: narrationForMoment(moment), tone: 'you' })
-    if (moment.kind === 'playerPass') setMode('pass')
+    if (moment.kind === 'playerDecision') setMode('pass')
     else if (moment.kind === 'opponentFreeKick') setMode('defense')
     else if (moment.kind === 'diceDuel') setMode('dice')
     else setMode('shot')
@@ -521,7 +521,7 @@ export const MatchScreen = ({
           text: withName(event.success ? SIM_LINES.shotGoal : SIM_LINES.shotMiss, playerName),
           tone: event.success ? 'good' : 'bad',
         }
-      case 'playerPass':
+      case 'playerDecision':
         return {
           minute: event.minute,
           text: withName(event.success ? SIM_LINES.passOk : SIM_LINES.passFail, playerName),
