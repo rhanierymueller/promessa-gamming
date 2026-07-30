@@ -1,0 +1,63 @@
+/* ---------- mercado de transferências ---------- */
+
+/*
+ * "Todas as nacionalidades" não cabia no filtro e saía cortado em
+ * "Todas as nacionalidade⌄": select nativo não encolhe o texto, então a coluna
+ * precisa caber no maior rótulo.
+ */
+.tab-panel .market-filters {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.tab-panel .market-filters .squad-select {
+  font-size: 11px;
+}
+
+.tab-panel .market-budget {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.tab-panel .market-row {
+  border-radius: 2px;
+}
+
+.tab-panel .market-ovr {
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  border-radius: 2px;
+}
+
+.tab-panel .market-price {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+/*
+ * Dez botões cinzas iguais dizendo "sem verba" formavam uma parede na borda
+ * direita e pesavam mais que os próprios jogadores. Sem dinheiro, isso é um
+ * aviso — não um botão. Vira texto apagado, e volta a ser botão quando dá
+ * para comprar.
+ */
+.tab-panel .market-buy:disabled {
+  border-color: transparent;
+  background: none;
+  color: var(--steel);
+  opacity: 0.7;
+  letter-spacing: 0.14em;
+}
+
+.tab-panel .market-buy {
+  border-radius: 2px;
+}
+
+.tab-panel .market-meta {
+  color: var(--steel);
+}

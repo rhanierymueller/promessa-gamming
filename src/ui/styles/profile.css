@@ -1,0 +1,93 @@
+/* ---------- perfil: carreira, atributos e conta ---------- */
+
+.tab-panel .profile-name {
+  font-family: var(--display);
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.tab-panel .profile-portrait {
+  border-radius: 3px;
+  border-color: #322850;
+}
+
+/*
+ * Oito números dourados do mesmo tamanho: o cartão inteiro gritava e nada se
+ * lia primeiro. O dourado fica nos dois que definem um atacante — gols na
+ * carreira e nota média —, vitórias em verde, e o resto vira apoio.
+ */
+.tab-panel .profile-career .stat-value {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.tab-panel .profile-career .stat:nth-child(1) .stat-value,
+.tab-panel .profile-career .stat:nth-child(4) .stat-value {
+  color: var(--accent);
+}
+
+.tab-panel .profile-career .stat:nth-child(5) .stat-value {
+  color: #7ee08a;
+}
+
+.tab-panel .profile-career .stat-label {
+  color: var(--steel);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+}
+
+/* ---------- atributos ---------- */
+
+.tab-panel .attr-points {
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.tab-panel .attr-hint {
+  color: var(--steel);
+}
+
+/* o pip vazio é o que falta, não decoração: escurece para o cheio saltar */
+.tab-panel .attr-pip {
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.tab-panel .attr-pip-on {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(255, 210, 63, 0.35);
+}
+
+.tab-panel .attr-btn {
+  border-radius: 2px;
+}
+
+/* ---------- comemoração, troféus e conta ---------- */
+
+.tab-panel .celebration-option,
+.tab-panel .account-actions .btn,
+.tab-panel .danger-zone,
+.tab-panel .danger-zone .btn {
+  border-radius: 2px;
+}
+
+.tab-panel .danger-zone-title {
+  letter-spacing: 0.2em;
+}
+
+.tab-panel .danger-zone-note {
+  color: var(--steel);
+}
+
+.tab-panel .appearance-label {
+  color: var(--steel);
+  letter-spacing: 0.2em;
+}

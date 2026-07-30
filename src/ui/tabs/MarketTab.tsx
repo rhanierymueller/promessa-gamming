@@ -6,6 +6,7 @@ import type { SquadPosition } from '../../engine/squad/players'
 import { signPlayer, type PlayerSave } from '../../state/save'
 import { MarketRow } from '../MarketRow'
 import { PlayerCardModal } from '../PlayerCard'
+import '../styles/market.css'
 
 /** Transfermarket: filtros estilo FIFA e contratação com a verba da divisão. */
 
