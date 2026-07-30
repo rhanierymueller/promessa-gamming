@@ -23,12 +23,14 @@ Dentro:
 - `AuthGate` nas duas vistas (entrar e recuperar senha).
 - `PasswordReset` (nova senha, aberta pelo link do e-mail), incluindo o estado de sucesso.
 
+- `CharacterCreate` (a criação da promessa). **Entrou depois**, a pedido do dono do produto,
+  ao ver o resultado das outras telas: era a única do fluxo de entrada que continuava parecendo
+  formulário. Virou a ficha de inscrição no balcão da mesma portaria.
+
 Fora:
 
 - O hero da landing e a coreografia de chute controlada por scroll. Ficam intactos, linha por
   linha. Foi a parte que o dono do produto aprovou como está.
-- `CharacterCreate` (a criação da promessa). Continua como está e continua usando as classes
-  `.create-*` do `index.css`.
 - Qualquer mudança de comportamento: autenticação, validação, cooldown, sincronização.
 
 ## A direção visual
