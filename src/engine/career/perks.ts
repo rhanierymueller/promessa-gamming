@@ -26,8 +26,8 @@ export interface Perk {
 
 export const PERKS: readonly Perk[] = [
   { id: 'folha-seca', name: 'Folha Seca', description: 'Sua cobrança engana a barreira: o pulo deles rende 15% menos.' },
-  { id: 'frieza', name: 'Frieza', description: 'O tempo desacelera: +50% de tempo para decidir nos passes.' },
-  { id: 'maestro', name: 'Maestro', description: 'Visão de camisa 10: +5% de chance em todas as opções de passe.' },
+  { id: 'frieza', name: 'Frieza', description: 'Sangue-frio na pressão: 25% menos risco de contra-ataque nas suas decisões.' },
+  { id: 'maestro', name: 'Maestro', description: 'Visão de camisa 10: +10% de peso em gol e chance criada nas decisões.' },
   { id: 'capitao', name: 'Capitão', description: 'Sua atuação contagia: momentum positivo 30% mais forte no time.' },
   { id: 'matador', name: 'Matador', description: 'Frio no desespero: chute 15% mais preciso quando o jogo está empatado ou perdendo.' },
   { id: 'muralha', name: 'Muralha', description: 'Reflexo de paredão: alcance da luva 6% maior nas defesas.' },
@@ -74,9 +74,9 @@ const MATADOR_PRECISION = 0.85
 const COPA_PRECISION = 0.88
 const FOLHA_SECA_WALL = 0.85
 const MURALHA_REACH = 1.06
-const MAESTRO_PASS_BONUS = 0.05
-const MAX_PASS_CHANCE = 0.97
-const FRIEZA_TIME_FACTOR = 1.5
+/** Maestro empurra os desfechos bons da decisão; frieza segura o contra-ataque. */
+const MAESTRO_BONUS = 1.1
+const FRIEZA_CORTE_CONTRA = 0.75
 const CAPITAO_MOMENTUM = 1.3
 const MAX_MOMENTUM = 1
 const IDOLO_WIN_POINTS = 1
@@ -106,13 +106,26 @@ export const applyPerksToDefense = (
 ): DefenseConfig =>
   perks.includes('muralha') ? { ...config, reach: config.reach * MURALHA_REACH } : config
 
-export const perkPassChance = (baseChance: number, perks: readonly PerkId[]): number =>
-  perks.includes('maestro')
-    ? Math.min(MAX_PASS_CHANCE, baseChance + MAESTRO_PASS_BONUS)
-    : baseChance
+/**
+ * Maestro na decisão: multiplica o PESO de gol e chance criada.
+ *
+ * Antes somava 5% direto na probabilidade e precisava de um teto de 97% para
+ * não estourar — e esse teto achatava a escolha, porque a opção segura chegava
+ * perto de 100% e virava opção grátis. Como peso, o efeito é proporcional e a
+ * normalização fecha a conta sozinha.
+ */
+export const perkBonusBom = (perks: readonly PerkId[]): number =>
+  perks.includes('maestro') ? MAESTRO_BONUS : 1
 
-export const perkDecisionSeconds = (baseSeconds: number, perks: readonly PerkId[]): number =>
-  perks.includes('frieza') ? baseSeconds * FRIEZA_TIME_FACTOR : baseSeconds
+/**
+ * Frieza na decisão: corta o peso do contra-ataque.
+ *
+ * Substitui o bônus de tempo de decisão, que perdeu sentido quando o lance
+ * deixou de ter cronômetro. Sangue-frio agora é não entregar a bola na
+ * pressão — efeito no lance, não no relógio.
+ */
+export const perkCortaContra = (perks: readonly PerkId[]): number =>
+  perks.includes('frieza') ? FRIEZA_CORTE_CONTRA : 1
 
 /** Capitão amplia o contágio positivo — jogar mal segue pesando igual. */
 export const captainMomentum = (momentum: number, perks: readonly PerkId[]): number =>

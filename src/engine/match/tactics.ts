@@ -21,13 +21,29 @@ interface TacticProfile {
   readonly microOurGoal: number
   /** Chance de gol emergente deles a cada lance corrido. */
   readonly microTheirGoal: number
+  /**
+   * O quanto a postura te expõe quando VOCÊ perde a bola numa decisão.
+   * Recuar tem gente atrás para cobrir; contra-ataque deixa o time esticado.
+   */
+  readonly exporContra: number
 }
 
+/*
+ * As taxas de gol emergente foram cortadas proporcionalmente quando a decisão
+ * passou a marcar gol (eram 0.012/0.012, 0.004/0.007 e 0.026/0.017). O corte é
+ * repartido entre o lance corrido e o gol de plano em vez de concentrado num
+ * só: tirar tudo do plano faria os gols automáticos do time praticamente
+ * sumirem da narração, e a partida perderia a sensação de que existe um jogo
+ * em volta do jogador. A relação entre as três posturas é preservada.
+ */
 const PROFILES: Record<Tactic, TacticProfile> = {
-  equilibrado: { cancelTheirGoal: 0.1, cancelOurGoal: 0.1, microOurGoal: 0.012, microTheirGoal: 0.012 },
-  recuar: { cancelTheirGoal: 0.4, cancelOurGoal: 0.35, microOurGoal: 0.004, microTheirGoal: 0.007 },
-  'contra-ataque': { cancelTheirGoal: 0.15, cancelOurGoal: 0.2, microOurGoal: 0.026, microTheirGoal: 0.017 },
+  equilibrado: { cancelTheirGoal: 0.1, cancelOurGoal: 0.1, microOurGoal: 0.0075, microTheirGoal: 0.011, exporContra: 1 },
+  recuar: { cancelTheirGoal: 0.4, cancelOurGoal: 0.35, microOurGoal: 0.0025, microTheirGoal: 0.0064, exporContra: 0.7 },
+  'contra-ataque': { cancelTheirGoal: 0.15, cancelOurGoal: 0.2, microOurGoal: 0.016, microTheirGoal: 0.0155, exporContra: 1.25 },
 }
+
+/** Multiplicador do risco de contra-ataque de uma decisão, pela postura do time. */
+export const exposicaoDaTatica = (tactic: Tactic): number => PROFILES[tactic].exporContra
 
 /**
  * MOMENTUM: sua atuação contagia o time. Nota acima de 6 empurra os gols do

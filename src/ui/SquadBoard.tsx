@@ -5,6 +5,7 @@ import { overallAt, positionFit, type SquadPlayer } from '../engine/squad/player
 import { sectorRatings } from '../engine/squad/sectors'
 import { FormationBoard } from './FormationBoard'
 import { ovrClass } from '../engine/squad/overallTier'
+import type { PlayerGender } from '../state/save'
 
 /**
  * Prancheta do técnico: o campo com os titulares, o seletor de esquema e a
@@ -22,6 +23,10 @@ interface SquadBoardProps {
   readonly lineup: readonly number[]
   /** Índice do craque do jogador no elenco; -1 quando ele não está nele. */
   readonly userIndex: number
+  /** Gênero do elenco: escolhe o banco de retratos dos atletas. */
+  readonly gender: PlayerGender
+  /** Retrato configurado no Perfil — só para o SEU craque. */
+  readonly userFaceUrl?: string | null
   readonly primaryColor: string
   /** Sem isto a prancheta é só leitura (elenco de adversário). */
   readonly editable: boolean
@@ -46,6 +51,8 @@ export const SquadBoard = ({
   formation,
   lineup,
   userIndex,
+  gender,
+  userFaceUrl,
   primaryColor,
   editable,
   onFormationChange,
@@ -141,6 +148,8 @@ export const SquadBoard = ({
             formation={shape}
             players={starters.map((squadIndex) => squad[squadIndex])}
             userSlot={starters.indexOf(userIndex)}
+            gender={gender}
+            userFaceUrl={userFaceUrl}
             primaryColor={primaryColor}
             onSelect={onSelect}
           />

@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { CAREER_KEYS } from '../state/localData'
+import { clearPendingMatch } from '../state/pendingMatch'
 
 /**
  * Rede de segurança para exceções em render.
@@ -31,6 +32,17 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
+    /*
+     * Um crash NÃO é abandono de partida.
+     *
+     * Sem isto, a única saída prática desta tela é recarregar — e no boot o
+     * loadSaveChargingForfeit encontra a partida pendente e cobra W.O. 3×0 com
+     * nota 3, gravado. Ou seja: um bug nosso custava uma derrota real e
+     * definitiva na carreira de quem jogou. A pendência existe para conter
+     * quem sai de uma partida que está perdendo, não para punir quem foi
+     * vítima de exceção.
+     */
+    clearPendingMatch(localStorage)
     // sem serviço de telemetria: o console é o que existe para diagnosticar
     // um relato de jogador ("deu tela de erro na hora do pênalti")
     console.error('Promessa quebrou:', error, info.componentStack)

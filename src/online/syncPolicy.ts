@@ -26,3 +26,51 @@ export const chooseSave = ({ localSavedAt, cloudSavedAt }: SyncInput): SaveWinne
   // empate fica com o aparelho: trocar a tela sem ganho só confunde
   return localSavedAt >= cloudSavedAt ? 'local' : 'cloud'
 }
+
+/** O que a nuvem respondeu, sem o conteúdo. */
+export type CloudState = 'save' | 'vazia' | 'ilegivel' | 'indisponivel'
+
+export interface SyncDecision {
+  readonly winner: SaveWinner
+  /** Pode ESCREVER o save do aparelho na nuvem? */
+  readonly pushLocal: boolean
+  /** A carreira que passa a valer é a da nuvem? */
+  readonly useCloud: boolean
+}
+
+/**
+ * Decide o que fazer com os dois saves — inclusive quando a nuvem não deu
+ * resposta confiável.
+ *
+ * O ponto crítico: `vazia` e `ilegivel` NÃO são a mesma coisa. Tratar as duas
+ * como "nuvem sem nada" fazia a carreira mais nova de outro aparelho ser
+ * sobrescrita pela mais antiga deste, em silêncio, sempre que o parse do save
+ * remoto falhasse — por exemplo depois de uma mudança de formato do save.
+ *
+ * Regra: só escreve na nuvem quando dá para AFIRMAR que ela está atrás ou
+ * vazia. Ficar dessincronizado até a próxima gravação é recuperável; apagar a
+ * carreira do outro aparelho não é.
+ */
+export const resolveSync = ({
+  localSavedAt,
+  cloud,
+  cloudSavedAt,
+}: {
+  readonly localSavedAt: number | null
+  readonly cloud: CloudState
+  readonly cloudSavedAt: number | null
+}): SyncDecision => {
+  if (cloud === 'ilegivel' || cloud === 'indisponivel') {
+    return {
+      winner: localSavedAt === null ? 'nenhum' : 'local',
+      pushLocal: false,
+      useCloud: false,
+    }
+  }
+  const winner = chooseSave({ localSavedAt, cloudSavedAt })
+  return {
+    winner,
+    pushLocal: winner === 'local' && localSavedAt !== null,
+    useCloud: winner === 'cloud',
+  }
+}

@@ -9,3 +9,9 @@ coverage
 .vercel
 .env*
 *.tsbuildinfo
+
+# export de "Baixar meus dados" — contém dados pessoais, nunca versionar
+promessa-meus-dados*.json
+
+# mockups do brainstorm visual
+.superpowers/

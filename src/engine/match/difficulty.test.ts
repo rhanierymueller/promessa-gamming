@@ -1,17 +1,42 @@
 import { describe, expect, test } from 'vitest'
+import { DEFAULT_ATTRIBUTES } from '../career/attributes'
+import type { ContextoDaJogada } from '../decision/context'
+import { createRng } from '../rng'
+import { simulateToEnd } from './autoplay'
 import { DEFAULT_MATCH_CONFIG as CFG } from './config'
 import { matchConfigForRatings } from './difficulty'
 import { startMatch } from './match'
 
-/** Placar só dos gols de PLANO (sem os lances do usuário) para N partidas. */
-const planWinRate = (myRating: number, oppRating: number, samples: number): number => {
+const CONTEXTO: ContextoDaJogada = {
+  attributes: DEFAULT_ATTRIBUTES,
+  perks: [],
+  tatica: 'equilibrado',
+  momentum: 0,
+  edges: { attack: 0, defense: 0, midfield: 0 },
+  travamento: 0,
+}
+
+/**
+ * Taxa de vitória no placar REAL da partida.
+ *
+ * Antes isto contava só os gols de PLANO, ignorando chute, defesa e decisão.
+ * Servia enquanto o placar era quase todo sorteio — mas a decisão passou a
+ * marcar para os dois lados, e medir só o plano deixaria este teste (o único
+ * guarda de balanceamento do repo) verde enquanto o jogo desbalanceia.
+ */
+const winRate = (myRating: number, oppRating: number, samples: number): number => {
   const config = matchConfigForRatings(CFG, myRating, oppRating)
   let wins = 0
   for (let seed = 1; seed <= samples; seed++) {
-    const match = startMatch(seed, config)
-    const team = match.plan.filter((moment) => moment.kind === 'teamGoal').length
-    const opp = match.plan.filter((moment) => moment.kind === 'opponentGoal').length
-    if (team > opp) wins++
+    const sim = simulateToEnd(
+      startMatch(seed, config),
+      config,
+      { shotGoal: 0.34, defenseSave: 0.42 },
+      { contexto: CONTEXTO, perfil: 'equilibrado' },
+      createRng(seed * 2654435761 + 11),
+    )
+    const { team, opponent } = sim.value.state.score
+    if (team > opponent) wins++
   }
   return wins / samples
 }
@@ -28,7 +53,7 @@ describe('matchConfigForRatings', () => {
 
   test('time 50 contra time 80: zebra é rara mas NÃO impossível', () => {
     // Act
-    const underdogWins = planWinRate(50, 80, 400)
+    const underdogWins = winRate(50, 80, 400)
 
     // Assert
     expect(underdogWins).toBeGreaterThan(0.01)
@@ -37,7 +62,7 @@ describe('matchConfigForRatings', () => {
 
   test('time 80 contra time 50 vence com folga na maioria', () => {
     // Act
-    const favoriteWins = planWinRate(80, 50, 400)
+    const favoriteWins = winRate(80, 50, 400)
 
     // Assert
     expect(favoriteWins).toBeGreaterThan(0.5)

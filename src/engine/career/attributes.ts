@@ -26,6 +26,14 @@ export const ATTRIBUTE_LABELS: Record<AttributeKey, string> = {
 
 export const ATTRIBUTE_KEYS: readonly AttributeKey[] = ['finalizacao', 'passe', 'cobranca', 'defesa']
 
+/** Sigla para caber na linha da decisão, onde o nome inteiro não entra. */
+export const ATTRIBUTE_ABBR: Record<AttributeKey, string> = {
+  finalizacao: 'FIN',
+  passe: 'PAS',
+  cobranca: 'COB',
+  defesa: 'DEF',
+}
+
 export const MIN_ATTRIBUTE = 1
 export const MAX_ATTRIBUTE = 10
 

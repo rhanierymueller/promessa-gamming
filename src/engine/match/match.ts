@@ -1,3 +1,4 @@
+import type { Desfecho } from '../decision/outcomes'
 import { createRng, nextFloat, nextInt, type RngResult, type RngState } from '../rng'
 import type { ShotOutcomeKind } from '../shot/types'
 import { clampRating, shotRatingDelta } from './rating'
@@ -45,13 +46,40 @@ const buildPlan = (rng: RngState, config: MatchConfig): RngResult<readonly Match
 
   addMoments(config.commentaryMoments, (minute, templateId) => ({ kind: 'commentary', minute, templateId }))
   addMoments(config.playerShots, (minute, templateId) => ({ kind: 'playerShot', minute, templateId }))
-  addMoments(config.playerFreeKicks, (minute, templateId) => ({ kind: 'playerFreeKick', minute, templateId }))
-  addMoments(config.playerPasses, (minute, templateId) => ({ kind: 'playerPass', minute, templateId }))
+
+  // Especiais variam, mas não podem sumir juntos e deixar a partida sem graça.
+  const freeKickRoll = rollCount(draft.rng, config.playerFreeKickChance, config.playerFreeKicks)
+  draft = { ...draft, rng: freeKickRoll.next }
+  const diceRoll = rollCount(draft.rng, config.diceDuelChance, 1)
+  draft = { ...draft, rng: diceRoll.next }
+
+  let freeKicks = freeKickRoll.value
+  let dice = diceRoll.value
+  const missingSpecials = Math.max(0, config.minimumSpecialMoments - freeKicks - dice)
+
+  for (let i = 0; i < missingSpecials; i++) {
+    const canAddFreeKick = config.playerFreeKicks > freeKicks && config.playerFreeKickChance > 0
+    const canAddDice = dice === 0 && config.diceDuelChance > 0
+    if (!canAddFreeKick && !canAddDice) break
+
+    if (canAddFreeKick && canAddDice) {
+      const choice = nextFloat(draft.rng)
+      draft = { ...draft, rng: choice.next }
+      const freeKickWeight = config.playerFreeKickChance
+      const diceWeight = config.diceDuelChance
+      if (choice.value < freeKickWeight / (freeKickWeight + diceWeight)) freeKicks++
+      else dice++
+    } else if (canAddFreeKick) {
+      freeKicks++
+    } else {
+      dice++
+    }
+  }
+
+  addMoments(freeKicks, (minute, templateId) => ({ kind: 'playerFreeKick', minute, templateId }))
+  addMoments(config.playerDecisions, (minute, templateId) => ({ kind: 'playerDecision', minute, templateId }))
   addMoments(config.opponentFreeKicks, (minute, templateId) => ({ kind: 'opponentFreeKick', minute, templateId }))
-  // no máximo um por partida, e só quando o sorteio manda
-  const dice = rollCount(draft.rng, config.diceDuelChance, 1)
-  draft = { ...draft, rng: dice.next }
-  addMoments(dice.value, (minute, templateId) => ({ kind: 'diceDuel', minute, templateId }))
+  addMoments(dice, (minute, templateId) => ({ kind: 'diceDuel', minute, templateId }))
 
   const teamGoals = rollCount(draft.rng, config.teamGoalChance, config.maxTeamGoals)
   draft = { ...draft, rng: teamGoals.next }
@@ -79,7 +107,7 @@ export const startMatch = (seed: number, config: MatchConfig): MatchState => {
     cursor: 0,
     score: { team: 0, opponent: 0 },
     rating: config.baseRating,
-    stats: { shots: 0, goals: 0, golacos: 0, passes: 0, passesCompleted: 0 },
+    stats: { shots: 0, goals: 0, golacos: 0, decisions: 0, decisionsGood: 0, assists: 0 },
     rng: plan.next,
   }
 }
@@ -91,7 +119,7 @@ export const isFinished = (state: MatchState): boolean => state.cursor >= state.
 export const isPlayerMoment = (moment: MatchMoment): moment is MatchMoment & { kind: PlayerMomentKind } =>
   moment.kind === 'playerShot' ||
   moment.kind === 'playerFreeKick' ||
-  moment.kind === 'playerPass' ||
+  moment.kind === 'playerDecision' ||
   moment.kind === 'opponentFreeKick' ||
   moment.kind === 'diceDuel'
 
@@ -223,24 +251,52 @@ export const applyDefenseResult = (
   }
 }
 
-export const applyPassResult = (
+/**
+ * Fecha a decisão do jogador: o desfecho mexe no PLACAR, na nota e nos stats.
+ *
+ * É a diferença central em relação ao passe que existia aqui antes, que só
+ * mexia na nota — a escolha do jogador era decorativa e nunca decidia a
+ * partida.
+ *
+ * `gol` conta como gol dele; `chance` que o time converteu conta como
+ * ASSISTÊNCIA, não como gol — quem finalizou foi o companheiro. Criar a chance
+ * já conta como decisão bem resolvida mesmo quando o time desperdiça: o erro
+ * do atacante não é falha de quem deu o passe.
+ *
+ * A guarda lança, como todas as outras deste arquivo. Isso só é seguro porque
+ * o ErrorBoundary agora limpa a partida pendente antes de a tela de erro subir
+ * — antes, qualquer exceção aqui virava W.O. 3×0 gravado na carreira.
+ */
+export const applyDecisionResult = (
   state: MatchState,
-  completed: boolean,
+  desfecho: Desfecho,
   ratingDelta: number,
+  assistConvertida: boolean,
   config: MatchConfig,
 ): MatchState => {
   const moment = currentMoment(state)
-  if (moment.kind !== 'playerPass') {
-    throw new Error(`applyPassResult fora de hora: momento atual é ${moment.kind}`)
+  if (moment.kind !== 'playerDecision') {
+    throw new Error(`applyDecisionResult fora de hora: momento atual é ${moment.kind}`)
   }
+  const meuGol = desfecho === 'gol'
+  const golDoTime = desfecho === 'chance' && assistConvertida
+  const golDeles = desfecho === 'contra'
+  const criou = desfecho === 'gol' || desfecho === 'chance'
+
   return {
     ...state,
     cursor: state.cursor + 1,
+    score: {
+      team: state.score.team + (meuGol || golDoTime ? 1 : 0),
+      opponent: state.score.opponent + (golDeles ? 1 : 0),
+    },
     rating: clampRating(state.rating + ratingDelta, config),
     stats: {
       ...state.stats,
-      passes: state.stats.passes + 1,
-      passesCompleted: state.stats.passesCompleted + (completed ? 1 : 0),
+      goals: state.stats.goals + (meuGol ? 1 : 0),
+      decisions: state.stats.decisions + 1,
+      decisionsGood: state.stats.decisionsGood + (criou ? 1 : 0),
+      assists: state.stats.assists + (golDoTime ? 1 : 0),
     },
   }
 }

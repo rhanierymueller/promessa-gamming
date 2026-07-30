@@ -14,8 +14,8 @@ import {
   PERFECT_GAMES_FOR_PERK,
   PERFECT_RATING,
   perkById,
-  perkDecisionSeconds,
-  perkPassChance,
+  perkBonusBom,
+  perkCortaContra,
   perkTrainingBonus,
 } from './perks'
 
@@ -92,15 +92,15 @@ describe('efeitos dos perks', () => {
     expect(config.reach).toBeGreaterThan(DEFAULT_DEFENSE_CONFIG.reach)
   })
 
-  test('maestro soma chance de passe sem estourar o teto', () => {
-    expect(perkPassChance(0.6, ['maestro'])).toBeCloseTo(0.65)
-    expect(perkPassChance(0.96, ['maestro'])).toBe(0.97)
-    expect(perkPassChance(0.6, [])).toBe(0.6)
+  test('maestro empurra os desfechos bons da decisão', () => {
+    expect(perkBonusBom(['maestro'])).toBeGreaterThan(1)
+    expect(perkBonusBom([])).toBe(1)
   })
 
-  test('frieza estica o tempo de decisão', () => {
-    expect(perkDecisionSeconds(6, ['frieza'])).toBeCloseTo(9)
-    expect(perkDecisionSeconds(6, [])).toBe(6)
+  test('frieza corta o risco de contra-ataque', () => {
+    expect(perkCortaContra(['frieza'])).toBeLessThan(1)
+    expect(perkCortaContra(['frieza'])).toBeGreaterThan(0)
+    expect(perkCortaContra([])).toBe(1)
   })
 
   test('capitão amplia só o momentum positivo', () => {
