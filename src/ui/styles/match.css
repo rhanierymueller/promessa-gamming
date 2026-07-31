@@ -93,8 +93,6 @@
 .shell .match-in-lance {
   --lance-h: min(calc(100svh - 128px), calc(92vw * 16 / 9));
   --lance-w: calc(var(--lance-h) * 9 / 16);
-  /* respiro entre o placar e o topo do palco */
-  --lance-gap: 12px;
 }
 
 .shell .match-in-lance::before {
@@ -111,45 +109,43 @@
   visibility: hidden;
 }
 
-.shell .match-in-lance > .match-header,
-.shell .match-in-lance > .stage,
-.shell .match-in-lance > .dice-lance {
+/*
+ * A cena é UM elemento centralizado, com o placar e o lance empilhados
+ * dentro. Antes eu posicionava os dois separadamente e deslocava um pelo
+ * tamanho do outro — a conta assumia a altura do palco e quebrava no dado,
+ * que tem outra altura, jogando o placar para fora da tela.
+ */
+.shell .lance-scene {
   position: fixed;
   top: 50%;
   left: 50%;
   z-index: 41;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   margin: 0;
   transform: translate(-50%, -50%);
-}
-
-/*
- * O placar sobe meia altura de palco (mais a folga e a própria altura dele)
- * para pousar logo acima do topo do palco, na mesma largura.
- */
-.shell .match-in-lance > .match-header {
-  z-index: 42;
-  width: min(92vw, var(--lance-w));
-  margin-top: calc((var(--lance-h) / -2) - var(--lance-gap) - 24px);
-  animation: lance-fade 0.28s ease both;
-}
-
-.shell .match-in-lance > .stage,
-.shell .match-in-lance > .dice-lance {
-  /* desce a metade da barra do placar, para o conjunto ficar centrado */
-  margin-top: calc((48px + var(--lance-gap)) / 2);
   animation: lance-rise 0.3s ease both;
 }
 
-.shell .match-in-lance > .stage {
+/* o placar acompanha a largura do lance: os dois leem como um bloco só */
+.shell .lance-scene > .match-header {
+  width: 100%;
+  margin: 0;
+}
+
+.shell .lance-scene > .stage {
   width: auto;
   height: var(--lance-h);
   max-width: 92vw;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.8);
 }
 
-.shell .match-in-lance > .dice-lance {
+.shell .lance-scene > .dice-lance {
   width: min(92vw, 520px);
   max-height: var(--lance-h);
+  margin: 0;
   overflow-y: auto;
 }
 
@@ -165,9 +161,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .shell .match-in-lance::before,
-  .shell .match-in-lance > .match-header,
-  .shell .match-in-lance > .stage,
-  .shell .match-in-lance > .dice-lance {
+  .shell .lance-scene {
     animation: none;
   }
 }

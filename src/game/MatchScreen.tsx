@@ -733,20 +733,29 @@ export const MatchScreen = ({
 
   const isLance = mode === 'shot' || mode === 'defense' || mode === 'dice'
 
+  /*
+   * No lance o placar acompanha o palco dentro da mesma cena centralizada —
+   * posicionar os dois separadamente exigia adivinhar a altura de um para
+   * deslocar o outro, e a conta quebrava quando o lance era o dado.
+   */
+  const scoreboard = (
+    <div className="match-header">
+      <span className="match-team">
+        <ClubCrest club={club} customUrl={crestUrls[club.id]} size={20} />
+        {club.abbr}
+      </span>
+      <span className="match-score">{shownScore.team} × {shownScore.opponent}</span>
+      <span className="match-team">
+        {opponent.abbr}
+        <ClubCrest club={opponent} customUrl={crestUrls[opponent.id]} size={20} />
+      </span>
+      <span className="match-minute">{displayMinute}&prime;</span>
+    </div>
+  )
+
   return (
     <div className={`match match-live-layout${isLance ? ' match-in-lance' : ''}`}>
-      <div className="match-header">
-        <span className="match-team">
-          <ClubCrest club={club} customUrl={crestUrls[club.id]} size={20} />
-          {club.abbr}
-        </span>
-        <span className="match-score">{shownScore.team} × {shownScore.opponent}</span>
-        <span className="match-team">
-          {opponent.abbr}
-          <ClubCrest club={opponent} customUrl={crestUrls[opponent.id]} size={20} />
-        </span>
-        <span className="match-minute">{displayMinute}&prime;</span>
-      </div>
+      {!isLance && scoreboard}
 
       {mode === 'intro' && (
         <MatchIntro
@@ -759,22 +768,27 @@ export const MatchScreen = ({
       )}
 
       {mode === 'dice' ? (
-        <div className="dice-lance">
-          <span className="card-label">
-            {isFinished(match)
-              ? 'Empatou no tempo normal · os dados dão a vaga'
-              : 'Lance decisivo · a sorte decide'}
-          </span>
-          <DiceDuelStage
-            key={`dado-${match.cursor}`}
-            seed={(seed ^ Math.imul(match.cursor + 1, 0x9e3779b9)) >>> 0}
-            teamName={club.name}
-            opponentName={opponent.name}
-            onResolved={onDiceResolved}
-            forQualification={isFinished(match)}
-          />
+        <div className="lance-scene">
+          {scoreboard}
+          <div className="dice-lance">
+            <span className="card-label">
+              {isFinished(match)
+                ? 'Empatou no tempo normal · os dados dão a vaga'
+                : 'Lance decisivo · a sorte decide'}
+            </span>
+            <DiceDuelStage
+              key={`dado-${match.cursor}`}
+              seed={(seed ^ Math.imul(match.cursor + 1, 0x9e3779b9)) >>> 0}
+              teamName={club.name}
+              opponentName={opponent.name}
+              onResolved={onDiceResolved}
+              forQualification={isFinished(match)}
+            />
+          </div>
         </div>
       ) : isLance ? (
+        <div className="lance-scene">
+        {scoreboard}
         <ShotStage
           key={`lance-${match.cursor}`}
           backgroundUrl={stadiumUrl}
@@ -796,6 +810,7 @@ export const MatchScreen = ({
           keeperQuality={keeperQualityFor(competition, opponent.strength)}
           onRoundEnd={mode === 'defense' ? onDefenseResolved : onShotResolved}
         />
+        </div>
       ) : (
         <>
           <div className={`live-pitch-stage${mode === 'decision' ? ' live-pitch-stage-decision' : ''}`}>
