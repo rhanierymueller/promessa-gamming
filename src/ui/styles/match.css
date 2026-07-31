@@ -82,45 +82,61 @@
  * Vale por CSS, ancorado no .match-in-lance que o MatchScreen já marcava.
  */
 /*
- * O contêiner da partida vira a própria cena durante o lance. Empilhar dois
- * elementos fixos independentes (placar e palco) fazia a base de um encostar
- * no topo do outro e as larguras não baterem; num flex column os dois se
- * alinham sozinhos, sem eu adivinhar a altura do placar.
+ * O palco e o placar são posicionados um a um, ancorados no centro da tela.
+ * Tentei antes transformar o contêiner inteiro em cena com inset: 0 e flex —
+ * não dá: o app usa body { zoom: 1.1 } no computador, e caixa fixa colada nas
+ * quatro bordas não se comporta sob zoom.
+ *
+ * A altura do palco manda (ele é 9/16) e o placar herda a largura dela, para
+ * os dois lerem como um bloco só.
  */
 .shell .match-in-lance {
-  /* a altura do palco manda, porque ele é 9/16; o resto se ajusta a ela */
-  --lance-h: min(calc(100svh - 108px), calc(92vw * 16 / 9));
+  --lance-h: min(calc(100svh - 128px), calc(92vw * 16 / 9));
   --lance-w: calc(var(--lance-h) * 9 / 16);
+  /* respiro entre o placar e o topo do palco */
+  --lance-gap: 12px;
+}
 
+.shell .match-in-lance::before {
+  content: '';
   position: fixed;
   inset: 0;
   z-index: 40;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: max(12px, env(safe-area-inset-top)) 12px 12px;
-  background: radial-gradient(58% 54% at 50% 46%, rgba(10, 8, 16, 0.7), rgba(5, 4, 10, 0.97));
+  background: radial-gradient(58% 54% at 50% 46%, rgba(10, 8, 16, 0.72), rgba(5, 4, 10, 0.97));
   animation: lance-fade 0.28s ease both;
 }
 
 /* no lance existem o placar e o palco — o resto da partida sai de cena */
 .shell .match-in-lance > *:not(.match-header):not(.stage):not(.dice-lance) {
-  display: none;
+  visibility: hidden;
 }
 
-/* o placar acompanha a largura do palco: os dois leem como um bloco só */
-.shell .match-in-lance > .match-header {
-  flex-shrink: 0;
-  width: min(92vw, var(--lance-w));
+.shell .match-in-lance > .match-header,
+.shell .match-in-lance > .stage,
+.shell .match-in-lance > .dice-lance {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 41;
   margin: 0;
+  transform: translate(-50%, -50%);
+}
+
+/*
+ * O placar sobe meia altura de palco (mais a folga e a própria altura dele)
+ * para pousar logo acima do topo do palco, na mesma largura.
+ */
+.shell .match-in-lance > .match-header {
+  z-index: 42;
+  width: min(92vw, var(--lance-w));
+  margin-top: calc((var(--lance-h) / -2) - var(--lance-gap) - 24px);
   animation: lance-fade 0.28s ease both;
 }
 
 .shell .match-in-lance > .stage,
 .shell .match-in-lance > .dice-lance {
-  margin: 0;
+  /* desce a metade da barra do placar, para o conjunto ficar centrado */
+  margin-top: calc((48px + var(--lance-gap)) / 2);
   animation: lance-rise 0.3s ease both;
 }
 
@@ -143,12 +159,12 @@
 }
 
 @keyframes lance-rise {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; transform: translate(-50%, -46%); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shell .match-in-lance,
+  .shell .match-in-lance::before,
   .shell .match-in-lance > .match-header,
   .shell .match-in-lance > .stage,
   .shell .match-in-lance > .dice-lance {
