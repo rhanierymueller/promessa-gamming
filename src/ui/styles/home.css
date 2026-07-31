@@ -315,6 +315,7 @@
    * a altura da grade de treinos ao lado.
    */
   .shell-tabs .tab-panel > .news-center {
+    position: relative;
     align-self: stretch;
     min-height: 0;
   }
@@ -324,12 +325,24 @@
     min-height: 0;
   }
 
+  /*
+   * As bolinhas saem do fluxo e flutuam sobre o rodapé do card. Empilhadas
+   * embaixo dele, elas comiam altura e a base do card parava antes da grade
+   * de treinos ao lado — que é justamente o alinhamento que se quer ver.
+   */
+  .shell-tabs .tab-panel > .news-center .news-dots {
+    position: absolute;
+    right: 0;
+    bottom: 16px;
+    left: 0;
+  }
+
   .shell-tabs .tab-panel > .news-center .news-card {
     flex-direction: column;
     align-items: flex-start;
     justify-content: center;
     gap: 20px;
-    padding: 30px;
+    padding: 30px 30px 52px;
   }
 
   .shell-tabs .tab-panel > .news-center .news-media,
