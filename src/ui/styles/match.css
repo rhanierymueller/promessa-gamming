@@ -1,0 +1,213 @@
+/* ---------- dia de jogo ---------- */
+
+/*
+ * Só apresentação, e só CSS: MatchScreen e LivePitch estão em obra em
+ * paralelo, então nada de mexer no markup deles aqui.
+ */
+
+/* o cabeçalho da partida usa a mesma faixa de uma linha das abas */
+.shell .match-head {
+  padding-right: 52px;
+}
+
+/* ---------- controles: velocidade e postura ---------- */
+
+/*
+ * Eram bandejas com o item ativo virando bloco dourado chapado — o mesmo
+ * problema das subabas antigas, e aqui pior, porque são DOIS grupos empilhados
+ * berrando ao lado do placar. Viram controle segmentado: o ativo acende, não
+ * inverte.
+ */
+.shell .live-group {
+  gap: 0;
+  padding: 0;
+  border-radius: 2px;
+  border-color: #2b2242;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.shell .live-btn {
+  position: relative;
+  border-radius: 0;
+  border: none;
+  border-right: 1px solid #241d38;
+  color: var(--steel);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.shell .live-btn:last-child {
+  border-right: none;
+}
+
+.shell .live-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.shell .live-btn-active {
+  background: rgba(255, 210, 63, 0.1);
+  color: var(--accent);
+  font-weight: 400;
+}
+
+.shell .live-btn-active::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(255, 210, 63, 0.85);
+}
+
+/* o anel vermelho de foco competia com o vermelho de erro da narração */
+.shell .live-btn:focus-visible {
+  outline: none;
+  color: var(--text);
+  background: rgba(255, 210, 63, 0.14);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* ---------- modo lance: o refletor acende, o resto apaga ---------- */
+
+/*
+ * Chute, defesa e dado ocupavam o fluxo da página: o palco é 9/16, então em
+ * tela larga ele estourava a dobra e era preciso rolar justo no instante em
+ * que o tempo conta. Agora o lance sai do fluxo e vem para o centro, com o
+ * resto da tela apagando atrás — a mesma regra das telas de entrada: uma luz
+ * só, e o que ela não toca some.
+ *
+ * Vale por CSS, ancorado no .match-in-lance que o MatchScreen já marcava.
+ */
+/*
+ * O palco e o placar são posicionados um a um, ancorados no centro da tela.
+ * Tentei antes transformar o contêiner inteiro em cena com inset: 0 e flex —
+ * não dá: o app usa body { zoom: 1.1 } no computador, e caixa fixa colada nas
+ * quatro bordas não se comporta sob zoom.
+ *
+ * A altura do palco manda (ele é 9/16) e o placar herda a largura dela, para
+ * os dois lerem como um bloco só.
+ */
+.shell .match-in-lance {
+  --lance-h: min(calc(100svh - 128px), calc(92vw * 16 / 9));
+  --lance-w: calc(var(--lance-h) * 9 / 16);
+}
+
+.shell .match-in-lance::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: radial-gradient(58% 54% at 50% 46%, rgba(10, 8, 16, 0.72), rgba(5, 4, 10, 0.97));
+  animation: lance-fade 0.28s ease both;
+}
+
+/*
+ * No lance só a cena aparece; o resto da partida sai de vista. O :not da cena
+ * é obrigatório — sem ele a própria .lance-scene caía na regra e levava o
+ * placar e o palco junto, deixando a tela preta.
+ */
+.shell .match-in-lance > *:not(.lance-scene) {
+  visibility: hidden;
+}
+
+/*
+ * A cena é UM elemento centralizado, com o placar e o lance empilhados
+ * dentro. Antes eu posicionava os dois separadamente e deslocava um pelo
+ * tamanho do outro — a conta assumia a altura do palco e quebrava no dado,
+ * que tem outra altura, jogando o placar para fora da tela.
+ */
+.shell .lance-scene {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  animation: lance-rise 0.3s ease both;
+}
+
+/* o placar acompanha a largura do lance: os dois leem como um bloco só */
+.shell .lance-scene > .match-header {
+  width: 100%;
+  margin: 0;
+}
+
+.shell .lance-scene > .stage {
+  width: auto;
+  height: var(--lance-h);
+  max-width: 92vw;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.8);
+}
+
+.shell .lance-scene > .dice-lance {
+  width: min(92vw, 520px);
+  max-height: var(--lance-h);
+  margin: 0;
+  overflow-y: auto;
+}
+
+@keyframes lance-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes lance-rise {
+  from { opacity: 0; transform: translate(-50%, -46%); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell .match-in-lance::before,
+  .shell .lance-scene {
+    animation: none;
+  }
+}
+
+/* ---------- placar ---------- */
+
+.shell .match-header {
+  border-radius: 2px;
+  border-color: #2b2242;
+}
+
+.shell .match-score {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+/* ---------- números do jogo ---------- */
+
+.shell .live-stats {
+  border-radius: 2px;
+  border-color: #2b2242;
+}
+
+/* ---------- narração ---------- */
+
+.shell .match-log-live {
+  border-radius: 2px;
+  border-color: #2b2242;
+}
+
+.shell .match-log-live .log-line {
+  border-radius: 2px;
+}
+
+.shell .match-log-title {
+  letter-spacing: 0.26em;
+  color: var(--steel);
+}
+
+.shell .log-minute {
+  color: var(--steel);
+}

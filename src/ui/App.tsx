@@ -69,6 +69,8 @@ import { NationalTab } from './tabs/NationalTab'
 import { isTournamentRunning } from '../engine/career/seasonEnd'
 import { ProfileTab } from './tabs/ProfileTab'
 import { TeamTab } from './tabs/TeamTab'
+import './styles/home.css'
+import './styles/match.css'
 
 type Tab = 'home' | 'matches' | 'selecao' | 'team' | 'market' | 'profile'
 type Screen = 'tabs' | 'match' | 'training' | 'gk-training' | 'freekick-training' | 'dice-training'
@@ -485,14 +487,11 @@ export const App = () => {
     )
   }
 
+  // a ficha de inscrição é tela cheia como a portaria: sem shell, sem cabeçalho repetido
   if (gate === 'signup' || !save || !club) {
     return (
-      <main className="shell">
+      <>
         <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
-        <header className="header">
-          <p className="eyebrow">Promessa</p>
-          <h1>Promessa</h1>
-        </header>
         <CharacterCreate
           onCreated={(created) => {
             updateSave(created)
@@ -500,8 +499,7 @@ export const App = () => {
           }}
           onBack={() => setGate('auth')}
         />
-        <footer className="footer">PROMESSA · em desenvolvimento</footer>
-      </main>
+      </>
     )
   }
 
@@ -509,13 +507,13 @@ export const App = () => {
     return (
       <main className="shell">
         <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
-        <header className="header">
-          <p className="eyebrow">
+        <header className="tabs-head match-head">
+          <span className="tabs-brand">
             {matchSetup.kind === 'torneio'
               ? 'Jogo da seleção'
-              : `Promessa · Rodada ${save.season.currentRound + 1}`}
-          </p>
-          <h1>Dia de jogo</h1>
+              : `Rodada ${save.season.currentRound + 1}`}
+          </span>
+          <h1 className="tabs-title">Dia de jogo</h1>
         </header>
         <MatchScreen
           key={matchSetup.seed}
@@ -653,9 +651,9 @@ export const App = () => {
   return (
     <main className="shell shell-tabs">
         <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
-      <header className="header">
-        <p className="eyebrow">Promessa</p>
-        <h1>{TAB_ITEMS.find((item) => item.id === tab)!.label}</h1>
+      <header className="tabs-head">
+        <span className="tabs-brand">Promessa</span>
+        <h1 className="tabs-title">{TAB_ITEMS.find((item) => item.id === tab)!.label}</h1>
       </header>
 
       {callUpCeremony && nationById(save.nationalityId) && (

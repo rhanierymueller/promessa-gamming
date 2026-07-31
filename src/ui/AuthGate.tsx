@@ -1,5 +1,7 @@
-import { ArrowLeft, KeyRound, LogIn, UserPlus } from 'lucide-react'
+import { KeyRound, LogIn, UserPlus } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { GateField } from './auth/GateField'
+import { AuthScene } from './auth/AuthScene'
 import { currentSessionEmail, requestPasswordReset, signInAccount } from '../online/account'
 import { isOnlineAvailable } from '../online/leagues'
 import { markResetRequested, resetCooldownRemaining } from '../state/passwordReset'
@@ -107,39 +109,32 @@ export const AuthGate = ({ hasSave, onEnter, onSignup, onBack, initialNotice }: 
   if (view === 'forgot') {
     const waitSeconds = Math.ceil(cooldownLeft / 1000)
     return (
-      <div className="auth-gate">
-        <button
-          className="btn btn-secondary btn-icon auth-back"
-          disabled={isSubmitting}
-          onClick={() => swapView('login')}
-        >
-          <ArrowLeft size={14} aria-hidden="true" /> Voltar
-        </button>
+      <AuthScene
+        place="Portaria · segunda via"
+        kicker="Balcão da portaria"
+        title="Perdi a senha"
+        subtitle="Deixe o e-mail da conta. Se ela existir, sai um link para você criar uma senha nova."
+        onBack={() => swapView('login')}
+        isBackDisabled={isSubmitting}
+      >
+        <div className="badge-fields">
+          <GateField
+            label="E-mail"
+            value={email}
+            onChange={setEmail}
+            type="email"
+            autoComplete="email"
+            placeholder="voce@email.com"
+            onSubmit={() => void submitReset()}
+          />
+        </div>
 
-        <div className="auth-card">
-          <h2 className="create-title">Recuperar senha</h2>
-          <p className="muted">
-            Digite o e-mail da conta. Se ele existir, você recebe um link para criar uma nova senha.
-          </p>
+        {error && <p className="gate-alert" role="alert">{error}</p>}
+        {notice && <p className="gate-note" role="status">{notice}</p>}
 
-          <label className="create-field">
-            <span className="create-label">E-mail</span>
-            <input
-              className="create-input"
-              type="email"
-              value={email}
-              autoComplete="email"
-              placeholder="voce@email.com"
-              onChange={(event) => setEmail(event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Enter') void submitReset() }}
-            />
-          </label>
-
-          {error && <p className="crest-error" role="alert">{error}</p>}
-          {notice && <p className="muted" role="status">{notice}</p>}
-
+        <div className="gate-actions">
           <button
-            className="btn btn-icon"
+            className="gate-btn"
             disabled={isSubmitting || cooldownLeft > 0}
             onClick={() => void submitReset()}
           >
@@ -153,82 +148,81 @@ export const AuthGate = ({ hasSave, onEnter, onSignup, onBack, initialNotice }: 
 
           <button
             type="button"
-            className="auth-link"
+            className="gate-link"
             disabled={isSubmitting}
             onClick={() => swapView('login')}
           >
             Lembrei a senha — voltar ao login
           </button>
         </div>
-      </div>
+      </AuthScene>
     )
   }
 
   return (
-    <div className="auth-gate">
-      <button className="btn btn-secondary btn-icon auth-back" disabled={isSubmitting} onClick={onBack}>
-        <ArrowLeft size={14} aria-hidden="true" /> Voltar
-      </button>
+    <AuthScene
+      place="Túnel · portaria"
+      kicker="Credencial de atleta"
+      title="De volta ao clube"
+      onBack={onBack}
+      isBackDisabled={isSubmitting}
+    >
+      {sessionEmail && hasSave && (
+        <button type="button" className="gate-resume" onClick={onEnter}>
+          <LogIn size={14} aria-hidden="true" />
+          <span>Continuar como {sessionEmail}</span>
+        </button>
+      )}
 
-      <div className="auth-card">
-        <h2 className="create-title">Bem-vindo de volta</h2>
+      <div className="badge-fields">
+        <GateField
+          label="E-mail"
+          value={email}
+          onChange={setEmail}
+          type="email"
+          autoComplete="email"
+          placeholder="voce@email.com"
+        />
+        <GateField
+          label="Senha"
+          value={password}
+          onChange={setPassword}
+          type="password"
+          autoComplete="current-password"
+          onSubmit={() => void submit()}
+        />
+      </div>
 
-        {sessionEmail && hasSave && (
-          <button className="btn btn-icon auth-continue" onClick={onEnter}>
-            <LogIn size={15} aria-hidden="true" /> Continuar como {sessionEmail}
-          </button>
-        )}
+      {isOnlineAvailable() && (
+        <button
+          type="button"
+          className="gate-link"
+          disabled={isSubmitting}
+          onClick={() => swapView('forgot')}
+        >
+          Esqueci minha senha
+        </button>
+      )}
 
-        <label className="create-field">
-          <span className="create-label">E-mail</span>
-          <input
-            className="create-input"
-            type="email"
-            value={email}
-            autoComplete="email"
-            placeholder="voce@email.com"
-            onChange={(event) => setEmail(event.target.value)}
-          />
-        </label>
-        <label className="create-field">
-          <span className="create-label">Senha</span>
-          <input
-            className="create-input"
-            type="password"
-            value={password}
-            autoComplete="current-password"
-            onChange={(event) => setPassword(event.target.value)}
-            onKeyDown={(event) => { if (event.key === 'Enter') void submit() }}
-          />
-        </label>
+      {error && <p className="gate-alert" role="alert">{error}</p>}
+      {notice && <p className="gate-note" role="status">{notice}</p>}
+      {!isOnlineAvailable() && (
+        <p className="gate-note">
+          Modo local: o servidor não está configurado — dá para jogar mesmo assim.
+        </p>
+      )}
 
-        {isOnlineAvailable() && (
-          <button
-            type="button"
-            className="auth-link"
-            disabled={isSubmitting}
-            onClick={() => swapView('forgot')}
-          >
-            Esqueci minha senha
-          </button>
-        )}
-
-        {error && <p className="crest-error" role="alert">{error}</p>}
-        {notice && <p className="muted" role="status">{notice}</p>}
-        {!isOnlineAvailable() && (
-          <p className="muted">Modo local: o servidor não está configurado — dá para jogar mesmo assim.</p>
-        )}
-
-        <button className="btn btn-icon" disabled={isSubmitting} onClick={() => void submit()}>
+      <div className="gate-actions">
+        <button className="gate-btn" disabled={isSubmitting} onClick={() => void submit()}>
           <LogIn size={15} aria-hidden="true" /> {isSubmitting ? 'Entrando…' : 'Entrar'}
         </button>
 
-        <div className="auth-divider" role="separator">ou</div>
+        <div className="gate-or" role="separator">ou</div>
 
-        <button className="btn btn-secondary btn-icon" onClick={onSignup}>
+        <button type="button" className="gate-btn gate-btn-ghost" onClick={onSignup}>
           <UserPlus size={15} aria-hidden="true" /> Criar conta e carreira
         </button>
       </div>
-    </div>
+    </AuthScene>
   )
 }

@@ -22,16 +22,16 @@ import { rollMicroGoal } from './tactics'
  *     gols deles 1.866   —  corrido 0.447 | plano/falta/dado 1.419
  *
  * A ideia da mudança é que a decisão ABSORVA gol do sorteio, não some por cima.
- * Depois de cortar teamGoalChance (0.40 → 0.25), opponentGoalChance (0.35 →
- * 0.32) e as taxas de lance corrido, a primeira medição equilibrada deu:
+ * Depois vieram o chute único, a falta ocasional e o especial garantido entre
+ * falta/dados — que derrubaram a vitória para 40.4% sem nenhum teste acusar,
+ * porque só a média de gols estava sob guarda. A compensação veio de
+ * `playerDecisions: 3` (mais do lance novo, não mais sorteio) com
+ * teamGoalChance 0.30 e opponentGoalChance 0.25. Medição em 20.000 partidas:
  *
- *     gols meus  2.426   gols deles 1.886   V/E/D 50.8 / 20.6 / 28.6
+ *     gols meus 2.389   gols deles 1.876   V/E/D 50.0 / 21.6 / 28.4
  *
- * contra 2.418 / 1.866 e 50.9 / 21.9 / 27.2 antes. As rodadas seguintes
- * tornaram a falta ocasional e garantiram um especial entre falta/dados para
- * a partida nunca ficar sem minigames. Em 20.000 partidas, o estado atual
- * mediu 2.053 × 1.967 com um chute normal por partida, e 62% dos gols do time
- * saindo de gol ou assistência do protagonista.
+ * contra 2.418 / 1.866 e 50.9 / 21.9 / 27.2 antes de tudo, com 63% dos gols do
+ * time saindo de gol ou assistência do protagonista (eram 42%).
  *
  * A faixa é larga de propósito. Ela não existe para fixar um número exato, e
  * sim para acusar quando o placar SAI DA REALIDADE do jogo — os três perfis de
@@ -58,12 +58,16 @@ interface Medida {
   readonly meus: number
   readonly deles: number
   readonly doMeuPe: number
+  readonly vitorias: number
+  readonly empates: number
 }
 
 const medir = (perfil: Perfil): Medida => {
   let meus = 0
   let deles = 0
   let doMeuPe = 0
+  let vitorias = 0
+  let empates = 0
 
   for (let i = 0; i < PARTIDAS; i++) {
     const state = startMatch(i * 7919 + 13, DEFAULT_MATCH_CONFIG)
@@ -89,11 +93,19 @@ const medir = (perfil: Perfil): Medida => {
 
     meus += t
     deles += o
+    if (t > o) vitorias++
+    else if (t === o) empates++
     // gol seu + assistência sua: o que saiu de uma decisão ou de um chute seu
     doMeuPe += sim.value.state.stats.goals + sim.value.state.stats.assists
   }
 
-  return { meus: meus / PARTIDAS, deles: deles / PARTIDAS, doMeuPe: doMeuPe / PARTIDAS }
+  return {
+    meus: meus / PARTIDAS,
+    deles: deles / PARTIDAS,
+    doMeuPe: doMeuPe / PARTIDAS,
+    vitorias: vitorias / PARTIDAS,
+    empates: empates / PARTIDAS,
+  }
 }
 
 describe('calibragem do placar', () => {
@@ -118,6 +130,21 @@ describe('calibragem do placar', () => {
     const { meus, doMeuPe } = medidas.get('equilibrado')!
     // antes das decisões eram ~42%; com o conjunto atual ficam ~62%
     expect(doMeuPe / meus).toBeGreaterThan(0.6)
+  })
+
+  /*
+   * A média de gols sozinha NÃO protege o balanceamento: quando playerShots caiu
+   * de 2 para 1 e a falta virou ocasional, os gols continuaram dentro da faixa
+   * enquanto a vitória despencava de 50.9% para 40.4% — o teste seguiu verde e
+   * a carreira ficou muito mais dura sem ninguém perceber. Quem decide se o jogo
+   * está justo é o RESULTADO, então ele é medido aqui.
+   */
+  it('o jogador equilibrado ganha aproximadamente metade das partidas', () => {
+    const { vitorias, empates } = medidas.get('equilibrado')!
+    expect(vitorias).toBeGreaterThan(0.45)
+    expect(vitorias).toBeLessThan(0.56)
+    expect(empates).toBeGreaterThan(0.15)
+    expect(empates).toBeLessThan(0.28)
   })
 
   it('ousar rende mais gol e cobra mais caro que se proteger', () => {

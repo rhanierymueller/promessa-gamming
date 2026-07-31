@@ -1,4 +1,5 @@
 import { Download, FileText, Lock, LogOut, RotateCcw, Trash2 } from 'lucide-react'
+import '../styles/profile.css'
 import { TrophyRoom } from '../TrophyRoom'
 import { useEffect, useRef, useState } from 'react'
 import { Legal } from '../Legal'

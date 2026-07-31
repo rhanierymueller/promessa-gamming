@@ -1,0 +1,373 @@
+/* ---------- criar a promessa: a ficha de inscrição no balcão ---------- */
+
+/*
+ * Mesma portaria das telas de conta, só que aqui o que está no balcão é um
+ * documento comprido: a ficha de inscrição na federação. O jogador preenche a
+ * ficha e, no fim, a credencial é emitida — emendando na cena de entrar.
+ */
+
+/* a variante alta: o papel rola, a portaria fica parada atrás */
+.gate-tall {
+  justify-content: flex-start;
+  padding: 72px 16px 56px;
+}
+
+.gate-tall .gate-bg,
+.gate-tall .gate-dark,
+.gate-tall .gate-beam {
+  position: fixed;
+}
+
+.gate-tall .gate-place,
+.gate-tall .gate-back {
+  position: fixed;
+}
+
+.ficha {
+  position: relative;
+  z-index: 2;
+  width: min(100%, 720px);
+  padding: 30px clamp(20px, 4vw, 42px) 34px;
+  color: #241d33;
+  background:
+    repeating-linear-gradient(0deg, rgba(120, 96, 60, 0.04) 0 2px, transparent 2px 4px),
+    linear-gradient(168deg, #f5edda, #ded1b6);
+  box-shadow:
+    0 34px 70px rgba(0, 0, 0, 0.72),
+    0 0 70px rgba(255, 200, 90, 0.07);
+}
+
+/* furos de arquivo na margem esquerda */
+.ficha::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 13px;
+  width: 9px;
+  background-image: radial-gradient(circle 4.5px at 50% 12px, #0c0a14 98%, transparent);
+  background-size: 100% 78px;
+  opacity: 0.5;
+}
+
+.ficha-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 3px double rgba(36, 29, 51, 0.35);
+}
+
+.ficha-org {
+  display: block;
+  color: rgba(36, 29, 51, 0.5);
+  font-size: 9.5px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+}
+
+.ficha-title {
+  margin: 4px 0 0;
+  font-family: var(--display);
+  font-size: clamp(26px, 5vw, 40px);
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #191325;
+}
+
+.ficha-num {
+  flex-shrink: 0;
+  text-align: right;
+  color: rgba(36, 29, 51, 0.5);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.ficha-sec {
+  margin-top: 26px;
+}
+
+.ficha-sec-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ficha-sec-num {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(36, 29, 51, 0.5);
+  color: #191325;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ficha-sec-title {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #191325;
+}
+
+/* a linha que atravessa a ficha até a borda */
+.ficha-sec-head::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: repeating-linear-gradient(90deg, rgba(36, 29, 51, 0.35) 0 4px, transparent 4px 8px);
+}
+
+.ficha-grid {
+  display: grid;
+  grid-template-columns: 1fr 130px;
+  gap: 16px;
+}
+
+.ficha-grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (max-width: 560px) {
+  .ficha-grid,
+  .ficha-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ficha-hint {
+  margin: 0 0 10px;
+  color: rgba(36, 29, 51, 0.62);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* ---------- etiquetas escolhíveis: carimbo na ficha ---------- */
+
+.ficha-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ficha-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: rgba(36, 29, 51, 0.05);
+  border: 1.5px solid rgba(36, 29, 51, 0.3);
+  color: #2c2440;
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ficha-chip strong {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.ficha-chip:hover {
+  border-color: #191325;
+  background: rgba(36, 29, 51, 0.1);
+}
+
+.ficha-chip:focus-visible {
+  outline: 2px solid #191325;
+  outline-offset: 2px;
+}
+
+/* escolhido: carimbado a tinta, com a marca dourada por baixo */
+.ficha-chip-on {
+  background: #241d33;
+  border-color: #241d33;
+  color: #f5edda;
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+
+.ficha-chip-on:hover {
+  background: #191325;
+  border-color: #191325;
+}
+
+.ficha-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid #a3243c;
+  background: rgba(163, 36, 60, 0.09);
+  color: #7e1c2e;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ficha-warn svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ficha-warn strong {
+  color: #5d1322;
+}
+
+/* ---------- atributos: a planilha datilografada ---------- */
+
+.ficha-points {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  margin-bottom: 12px;
+  padding: 5px 11px;
+  border: 2px solid rgba(36, 29, 51, 0.45);
+  color: #191325;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.ficha-points b {
+  font-family: var(--display);
+  font-size: 22px;
+  letter-spacing: 0.02em;
+}
+
+.ficha-points-zero {
+  border-color: rgba(163, 36, 60, 0.6);
+  color: #7e1c2e;
+}
+
+.ficha-attrs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px 26px;
+}
+
+@media (max-width: 560px) {
+  .ficha-attrs {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ficha-attr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+
+.ficha-attr-name {
+  font-size: 12.5px;
+  color: #2c2440;
+  white-space: nowrap;
+}
+
+/* a linha pontilhada que leva o olho até o número, como em ficha de papel */
+.ficha-attr-lead {
+  flex: 1;
+  height: 1px;
+  min-width: 12px;
+  background: repeating-linear-gradient(90deg, rgba(36, 29, 51, 0.4) 0 2px, transparent 2px 6px);
+}
+
+.ficha-attr-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ficha-attr-val {
+  min-width: 26px;
+  text-align: center;
+  font-family: var(--display);
+  font-size: 19px;
+  color: #191325;
+}
+
+.ficha-step {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: rgba(36, 29, 51, 0.06);
+  border: 1.5px solid rgba(36, 29, 51, 0.35);
+  color: #241d33;
+  cursor: pointer;
+}
+
+.ficha-step:hover:not(:disabled) {
+  background: #241d33;
+  border-color: #241d33;
+  color: #f5edda;
+}
+
+.ficha-step:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
+
+.ficha-step:focus-visible {
+  outline: 2px solid #191325;
+  outline-offset: 2px;
+}
+
+/* ---------- assinatura e envio ---------- */
+
+.ficha-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 3px double rgba(36, 29, 51, 0.35);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #2c2440;
+  cursor: pointer;
+}
+
+.ficha-consent input {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  accent-color: #241d33;
+  cursor: pointer;
+}
+
+.ficha-link {
+  padding: 0;
+  background: none;
+  border: none;
+  color: #191325;
+  font-family: inherit;
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.ficha-account {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  color: #2c2440;
+}
+
+.ficha-actions {
+  margin-top: 20px;
+}
+
+.ficha-actions .gate-btn {
+  width: 100%;
+}

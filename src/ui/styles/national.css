@@ -1,0 +1,85 @@
+/* ---------- seleção: chave, convocados e artilharia do torneio ---------- */
+
+/*
+ * O alternador daqui não usa .subtabs: reaproveita o grupo de botões da
+ * partida (.live-group/.live-btn), e por isso continuou com o bloco dourado
+ * chapado depois que as subabas da Liga mudaram. Escopo no .national-switch
+ * de propósito — a partida usa as mesmas classes e não está neste passo.
+ */
+.tab-panel .national-switch {
+  gap: 0;
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab-panel .national-switch .live-btn {
+  position: relative;
+  flex: 1;
+  padding: 11px 6px;
+  border: none;
+  border-radius: 0;
+  background: none;
+  color: var(--steel);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.tab-panel .national-switch .live-btn:hover {
+  color: var(--text);
+}
+
+.tab-panel .national-switch .live-btn-active {
+  background: none;
+  color: var(--accent);
+}
+
+.tab-panel .national-switch .live-btn-active::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(255, 210, 63, 0.85);
+}
+
+.tab-panel .national-switch .live-btn:focus-visible {
+  outline: none;
+  color: var(--text);
+  background: rgba(255, 210, 63, 0.1);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* ---------- cabeçalho do torneio ---------- */
+
+.tab-panel .national-head strong {
+  font-family: var(--display);
+  font-size: 23px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.tab-panel .national-head p {
+  margin-top: 5px;
+  color: var(--steel);
+  font-size: 11.5px;
+}
+
+/* ---------- artilharia do torneio ---------- */
+
+/*
+ * Aqui o clube vem DENTRO do nome (na Liga são irmãos), e como o nome é um
+ * span inline o texto saía grudado: "Juan ValenciaColômbia". Vira bloco e
+ * volta a ler como na outra tela: nome em cima, clube embaixo.
+ */
+.tab-panel .scorer-name > .scorer-club {
+  display: block;
+  margin-top: 1px;
+}
