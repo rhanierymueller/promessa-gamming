@@ -104,8 +104,12 @@
   animation: lance-fade 0.28s ease both;
 }
 
-/* no lance existem o placar e o palco — o resto da partida sai de cena */
-.shell .match-in-lance > *:not(.match-header):not(.stage):not(.dice-lance) {
+/*
+ * No lance só a cena aparece; o resto da partida sai de vista. O :not da cena
+ * é obrigatório — sem ele a própria .lance-scene caía na regra e levava o
+ * placar e o palco junto, deixando a tela preta.
+ */
+.shell .match-in-lance > *:not(.lance-scene) {
   visibility: hidden;
 }
 

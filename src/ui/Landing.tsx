@@ -6,6 +6,7 @@ import keeperSprite from '../assets/sprites/k_fly.png'
 import followSprite from '../assets/sprites/s_kick2.png'
 import kickSprite from '../assets/sprites/s_kick_noball.png'
 import { LedBoard } from './landing/LedBoard'
+import { NationalCall } from './landing/NationalCall'
 import { StickerWall } from './landing/StickerWall'
 import { TunnelOutro } from './landing/TunnelOutro'
 import { useRevealOnScroll } from './landing/useRevealOnScroll'
@@ -170,6 +171,7 @@ export const Landing = ({ hasSave, onPlay }: LandingProps) => {
       </div>
 
       <StickerWall />
+      <NationalCall />
       <LedBoard />
       <TunnelOutro cta={cta} onPlay={onPlay} />
     </div>

@@ -1261,40 +1261,49 @@ h1 {
   align-items: center;
   flex-direction: row-reverse;
   gap: 8px;
+  /*
+   * A folga até a barra entra na área do controle: como vão vazio, o ponteiro
+   * a atravessava, o hover caía no meio do caminho e a barra sumia justo
+   * quando se ia usá-la.
+   */
+  padding-bottom: 8px;
 }
 
+/*
+ * A barra abre EMBAIXO do ícone, não ao lado: crescendo para a esquerda ela
+ * passava por cima do título da tela. Fora do fluxo, o ícone também não se
+ * mexe quando ela aparece.
+ */
 .volume-slider {
-  width: 0;
-  opacity: 0;
-  padding: 0;
-  margin: 0;
+  position: absolute;
+  /* 100% já inclui a folga de baixo do controle — nada de vão morto aqui */
+  top: 100%;
+  right: 0;
+  width: clamp(90px, 22vw, 130px);
   height: 24px;
+  margin: 0;
+  padding: 0 8px;
+  opacity: 0;
+  pointer-events: none;
+  background: rgba(20, 16, 31, 0.96);
+  border: 1px solid var(--line);
+  border-radius: 3px;
   accent-color: var(--accent);
   cursor: pointer;
-  transition: width 160ms ease, opacity 160ms ease;
+  transition: opacity 160ms ease;
 }
 
 .volume-control:hover .volume-slider,
 .volume-control:focus-within .volume-slider {
-  width: clamp(90px, 22vw, 130px);
   opacity: 1;
+  pointer-events: auto;
 }
 
-/*
- * Sem mouse não há hover, e abrir a barra pelo ícone silenciaria o jogo: a
- * barra fica sempre à vista, mas EMBAIXO do ícone — lado a lado ela invadia
- * o cabeçalho no celular.
- */
+/* sem mouse não há hover, e abrir pelo ícone silenciaria o jogo: fica à vista */
 @media (hover: none) {
-  .volume-control {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
-  }
-
   .volume-slider {
-    width: 96px;
     opacity: 1;
+    pointer-events: auto;
   }
 }
 

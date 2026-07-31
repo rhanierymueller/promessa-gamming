@@ -2,6 +2,7 @@ import celebrateSprite from '../../assets/sprites/s_celebrate.png'
 import kickSprite from '../../assets/sprites/s_kick_noball.png'
 import portraitSprite from '../../assets/sprites/s_portrait.png'
 import runSprite from '../../assets/sprites/s_run.png'
+import serieATrophy from '../../assets/trophies/serie-a.png'
 
 /**
  * A parede do vestiário: os quatro pilares do jogo colados como figurinhas de
@@ -27,25 +28,31 @@ const STICKERS: readonly Sticker[] = [
     num: 'nº 01',
     art: kickSprite,
     title: 'O chute é seu',
-    text: 'Mira com o dedo, força e altura na régua. O goleiro lê a sua curva. Se isolou, foi você — não foi dado escondido.',
+    text: 'Mira, força e altura saem do seu dedo. Do outro lado tem um goleiro que estuda a sua manha e pula no canto certo.',
   },
   {
     num: 'nº 02',
     art: portraitSprite,
     title: 'Você é o técnico',
-    text: 'Escolhe a formação, escala os 11, batiza cada jogador. Botar zagueiro no ataque? Pode. O time sente na hora.',
+    text: 'Formação, escalação e o nome de cada um do elenco. Quer o zagueiro de centroavante? Bota. Depois não vem reclamar.',
   },
   {
     num: 'nº 03',
-    art: runSprite,
-    title: 'Carreira viva',
-    text: 'Quatro divisões, acesso e queda. Moleque que estoura com potencial, veterano que pendura a chuteira aos 38.',
+    art: serieATrophy,
+    title: 'Da Série D ao topo',
+    text: 'Seu time nasce na Série D, campo pelado e arquibancada vazia. A Série A está três acessos acima — e a queda, um degrau abaixo.',
   },
   {
     num: 'nº 04',
+    art: runSprite,
+    title: 'Carreira viva',
+    text: 'O moleque de 17 estoura ou não estoura. O veterano de 38 pendura as chuteiras. Todo ano o elenco muda embaixo de você.',
+  },
+  {
+    num: 'nº 05',
     art: celebrateSprite,
     title: 'Liga com os amigos',
-    text: 'Liga por código de convite e ranking toda semana. Zebra do seu amigo continua inaceitável.',
+    text: 'Você cria a liga, manda o código no grupo e o ranking vira assunto toda semana. Perder pro seu amigo continua inaceitável.',
     dupe: true,
   },
 ]

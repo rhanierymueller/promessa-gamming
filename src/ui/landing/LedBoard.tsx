@@ -1,3 +1,6 @@
+import { CLUBS } from '../../data/clubs'
+import { NATIONS } from '../../data/nations'
+import { SQUAD_SIZE } from '../../engine/squad/players'
 import { buildTickerResults, DIVISION_LABELS } from './tickerLines'
 
 /**
@@ -12,11 +15,20 @@ interface Stat {
   readonly dim?: boolean
 }
 
+/*
+ * Os números saem da própria base do jogo. Escritos à mão eles envelhecem
+ * escondido: o painel anunciava "16 seleções" enquanto o mundo já tinha 35 —
+ * e a Copa do Mundo sozinha sorteia 32 delas.
+ */
+
+/** Arredondado para baixo na centena; o "+" cobre os elencos de seleção. */
+const GENERATED_PLAYERS = Math.floor((CLUBS.length * SQUAD_SIZE) / 100) * 100
+
 const STATS: readonly Stat[] = [
-  { value: '56', label: 'clubes fictícios' },
-  { value: '4', label: 'divisões' },
-  { value: '1000+', label: 'jogadores gerados' },
-  { value: '16', label: 'seleções', dim: true },
+  { value: String(CLUBS.length), label: 'clubes fictícios' },
+  { value: String(DIVISION_LABELS.length), label: 'divisões', dim: true },
+  { value: `${GENERATED_PLAYERS}+`, label: 'jogadores gerados' },
+  { value: String(NATIONS.length), label: 'seleções' },
 ]
 
 export const LedBoard = () => {
