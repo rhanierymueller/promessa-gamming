@@ -81,48 +81,59 @@
  *
  * Vale por CSS, ancorado no .match-in-lance que o MatchScreen já marcava.
  */
-.shell .match-in-lance::before {
-  content: '';
+/*
+ * O contêiner da partida vira a própria cena durante o lance. Empilhar dois
+ * elementos fixos independentes (placar e palco) fazia a base de um encostar
+ * no topo do outro e as larguras não baterem; num flex column os dois se
+ * alinham sozinhos, sem eu adivinhar a altura do placar.
+ */
+.shell .match-in-lance {
+  /* a altura do palco manda, porque ele é 9/16; o resto se ajusta a ela */
+  --lance-h: min(calc(100svh - 108px), calc(92vw * 16 / 9));
+  --lance-w: calc(var(--lance-h) * 9 / 16);
+
   position: fixed;
   inset: 0;
   z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: max(12px, env(safe-area-inset-top)) 12px 12px;
   background: radial-gradient(58% 54% at 50% 46%, rgba(10, 8, 16, 0.7), rgba(5, 4, 10, 0.97));
   animation: lance-fade 0.28s ease both;
 }
 
-/* o placar sobe junto: sem ele o jogador perde a conta no meio do lance */
+/* no lance existem o placar e o palco — o resto da partida sai de cena */
+.shell .match-in-lance > *:not(.match-header):not(.stage):not(.dice-lance) {
+  display: none;
+}
+
+/* o placar acompanha a largura do palco: os dois leem como um bloco só */
 .shell .match-in-lance > .match-header {
-  position: fixed;
-  top: max(12px, env(safe-area-inset-top));
-  left: 50%;
-  z-index: 42;
-  width: min(94vw, 460px);
-  transform: translateX(-50%);
+  flex-shrink: 0;
+  width: min(92vw, var(--lance-w));
+  margin: 0;
   animation: lance-fade 0.28s ease both;
 }
 
 .shell .match-in-lance > .stage,
 .shell .match-in-lance > .dice-lance {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  z-index: 41;
   margin: 0;
-  transform: translate(-50%, -50%);
   animation: lance-rise 0.3s ease both;
 }
 
-/* altura manda: o palco é 9/16, então quem limita é a menor sobra da tela */
 .shell .match-in-lance > .stage {
   width: auto;
-  height: min(78svh, calc(92vw * 16 / 9));
+  height: var(--lance-h);
   max-width: 92vw;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.8);
 }
 
 .shell .match-in-lance > .dice-lance {
-  width: min(94vw, 520px);
-  max-height: 82svh;
+  width: min(92vw, 520px);
+  max-height: var(--lance-h);
   overflow-y: auto;
 }
 
@@ -132,12 +143,12 @@
 }
 
 @keyframes lance-rise {
-  from { opacity: 0; transform: translate(-50%, -46%); }
-  to { opacity: 1; transform: translate(-50%, -50%); }
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shell .match-in-lance::before,
+  .shell .match-in-lance,
   .shell .match-in-lance > .match-header,
   .shell .match-in-lance > .stage,
   .shell .match-in-lance > .dice-lance {
