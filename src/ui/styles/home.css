@@ -307,6 +307,40 @@
   .shell-tabs .tab-panel > .training-section .training-art {
     height: 118px;
   }
+
+  /*
+   * O carrossel mostra UMA notícia por vez — desenho de celular. Em meia
+   * coluna isso deixava um buraco alto do tamanho da grade de treinos ao
+   * lado, com o resto das (até oito) notícias escondido atrás de bolinhas.
+   * No computador ele vira lista: empilha, acompanha a altura da coluna
+   * vizinha e rola por dentro.
+   */
+  .shell-tabs .tab-panel > .news-center {
+    align-self: stretch;
+    min-height: 0;
+  }
+
+  .shell-tabs .tab-panel > .news-center .news-track {
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scroll-snap-type: y proximity;
+  }
+
+  .shell-tabs .tab-panel > .news-center .news-card {
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 0;
+    padding: 16px;
+    gap: 14px;
+  }
+
+  /* com a lista à vista, as bolinhas viraram enfeite sem função */
+  .shell-tabs .tab-panel > .news-center .news-dots {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
