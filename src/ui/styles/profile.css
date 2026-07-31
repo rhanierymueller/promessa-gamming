@@ -42,6 +42,16 @@
   letter-spacing: 0.16em;
 }
 
+/*
+ * O cartão agora acompanha a altura do de atributos ao lado, então os números
+ * da carreira descem para o rodapé em vez de deixar um vazio embaixo deles.
+ */
+@media (min-width: 1024px) {
+  .tab-panel .profile-career {
+    margin-top: auto;
+  }
+}
+
 /* ---------- atributos ---------- */
 
 .tab-panel .attr-points {

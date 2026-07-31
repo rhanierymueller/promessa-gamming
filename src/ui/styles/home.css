@@ -286,10 +286,11 @@
  * dominante (identidade e compromisso) segue inteiro e o resto divide.
  */
 @media (min-width: 1024px) {
-  .shell-tabs .tab-panel {
-    align-items: start;
-  }
-
+  /*
+   * Sem align-items: start — os cartões vizinhos dividem a altura da linha e
+   * as bordas terminam juntas. Com start, cada um parava na altura do próprio
+   * conteúdo e o mais curto ficava boiando ao lado do mais alto.
+   */
   .shell-tabs .tab-panel > .training-section {
     grid-column: 1 / 2;
   }
