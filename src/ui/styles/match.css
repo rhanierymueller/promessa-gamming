@@ -70,6 +70,81 @@
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
+/* ---------- modo lance: o refletor acende, o resto apaga ---------- */
+
+/*
+ * Chute, defesa e dado ocupavam o fluxo da página: o palco é 9/16, então em
+ * tela larga ele estourava a dobra e era preciso rolar justo no instante em
+ * que o tempo conta. Agora o lance sai do fluxo e vem para o centro, com o
+ * resto da tela apagando atrás — a mesma regra das telas de entrada: uma luz
+ * só, e o que ela não toca some.
+ *
+ * Vale por CSS, ancorado no .match-in-lance que o MatchScreen já marcava.
+ */
+.shell .match-in-lance::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: radial-gradient(58% 54% at 50% 46%, rgba(10, 8, 16, 0.7), rgba(5, 4, 10, 0.97));
+  animation: lance-fade 0.28s ease both;
+}
+
+/* o placar sobe junto: sem ele o jogador perde a conta no meio do lance */
+.shell .match-in-lance > .match-header {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 42;
+  width: min(94vw, 460px);
+  transform: translateX(-50%);
+  animation: lance-fade 0.28s ease both;
+}
+
+.shell .match-in-lance > .stage,
+.shell .match-in-lance > .dice-lance {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 41;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  animation: lance-rise 0.3s ease both;
+}
+
+/* altura manda: o palco é 9/16, então quem limita é a menor sobra da tela */
+.shell .match-in-lance > .stage {
+  width: auto;
+  height: min(78svh, calc(92vw * 16 / 9));
+  max-width: 92vw;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.8);
+}
+
+.shell .match-in-lance > .dice-lance {
+  width: min(94vw, 520px);
+  max-height: 82svh;
+  overflow-y: auto;
+}
+
+@keyframes lance-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes lance-rise {
+  from { opacity: 0; transform: translate(-50%, -46%); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell .match-in-lance::before,
+  .shell .match-in-lance > .match-header,
+  .shell .match-in-lance > .stage,
+  .shell .match-in-lance > .dice-lance {
+    animation: none;
+  }
+}
+
 /* ---------- placar ---------- */
 
 .shell .match-header {
