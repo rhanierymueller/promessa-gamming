@@ -1682,6 +1682,17 @@ const aggregateOf = (
     0,
   )
 
+/** Os jogos já registrados de um confronto do mata-mata. */
+const tieMatchesOf = (
+  state: LibertadosState,
+  stage: LibertadosKnockoutStage,
+  pair: readonly [string, string],
+): readonly LibertadosMatch[] =>
+  state.results.filter(
+    (result) =>
+      result.stage === stage && pair.includes(result.homeId) && pair.includes(result.awayId),
+  )
+
 /** Simula todos os jogos da data atual, pulando o do jogador. */
 const simulateDate = (state: LibertadosState, rng: RngState): RngResult<readonly LibertadosMatch[]> => {
   const played: LibertadosMatch[] = []
@@ -1708,15 +1719,7 @@ const simulateDate = (state: LibertadosState, rng: RngState): RngResult<readonly
     current = simulated.next
     // na volta, agregado empatado precisa de vencedor
     if (state.round === 1) {
-      const both = [
-        ...state.results.filter(
-          (result) =>
-            result.stage === state.stage &&
-            pair.includes(result.homeId) &&
-            pair.includes(result.awayId),
-        ),
-        simulated.value,
-      ]
+      const both = [...tieMatchesOf(state, state.stage, pair), simulated.value]
       const tied = aggregateOf(both, pair[0]) === aggregateOf(both, pair[1])
       const decided = withShootout(simulated.value, pair, tied, current)
       current = decided.next
@@ -1785,6 +1788,66 @@ export interface LibertadosAdvance {
   readonly playerPenaltyWon: boolean | null
 }
 
+interface DecidedPlayerMatch {
+  readonly match: LibertadosMatch
+  readonly playerPenaltyWon: boolean | null
+}
+
+/**
+ * Fecha a volta do jogador nos pênaltis quando o agregado termina empatado.
+ * Gravar o vencedor aqui não é detalhe: um confronto sem dono deixa a chave da
+ * fase seguinte sem montar.
+ */
+const resolvePlayerShootout = (
+  state: LibertadosState,
+  stage: LibertadosKnockoutStage,
+  scored: LibertadosMatch,
+  rng: RngState,
+  playerShootoutWon?: boolean,
+): RngResult<DecidedPlayerMatch> => {
+  const pair = knockoutPairs(state, stage).find((candidate) =>
+    candidate.includes(state.playerClubId!),
+  )
+  const undecided: DecidedPlayerMatch = { match: scored, playerPenaltyWon: null }
+  if (!pair) return { value: undecided, next: rng }
+
+  const both = [...tieMatchesOf(state, stage, pair), scored]
+  if (aggregateOf(both, pair[0]) !== aggregateOf(both, pair[1])) {
+    return { value: undecided, next: rng }
+  }
+
+  const coin = nextFloat(rng)
+  const playerPenaltyWon = playerShootoutWon ?? coin.value < 0.5
+  const opponentId = pair[0] === state.playerClubId ? pair[1] : pair[0]
+  return {
+    value: {
+      match: {
+        ...scored,
+        penaltyWinnerId: playerPenaltyWon ? state.playerClubId! : opponentId,
+      },
+      playerPenaltyWon,
+    },
+    next: coin.next,
+  }
+}
+
+/**
+ * O jogador caiu antes da final: o resto da edição roda simulado para o
+ * campeão existir de qualquer jeito. Os jogos que ele já disputou continuam no
+ * histórico — só o que falta é preenchido.
+ */
+const continueAfterElimination = (
+  eliminated: LibertadosState,
+  fromStage: LibertadosState['stage'],
+  rng: RngState,
+): RngResult<LibertadosState> => {
+  const rest = simulateEdition({ ...eliminated, stage: fromStage, round: 0 }, rng)
+  return {
+    value: { ...eliminated, results: rest.value.results, championId: rest.value.championId },
+    next: rest.next,
+  }
+}
+
 /**
  * Fecha o jogo atual do jogador com o placar REAL e simula o resto da data.
  * Quando o jogador cai, o resto da edição é simulado para que o campeão exista.
@@ -1807,9 +1870,7 @@ export const advanceLibertados = (
 
   const playerIsHome = fixture.homeId === state.playerClubId
   const stage = state.stage as 'groups' | LibertadosKnockoutStage
-  let current = rng
-  let playerPenaltyWon: boolean | null = null
-  let playerMatch: LibertadosMatch = {
+  const scored: LibertadosMatch = {
     stage,
     round: state.round,
     homeId: fixture.homeId,
@@ -1819,67 +1880,30 @@ export const advanceLibertados = (
   }
 
   // volta do mata-mata com agregado empatado: alguém tem de passar
-  if (isKnockoutStage(stage) && state.round === 1) {
-    const pair = knockoutPairs(state, stage).find((candidate) =>
-      candidate.includes(state.playerClubId!),
-    )
-    if (pair) {
-      const both = [
-        ...state.results.filter(
-          (result) =>
-            result.stage === stage &&
-            pair.includes(result.homeId) &&
-            pair.includes(result.awayId),
-        ),
-        playerMatch,
-      ]
-      if (aggregateOf(both, pair[0]) === aggregateOf(both, pair[1])) {
-        const coin = nextFloat(current)
-        current = coin.next
-        playerPenaltyWon = playerShootoutWon ?? coin.value < 0.5
-        const opponentId = pair[0] === state.playerClubId ? pair[1] : pair[0]
-        playerMatch = {
-          ...playerMatch,
-          penaltyWinnerId: playerPenaltyWon ? state.playerClubId! : opponentId,
-        }
-      }
-    }
-  }
+  const decided: RngResult<DecidedPlayerMatch> =
+    isKnockoutStage(stage) && state.round === 1
+      ? resolvePlayerShootout(state, stage, scored, rng, playerShootoutWon)
+      : { value: { match: scored, playerPenaltyWon: null }, next: rng }
 
-  const date = simulateDate(state, current)
-  current = date.next
-  const withResults: LibertadosState = {
+  const date = simulateDate(state, decided.next)
+  const advanced = advanceStage({
     ...state,
-    results: [...state.results, playerMatch, ...date.value],
-  }
+    results: [...state.results, decided.value.match, ...date.value],
+  })
+  const { playerPenaltyWon } = decided.value
 
-  const advanced = advanceStage(withResults)
-  /*
-   * Caiu antes da final: o resto da edição roda simulado, para o campeão
-   * existir de qualquer jeito. Quem perde a PRÓPRIA final já saiu daqui com
-   * championId preenchido — não há mais nada a simular.
-   */
+  // caiu antes da final: quem perde a PRÓPRIA final já sai com championId
   if (advanced.stage === 'eliminated' && advanced.championId === null) {
-    const resume: LibertadosState = {
-      ...advanced,
+    const resumed = continueAfterElimination(
+      advanced,
       // retoma da fase seguinte à que ele perdeu; dos grupos, vai às oitavas
-      stage:
-        state.stage === 'groups'
-          ? 'r16'
-          : stageAfter(state.stage as LibertadosKnockoutStage),
-      round: 0,
-    }
-    const rest = simulateEdition(resume, current)
-    return {
-      value: {
-        state: { ...advanced, results: rest.value.results, championId: rest.value.championId },
-        playerPenaltyWon,
-      },
-      next: rest.next,
-    }
+      state.stage === 'groups' ? 'r16' : stageAfter(state.stage as LibertadosKnockoutStage),
+      date.next,
+    )
+    return { value: { state: resumed.value, playerPenaltyWon }, next: resumed.next }
   }
 
-  return { value: { state: advanced, playerPenaltyWon }, next: current }
+  return { value: { state: advanced, playerPenaltyWon }, next: date.next }
 }
 ```
 
