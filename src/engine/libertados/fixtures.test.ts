@@ -76,6 +76,40 @@ describe('confrontos da Copa Libertados', () => {
     expect(tieWinner(state, 'r16', ['cabeca', 'desafiante'])).toBeNull()
   })
 
+  test('agregado empatado sem pênaltis registrados não elege ninguém', () => {
+    // Arrange: 1x1 nos dois jogos e nenhum desempate gravado — estado que só
+    // existe por defeito de quem gravou o resultado. Devolver o cabeça por
+    // padrão inventaria um classificado que não venceu nada.
+    const state = estado({
+      stage: 'r16',
+      results: [
+        jogo({ round: 0, homeId: 'desafiante', awayId: 'cabeca', homeGoals: 1, awayGoals: 1 }),
+        jogo({ round: 1, homeId: 'cabeca', awayId: 'desafiante', homeGoals: 1, awayGoals: 1 }),
+      ],
+    })
+
+    // Act & Assert
+    expect(tieWinner(state, 'r16', ['cabeca', 'desafiante'])).toBeNull()
+  })
+
+  test('fase seguinte só tem chave quando a anterior inteira terminou', () => {
+    /*
+     * Arrange: oitavas com um único confronto decidido. Se as quartas
+     * montassem a chave com a lista encurtada, os pares sairiam desalinhados e
+     * cruzariam clubes de metades diferentes da chave.
+     */
+    const state = estado({
+      stage: 'quarter',
+      results: [
+        jogo({ stage: 'r16', round: 0, homeId: 'f', awayId: 'a', homeGoals: 0, awayGoals: 2 }),
+        jogo({ stage: 'r16', round: 1, homeId: 'a', awayId: 'f', homeGoals: 3, awayGoals: 0 }),
+      ],
+    })
+
+    // Act & Assert
+    expect(knockoutPairs(state, 'quarter')).toEqual([])
+  })
+
   test('as oitavas cruzam 1º de um grupo com 2º do vizinho', () => {
     // grupos vazios: computeStandings devolve a ordem de entrada, então o 1º do
     // grupo A é 'a' e o 2º do grupo B é 'f'

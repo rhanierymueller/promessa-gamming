@@ -85,7 +85,12 @@ const tieMatches = (
       pair.includes(result.awayId),
   )
 
-/** Vencedor do confronto pelo agregado; null enquanto faltar jogo. */
+/**
+ * Vencedor do confronto pelo agregado; null enquanto o confronto não tiver
+ * dono. Agregado empatado só tem vencedor com os pênaltis registrados na
+ * volta: sem eles o confronto ainda não terminou, e devolver um dos dois lados
+ * por padrão inventaria um classificado.
+ */
 export const tieWinner = (
   state: LibertadosState,
   stage: LibertadosKnockoutStage,
@@ -102,25 +107,39 @@ export const tieWinner = (
   const headGoals = goalsFor(head)
   const challengerGoals = goalsFor(challenger)
   if (headGoals !== challengerGoals) return headGoals > challengerGoals ? head : challenger
-  // agregado empatado: quem levou nos pênaltis, registrado na volta
-  return matches.find((match) => match.penaltyWinnerId)?.penaltyWinnerId ?? head
+  return matches.find((match) => match.penaltyWinnerId)?.penaltyWinnerId ?? null
 }
 
+/**
+ * Os confrontos de uma fase, na ordem da chave.
+ *
+ * A chave de uma fase só existe quando TODOS os confrontos da fase anterior
+ * terminaram: os pares saem de posições consecutivas na lista de vencedores, e
+ * um vencedor faltando não deixaria só um buraco — ele encurtaria a lista e
+ * desalinharia todos os pares seguintes, cruzando clubes de chaves diferentes.
+ * Fase anterior incompleta devolve lista vazia.
+ */
 export const knockoutPairs = (
   state: LibertadosState,
   stage: LibertadosKnockoutStage,
 ): readonly (readonly [string, string])[] => {
   const previous = stageBefore(stage)
-  const teams =
-    previous === null
-      ? seededQualifiers(state)
-      : stageWinners(state, previous)
+  let teams: readonly string[]
+  if (previous === null) {
+    teams = seededQualifiers(state)
+  } else {
+    const winners = knockoutPairs(state, previous).map((pair) =>
+      tieWinner(state, previous, pair),
+    )
+    if (winners.length === 0 || winners.some((winner) => winner === null)) return []
+    teams = winners as readonly string[]
+  }
   const pairs: [string, string][] = []
   for (let i = 0; i + 1 < teams.length; i += 2) pairs.push([teams[i], teams[i + 1]])
   return pairs
 }
 
-/** Vencedores de todos os confrontos de uma fase, na ordem da chave. */
+/** Vencedores já decididos de uma fase, na ordem da chave. */
 export const stageWinners = (
   state: LibertadosState,
   stage: LibertadosKnockoutStage,
