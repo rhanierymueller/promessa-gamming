@@ -1,0 +1,142 @@
+/* Cerimônia de entrada e aba da Copa Libertados. */
+
+.libertados-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  padding: 1.5rem;
+  text-align: center;
+  background: radial-gradient(circle at 50% 20%, #1d3d2a 0%, #0b1410 60%, #05080a 100%);
+  color: #f5f0e6;
+  cursor: pointer;
+  overflow-y: auto;
+}
+
+.libertados-trophy {
+  width: min(30vh, 190px);
+  height: auto;
+  filter: drop-shadow(0 0 26px rgba(242, 194, 48, 0.55));
+  animation: libertados-rise 1.1s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes libertados-rise {
+  from { opacity: 0; transform: translateY(38px) scale(0.86); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.libertados-word {
+  margin: 0;
+  font-size: clamp(1.6rem, 6vw, 2.6rem);
+  letter-spacing: 0.14em;
+  color: #f2c230;
+  animation: libertados-fade 0.7s ease both 0.9s;
+}
+
+.libertados-year,
+.libertados-club {
+  margin: 0;
+  animation: libertados-fade 0.7s ease both 1.4s;
+}
+
+.libertados-pots {
+  display: flex;
+  gap: 0.6rem;
+  animation: libertados-fade 0.7s ease both 2.1s;
+}
+
+.libertados-pot {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid rgba(242, 194, 48, 0.5);
+  border-radius: 50%;
+  font-size: 0.85rem;
+  animation: libertados-spin 1.6s ease-in-out infinite;
+}
+
+.libertados-pot-1 { animation-delay: 0.12s; }
+.libertados-pot-2 { animation-delay: 0.24s; }
+.libertados-pot-3 { animation-delay: 0.36s; }
+
+@keyframes libertados-spin {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.libertados-draw-label {
+  margin: 0.3rem 0 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  animation: libertados-fade 0.6s ease both 2.6s;
+}
+
+.libertados-rivals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.1rem;
+}
+
+.libertados-rival {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 6.5rem;
+  opacity: 0;
+  animation: libertados-drop 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+.libertados-rival-1 { animation-delay: 3s; }
+.libertados-rival-2 { animation-delay: 4.2s; }
+.libertados-rival-3 { animation-delay: 5.4s; }
+
+.libertados-rival-name { font-size: 0.85rem; }
+
+.libertados-rival-nation {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  opacity: 0.72;
+}
+
+.libertados-line {
+  margin: 0.4rem 0 0;
+  font-size: 1rem;
+  animation: libertados-fade 0.8s ease both 6.6s;
+}
+
+@keyframes libertados-fade {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes libertados-drop {
+  from { opacity: 0; transform: translateY(-16px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .libertados-trophy,
+  .libertados-word,
+  .libertados-year,
+  .libertados-club,
+  .libertados-pots,
+  .libertados-pot,
+  .libertados-draw-label,
+  .libertados-rival,
+  .libertados-line {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
