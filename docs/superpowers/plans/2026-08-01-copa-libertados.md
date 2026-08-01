@@ -827,6 +827,33 @@ describe('sorteio da Copa Libertados', () => {
     const { value: grupos } = drawGroups([...BRASILEIROS, ...sorteados.value], null, sorteados.next)
     expect(grupos.flat()).toHaveLength(GROUP_COUNT * GROUP_SIZE)
   })
+
+  test('jogador fora do pote mais forte não some do sorteio nem deixa vaga vazia', () => {
+    /*
+     * Arrange: 'aurora-paulista' tem força 3 e cai num pote baixo. Inferir o
+     * pote do jogador pelo tamanho do grupo dava certo só quando ele estava no
+     * pote 1 — nos outros casos um clube sumia e um `undefined` entrava no
+     * lugar. Os quatro brasileiros do fixture padrão são todos força 5, então
+     * nenhum outro teste alcança este caminho.
+     */
+    const classificados = ['leoes-capital', 'mare-rubra', 'imperial', 'aurora-paulista']
+    const sorteados = pickContinentalClubs(CONTINENTAL_SPOTS, createRng(31))
+
+    // Act
+    const { value: grupos } = drawGroups(
+      [...classificados, ...sorteados.value],
+      'aurora-paulista',
+      sorteados.next,
+    )
+
+    // Assert
+    const todos = grupos.flat()
+    expect(todos).toHaveLength(GROUP_COUNT * GROUP_SIZE)
+    expect(todos.every((id) => typeof id === 'string' && id.length > 0)).toBe(true)
+    expect(new Set(todos).size).toBe(GROUP_COUNT * GROUP_SIZE)
+    expect(grupos[0][0]).toBe('aurora-paulista')
+    for (const grupo of grupos) expect(grupo).toHaveLength(GROUP_SIZE)
+  })
 })
 ```
 
@@ -943,20 +970,25 @@ export const drawGroups = (
   const groups: string[][] = Array.from({ length: GROUP_COUNT }, () => [])
   let current = rng
 
-  // o clube do jogador abre o grupo A, saindo do pote dele
-  if (playerClubId) {
-    const potIndex = pots.findIndex((pot) => pot.includes(playerClubId))
-    if (potIndex >= 0) {
-      pots[potIndex].splice(pots[potIndex].indexOf(playerClubId), 1)
-      groups[0].push(playerClubId)
-    }
+  /*
+   * O clube do jogador abre o grupo A, saindo do pote dele — que NÃO é
+   * necessariamente o primeiro. Um clube de força 3 pode terminar entre os
+   * quatro primeiros da Série A numa temporada de zebra e cair num pote baixo.
+   * Inferir o pote pelo tamanho do grupo assumia o contrário e, quando a
+   * suposição falhava, sumia com um clube do sorteio e empurrava `undefined`
+   * para dentro de um grupo.
+   */
+  const playerPot = playerClubId ? pots.findIndex((pot) => pot.includes(playerClubId)) : -1
+  if (playerClubId && playerPot >= 0) {
+    pots[playerPot].splice(pots[playerPot].indexOf(playerClubId), 1)
+    groups[0].push(playerClubId)
   }
 
   for (let potIndex = 0; potIndex < POT_COUNT; potIndex++) {
-    // o grupo do jogador já recebeu o clube dele neste pote
+    // o grupo do jogador não espera clube do pote de onde ele já saiu
     const pending = groups
       .map((_, index) => index)
-      .filter((index) => groups[index].length === potIndex)
+      .filter((index) => index !== 0 || potIndex !== playerPot)
     const shuffled = shuffle(pots[potIndex], current)
     current = shuffled.next
     const nationsByGroup = pending.map((index) => groups[index].map(nationOf))
