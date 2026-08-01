@@ -2734,18 +2734,93 @@ git commit -m "feat: escolha do próximo compromisso entre liga e Libertados"
 ### Task 10: Troféu na estante
 
 **Files:**
-- Create: `src/assets/trophies/libertados.png` (cópia de `src/assets/images/art-source/objetos/libertados_trofeu.png`)
+- Create: `scripts/trophy-from-art.mjs`
+- Create: `src/assets/trophies/libertados.png` (gerado da arte-fonte)
 - Modify: `src/ui/TrophyRoom.tsx`
 
 **Interfaces:**
 - Consumes: `TrophyKind` com `'libertados'` (Task 8)
 - Produces: nada novo — só fecha os `Record<TrophyKind, string>`
 
-- [ ] **Step 1: Copiar o troféu**
+- [ ] **Step 1: Preparar a arte para a estante**
+
+A arte-fonte (`src/assets/images/art-source/objetos/libertados_trofeu.png`) é um PNG
+de 1054×1492 **sem canal alfa**, com fundo magenta de chroma-key. Copiada como
+está, ela vira um retângulo rosa na estante: `.trophy-img` aplica
+`drop-shadow` sobre um cartão escuro, efeito que só funciona com silhueta
+recortada. Os sete troféus que já existem são RGBA de 160px de altura, entre
+21 KB e 37 KB — a arte crua tem 1,1 MB.
+
+Criar `scripts/trophy-from-art.mjs` (o repo já usa `sharp` em
+`scripts/slice-faces.mjs`):
+
+```js
+import sharp from 'sharp'
+
+/**
+ * Prepara a arte de um troféu para a Sala de Troféus: derruba o fundo de
+ * chroma-key, apara as bordas vazias e reduz para a altura de exibição.
+ *
+ * A arte-fonte vem em alta resolução e com fundo chapado, do jeito que o
+ * ilustrador entrega. A estante precisa do oposto: silhueta recortada, para o
+ * drop-shadow funcionar, e alguns quilobytes em vez de um megabyte.
+ */
+
+const [, , input, output] = process.argv
+if (!input || !output) {
+  console.error('uso: node scripts/trophy-from-art.mjs <arte.png> <destino.png>')
+  process.exit(1)
+}
+
+/** Altura dos troféus já existentes na estante. */
+const TARGET_HEIGHT = 160
+/** Distância máxima até a cor de fundo para o pixel virar transparente. */
+const CHROMA_TOLERANCE = 90
+
+const source = sharp(input)
+const { width, height } = await source.metadata()
+const pixels = await source.ensureAlpha().raw().toBuffer()
+
+// a cor do canto superior esquerdo é o fundo — é assim que a arte é entregue
+const [keyRed, keyGreen, keyBlue] = pixels
+
+for (let i = 0; i < pixels.length; i += 4) {
+  const distance = Math.hypot(
+    pixels[i] - keyRed,
+    pixels[i + 1] - keyGreen,
+    pixels[i + 2] - keyBlue,
+  )
+  if (distance <= CHROMA_TOLERANCE) pixels[i + 3] = 0
+}
+
+await sharp(pixels, { raw: { width, height, channels: 4 } })
+  .trim()
+  .resize({ height: TARGET_HEIGHT })
+  .png({ compressionLevel: 9 })
+  .toFile(output)
+
+console.log(`gravado ${output}`)
+```
+
+Rodar:
 
 ```bash
-cp src/assets/images/art-source/objetos/libertados_trofeu.png src/assets/trophies/libertados.png
+node scripts/trophy-from-art.mjs \
+  src/assets/images/art-source/objetos/libertados_trofeu.png \
+  src/assets/trophies/libertados.png
 ```
+
+Conferir o resultado antes de seguir — ele precisa bater com os vizinhos:
+
+```bash
+file src/assets/trophies/libertados.png src/assets/trophies/copa-mundo.png
+ls -l src/assets/trophies/
+```
+
+Esperado: `8-bit/color RGBA`, altura 160, tamanho na casa das dezenas de KB.
+Se o fundo não sair limpo, ajuste `CHROMA_TOLERANCE` — magenta puro contra
+prata e madeira tem folga grande, mas a arte pode ter antisserrilhado nas
+bordas.
 
 - [ ] **Step 2: Registrar na sala de troféus**
 
@@ -2774,8 +2849,11 @@ Expected: nenhum erro em `TrophyRoom.tsx` (os dois `Record<TrophyKind, string>` 
 
 - [ ] **Step 4: Commit**
 
+A arte-fonte também entra: ela estava fora do controle de versão.
+
 ```bash
-git add src/assets/trophies/libertados.png src/ui/TrophyRoom.tsx
+git add scripts/trophy-from-art.mjs src/assets/trophies/libertados.png \
+  src/assets/images/art-source/objetos/libertados_trofeu.png src/ui/TrophyRoom.tsx
 git commit -m "feat: taça da Copa Libertados na sala de troféus"
 ```
 
