@@ -1969,6 +1969,9 @@ const WEDNESDAY = 3
 const THURSDAY = 4
 const SATURDAY = 6
 
+/** Anos de carreira variados: o alinhamento não pode depender do ano de estreia. */
+const ANOS = [1, 2, 3, 4, 5, 8, 13, 21, 34]
+
 describe('calendário real da temporada', () => {
   test('ano 1 da carreira é 2026; cada temporada avança um ano', () => {
     expect(seasonYearFor(1)).toBe(2026)
@@ -2018,18 +2021,41 @@ describe('calendário real da temporada', () => {
     }
   })
 
-  test('a edição fecha em setembro, antes do torneio de seleções', () => {
-    const ultima = libertadosDate(1, MATCHES_PER_EDITION - 1)
-    expect(ultima.month).toBe(8)
-    expect(compareDates(ultima, tournamentDate(1))).toBeLessThan(0)
+  test('a edição abre em abril em qualquer ano de carreira', () => {
+    for (const careerYear of ANOS) {
+      const abertura = libertadosDate(careerYear, 0)
+      expect(abertura.month).toBe(3)
+      expect(weekdayOf(abertura)).toBe(cupWeekdayFor(careerYear))
+    }
   })
 
-  test('quase todo jogo da Libertados cai numa semana que também tem rodada de liga', () => {
-    const rodadas = Array.from({ length: SEASON_ROUNDS }, (_, round) => roundDate(1, round, true))
-    const acompanhados = Array.from({ length: MATCHES_PER_EDITION }, (_, index) =>
-      libertadosDate(1, index),
-    ).filter((jogo) => rodadas.some((rodada) => Math.abs(daysBetween(jogo, rodada)) <= 3))
-    expect(acompanhados.length).toBeGreaterThanOrEqual(10)
+  test('a edição fecha antes do torneio de seleções, em qualquer ano', () => {
+    for (const careerYear of ANOS) {
+      const ultima = libertadosDate(careerYear, MATCHES_PER_EDITION - 1)
+      expect(compareDates(ultima, tournamentDate(careerYear))).toBeLessThan(0)
+    }
+  })
+
+  test('todo jogo da Libertados divide a semana com uma rodada, em qualquer ano', () => {
+    /*
+     * É a razão de existir a cadência quinzenal. Ancorar as duas competições
+     * de forma independente alinhava só no ano de estreia: do ano 3 em diante
+     * nenhum jogo caía perto de uma rodada. Só valem os jogos disputados
+     * enquanto a liga ainda está em andamento — depois dela, o continente
+     * segue sozinho.
+     */
+    for (const careerYear of ANOS) {
+      const rodadas = Array.from({ length: SEASON_ROUNDS }, (_, round) =>
+        roundDate(careerYear, round, true),
+      )
+      const ultimaRodada = rodadas[rodadas.length - 1]
+      for (let index = 0; index < MATCHES_PER_EDITION; index++) {
+        const jogo = libertadosDate(careerYear, index)
+        if (daysBetween(jogo, ultimaRodada) < 0) continue
+        const acompanhado = rodadas.some((rodada) => Math.abs(daysBetween(jogo, rodada)) <= 3)
+        expect(acompanhado).toBe(true)
+      }
+    }
   })
 
   test('compareDates ordena no tempo', () => {
@@ -2132,14 +2158,24 @@ export const roundDate = (
   return addDays(opening, round * (inLibertados ? FORTNIGHT_DAYS : WEEK_DAYS))
 }
 
-/** Data real de um jogo da Libertados (0-13): abril, de quinze em quinze dias. */
+/**
+ * Data real de um jogo da Libertados (0-13): abril, de quinze em quinze dias.
+ *
+ * A âncora sai do calendário da LIGA, não de uma data própria. O jogo
+ * continental é sempre o meio de semana que antecede uma rodada — é isso que
+ * faz as duas competições dividirem a semana. Ancorar as duas de forma
+ * independente (primeiro sábado de março de um lado, primeira quarta de abril
+ * do outro) alinhava por sorte: a distância entre as âncoras muda de ano para
+ * ano e, fora do ano de estreia, nenhum jogo caía perto de uma rodada.
+ */
 export const libertadosDate = (careerYear: number, matchIndex: number): CalendarDate => {
-  const opening = firstWeekdayOf(
-    seasonYearFor(careerYear),
-    LIBERTADOS_MONTH,
-    cupWeekdayFor(careerYear),
-  )
-  return addDays(opening, matchIndex * FORTNIGHT_DAYS)
+  const leagueWeekday = leagueWeekdayFor(careerYear)
+  const daysBefore = (leagueWeekday - cupWeekdayFor(careerYear) + 7) % 7
+  const opening = firstWeekdayOf(seasonYearFor(careerYear), OPENING_MONTH, leagueWeekday)
+  // a edição abre em abril: anda de quinzena em quinzena até chegar no mês
+  let first = addDays(opening, -daysBefore)
+  while (first.month < LIBERTADOS_MONTH) first = addDays(first, FORTNIGHT_DAYS)
+  return addDays(first, matchIndex * FORTNIGHT_DAYS)
 }
 
 const firstSundayOf = (year: number, month: number): CalendarDate =>
