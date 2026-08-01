@@ -3192,6 +3192,7 @@ import {
   LIBERTADOS_NAME,
   STAGE_NAMES,
   type LibertadosKnockoutStage,
+  type LibertadosState,
 } from '../../engine/libertados/types'
 import { clubDisplayName, displayClub, type PlayerSave } from '../../state/save'
 import { ClubCrest } from '../ClubCrest'
@@ -3208,13 +3209,13 @@ interface LibertadosTabProps {
   readonly save: PlayerSave
 }
 
-/** Placar somado do confronto, no formato "3 × 2 (ida e volta)". */
+/** Placar somado do confronto: "3 × 2", "1 × 1 (ida)" ou "2 × 2 nos pênaltis". */
 const aggregateLabel = (
-  save: PlayerSave,
+  state: LibertadosState,
   stage: LibertadosKnockoutStage,
   pair: readonly [string, string],
 ): string => {
-  const matches = save.libertados!.results.filter(
+  const matches = state.results.filter(
     (result) =>
       result.stage === stage && pair.includes(result.homeId) && pair.includes(result.awayId),
   )
@@ -3224,8 +3225,14 @@ const aggregateLabel = (
       (sum, match) => sum + (match.homeId === clubId ? match.homeGoals : match.awayGoals),
       0,
     )
-  const suffix = matches.length === 1 ? ' (ida)' : ''
-  return `${goalsOf(pair[0])} × ${goalsOf(pair[1])}${suffix}`
+  const score = `${goalsOf(pair[0])} × ${goalsOf(pair[1])}`
+  if (matches.length === 1) return `${score} (ida)`
+  /*
+   * Agregado empatado só tem vencedor nos pênaltis. Sem dizer isso, a tela
+   * mostraria um empate com um dos lados em negrito e nenhuma explicação de
+   * por que ele passou.
+   */
+  return matches.some((match) => match.penaltyWinnerId) ? `${score} nos pênaltis` : score
 }
 
 export const LibertadosTab = ({ save }: LibertadosTabProps) => {
@@ -3328,7 +3335,7 @@ export const LibertadosTab = ({ save }: LibertadosTabProps) => {
                   <ClubCrest club={displayClub(save, head)} customUrl={save.customClubCrests[head.id]} size={16} />
                   {head.abbr}
                 </span>
-                <span className="libertados-tie-score">{aggregateLabel(save, stage, pair)}</span>
+                <span className="libertados-tie-score">{aggregateLabel(state, stage, pair)}</span>
                 <span className={`libertados-tie-side${winner === pair[1] ? ' libertados-tie-won' : ''}`}>
                   {challenger.abbr}
                   <ClubCrest club={displayClub(save, challenger)} customUrl={save.customClubCrests[challenger.id]} size={16} />
