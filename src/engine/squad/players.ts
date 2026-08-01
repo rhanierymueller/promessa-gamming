@@ -1,4 +1,5 @@
 import type { Club } from '../../data/clubs'
+import { continentalClubById } from '../../data/continentalClubs'
 import { foreignSquadFor, squadFor } from '../../data/squadNames'
 import type { PlayerAttributes } from '../career/attributes'
 import type { PlayerGender } from '../../state/save'
@@ -241,9 +242,14 @@ export const clubBaseQuality = (club: Club): number =>
 /** Prefixo que nationAsClub usa — seleção estrangeira tem nomes próprios. */
 const NATION_PREFIX = 'nation-'
 
-/** Id da nacionalidade quando o "clube" é uma seleção; null para clube de liga. */
-const nationalityOf = (clubId: string): string | null =>
-  clubId.startsWith(NATION_PREFIX) ? clubId.slice(NATION_PREFIX.length) : null
+/**
+ * Id da nacionalidade do "clube": seleção pelo prefixo, clube da Libertados
+ * pelo país do catálogo continental. null = clube da liga brasileira.
+ */
+const nationalityOf = (clubId: string): string | null => {
+  if (clubId.startsWith(NATION_PREFIX)) return clubId.slice(NATION_PREFIX.length)
+  return continentalClubById(clubId)?.nationId ?? null
+}
 
 /**
  * Nomes do elenco. O gerador padrão é brasileiro (apelidos de várzea inclusos)

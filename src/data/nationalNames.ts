@@ -150,6 +150,21 @@ export const NATIONAL_NAMES: Record<string, NamePool> = {
     firstsF: ['Kerly', 'Mayra', 'Ambar', 'Nayely', 'Denise', 'Joselyn', 'Madelin', 'Anahí', 'Gabriela', 'Karen', 'Ligia', 'Estefanía', 'Yomira', 'Xiomara', 'Nicole', 'Erika'],
     lasts: ['Cevallos', 'Quiñónez', 'Zambrano', 'Chalá', 'Espinoza', 'Ayoví', 'Tenorio', 'Montaño', 'Angulo', 'Arboleda', 'Preciado', 'Bone', 'Corozo', 'Vernaza', 'Padilla', 'Macías'],
   },
+  peru: {
+    firsts: ['Renato', 'Christian', 'Yoshimar', 'Wilder', 'Marcos', 'Andy', 'Piero', 'Alexander', 'Miguel', 'Luis', 'Jefferson', 'Bryan', 'Sergio', 'Franco', 'Joao', 'Aldo'],
+    firstsF: ['Mia', 'Xioczana', 'Alessandra', 'Rosa', 'Milagros', 'Steffani', 'Cindy', 'Fabiola', 'Adriana', 'Sandy', 'Pierina', 'Claudia', 'Heidy', 'Nahomi', 'Mariel', 'Birka'],
+    lasts: ['Tapia', 'Cueva', 'Yotún', 'Trauco', 'Corzo', 'Polo', 'Quispe', 'Callens', 'Zambrano', 'Grimaldo', 'Concha', 'Peña', 'Valera', 'Sonne', 'Noriega', 'Cartagena'],
+  },
+  bolivia: {
+    firsts: ['Marcelo', 'Ramiro', 'Roberto', 'Bruno', 'Diego', 'Leonel', 'Boris', 'Gabriel', 'Efraín', 'Moisés', 'Henry', 'Danny', 'Jaume', 'Ervin', 'Rodrigo', 'Luis'],
+    firstsF: ['Erika', 'Fabiola', 'Daniela', 'Rosmery', 'Karen', 'Andrea', 'Lucía', 'Mariana', 'Sofía', 'Verónica', 'Gabriela', 'Marisol', 'Nayra', 'Ximena', 'Rocío', 'Tania'],
+    lasts: ['Terceros', 'Villamil', 'Sagredo', 'Chumacero', 'Justiniano', 'Añez', 'Vaca', 'Melgar', 'Cuéllar', 'Arce', 'Saucedo', 'Bejarano', 'Quinteros', 'Menacho', 'Suárez', 'Roca'],
+  },
+  venezuela: {
+    firsts: ['Yeferson', 'Darwin', 'Wuilker', 'Jhon', 'Nahuel', 'Yangel', 'Cristian', 'Eduard', 'Jefferson', 'Alexander', 'José', 'Rómulo', 'Jorge', 'Ronald', 'Bernaldo', 'Telasco'],
+    firstsF: ['Deyna', 'Oriana', 'Yerliane', 'Michelle', 'Gabriela', 'Verónica', 'Ysaura', 'Nayluisa', 'Raiderlin', 'Sandra', 'Yenifer', 'Daniuska', 'Floriangel', 'Ana', 'Mariana', 'Zulay'],
+    lasts: ['Cásseres', 'Machís', 'Faríñez', 'Osorio', 'Ferraresi', 'Savarino', 'Bello', 'Sosa', 'Rondón', 'Aramburu', 'Contreras', 'Chancellor', 'Segovia', 'Hernández', 'Anzola', 'Ramírez'],
+  },
   portugal: {
     firsts: ['Diogo', 'Gonçalo', 'Rúben', 'Tiago', 'André', 'Nuno', 'Ricardo', 'Miguel', 'Bruno', 'Vasco', 'Duarte', 'Afonso', 'Rui', 'Bernardo', 'Hélder', 'Renato'],
     firstsF: ['Matilde', 'Beatriz', 'Carolina', 'Inês', 'Leonor', 'Mariana', 'Diana', 'Joana', 'Tatiana', 'Andreia', 'Fátima', 'Vanessa', 'Telma', 'Ana', 'Cláudia', 'Sílvia'],

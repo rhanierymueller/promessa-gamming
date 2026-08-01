@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest'
-import { CLUBS } from '../../data/clubs'
+import { CLUBS, clubById } from '../../data/clubs'
+import { continentalClubById } from '../../data/continentalClubs'
 import { nationAsClub, NATIONS } from '../../data/nations'
+import { NATIONAL_NAMES } from '../../data/nationalNames'
 import { RETIRE_AGE } from './aging'
 import { FORMATIONS, formationIdFor } from './formation'
 import {
@@ -273,5 +275,30 @@ describe('idade por temporada: evolução, declínio e aposentadoria', () => {
       expect(pool.some((player) => player.potential === level)).toBe(true)
     }
     expect(squadPlayersFor(clubs[0], 9)).toEqual(squadPlayersFor(clubs[0], 9))
+  })
+})
+
+describe('elenco de clube sul-americano', () => {
+  test('os nomes vêm do banco do país do clube, não do brasileiro', () => {
+    // Arrange
+    const club = continentalClubById('sa-charrua')!
+    const uruguaios = NATIONAL_NAMES.uruguai
+
+    // Act
+    const squad = squadPlayersFor(club)
+
+    // Assert
+    for (const player of squad) {
+      const [first, ...rest] = player.name.split(' ')
+      expect(uruguaios.firsts).toContain(first)
+      expect(uruguaios.lasts).toContain(rest.join(' '))
+    }
+  })
+
+  test('clube brasileiro continua com o gerador da liga', () => {
+    const squad = squadPlayersFor(clubById('leoes-capital')!)
+    expect(squad).toHaveLength(18)
+    // apelidos de várzea são exclusivos do gerador brasileiro
+    expect(squad.every((player) => player.name.length > 0)).toBe(true)
   })
 })
