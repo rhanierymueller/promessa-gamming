@@ -1011,16 +1011,34 @@ export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random)
     : null
 
   /*
-   * Ano sem você: a edição que acabou de passar roda inteira simulada, para o
+   * Ano sem você: a edição que se encerra agora roda simulada, para o
    * continente ter campeão de qualquer jeito. Com você, o campeão já foi
    * registrado quando o torneio terminou.
+   *
+   * Quem disputou essa edição saiu da Série A do ano PASSADO, e aquela tabela
+   * não fica guardada — então ela é reconstruída pela seed do próprio ano.
+   * Reaproveitar os classificados recém-apurados colocaria na edição que
+   * acabou justamente os clubes que só entram na próxima.
+   *
+   * A guarda por ano é o que impede um segundo campeão para a mesma
+   * temporada: dispensar o card de fim de torneio zera `save.libertados`, e
+   * sem ela a virada do ano trataria uma edição já disputada como ano sem
+   * jogador, simulando uma segunda por cima.
    */
-  const finishedEdition = save.libertados
-    ? null
-    : simulateEdition(
-        createLibertados(editionSeed ^ 0x7f4a7c15, save.careerYear, null, qualifiers),
-        createRng(editionSeed ^ 0x1b873593),
-      ).value
+  const alreadyLogged = save.continentalChampions.some(
+    (title) => title.year === save.careerYear,
+  )
+  const pastQualifiers = simulateDivisionOrder(
+    save.divisions[0],
+    createRng((editionSeed ^ 0x7f4a7c15) >>> 0),
+  ).value.slice(0, LIBERTADOS_SPOTS)
+  const finishedEdition =
+    save.libertados || alreadyLogged
+      ? null
+      : simulateEdition(
+          createLibertados(editionSeed ^ 0x2545f491, save.careerYear, null, pastQualifiers),
+          createRng(editionSeed ^ 0x1b873593),
+        ).value
   const continentalChampions =
     finishedEdition?.championId
       ? [

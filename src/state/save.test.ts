@@ -945,6 +945,26 @@ describe('Copa Libertados no save', () => {
     expect(proxima.libertados!.groups.flat()).toContain(save.clubId)
   })
 
+  test('dispensar o torneio não faz a virada do ano gravar um segundo campeão', () => {
+    /*
+     * Arrange: torneio disputado e encerrado, campeão já no histórico, e o
+     * card dispensado — o que zera `save.libertados`. Sem guarda por ano, a
+     * virada leria isso como "ano sem jogador" e simularia outra edição.
+     */
+    const save = base()
+    const edicao = createLibertados(9, save.careerYear, save.clubId, [save.clubId, 'mare-rubra', 'imperial', 'atlantico'])
+    const encerrado = withLibertadosState(save, { ...edicao, stage: 'eliminated', championId: 'sa-inti' })
+    const dispensado = applyLibertados(encerrado, null)
+
+    // Act
+    const proxima = startNewSeason(dispensado, () => 0.5)
+
+    // Assert
+    const doAno = proxima.continentalChampions.filter((title) => title.year === save.careerYear)
+    expect(doAno).toHaveLength(1)
+    expect(doAno[0].clubId).toBe('sa-inti')
+  })
+
   test('sem classificação, a edição do ano roda simulada e vira histórico', () => {
     // Arrange: clube da Série D nunca entra no top 4 da Série A
     const save = createSave({ playerName: 'Tuca', clubId: 'real-vila' })!
