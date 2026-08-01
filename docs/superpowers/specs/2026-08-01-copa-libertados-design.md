@@ -68,10 +68,16 @@ continentais levam prefixo `sa-` para nunca colidirem com os brasileiros.
 
 ### Nomes de jogadores
 
-Os elencos estrangeiros já saem certos: `squadPlayersFor` usa `foreignSquadFor`,
-que lê [nationalNames.ts](../../../src/data/nationalNames.ts). Faltam três
-bancos — **Peru, Bolívia e Venezuela** — que entram no mesmo formato dos
-existentes (16 nomes masculinos, 16 femininos, 16 sobrenomes).
+O gerador de elencos já sabe montar time estrangeiro — `foreignSquadFor` lê
+[nationalNames.ts](../../../src/data/nationalNames.ts) — mas hoje só reconhece
+**seleções**, pelo prefixo `nation-` do id. Sem ajuste, o Club Charrúa escalaria
+"Zeca" e "Serrote". Duas mudanças:
+
+1. `nationalityOf`, em [players.ts](../../../src/engine/squad/players.ts), passa
+   a consultar o país no catálogo continental além do prefixo.
+2. Entram três bancos de nomes — **Peru, Bolívia e Venezuela** — no mesmo
+   formato dos existentes (16 nomes masculinos, 16 femininos, 16 sobrenomes).
+   Os outros seis países já têm banco.
 
 ## 2. Escudos
 
