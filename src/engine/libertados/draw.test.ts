@@ -89,4 +89,31 @@ describe('sorteio da Copa Libertados', () => {
     const { value: grupos } = drawGroups([...BRASILEIROS, ...sorteados.value], null, sorteados.next)
     expect(grupos.flat()).toHaveLength(GROUP_COUNT * GROUP_SIZE)
   })
+
+  test('jogador fora do pote mais forte não some do sorteio nem deixa vaga vazia', () => {
+    /*
+     * Arrange: 'aurora-paulista' tem força 3 e cai num pote baixo. Inferir o
+     * pote do jogador pelo tamanho do grupo dava certo só quando ele estava no
+     * pote 1 — nos outros casos um clube sumia e um `undefined` entrava no
+     * lugar. Os quatro brasileiros do fixture padrão são todos força 5, então
+     * nenhum outro teste alcança este caminho.
+     */
+    const classificados = ['leoes-capital', 'mare-rubra', 'imperial', 'aurora-paulista']
+    const sorteados = pickContinentalClubs(CONTINENTAL_SPOTS, createRng(31))
+
+    // Act
+    const { value: grupos } = drawGroups(
+      [...classificados, ...sorteados.value],
+      'aurora-paulista',
+      sorteados.next,
+    )
+
+    // Assert
+    const todos = grupos.flat()
+    expect(todos).toHaveLength(GROUP_COUNT * GROUP_SIZE)
+    expect(todos.every((id) => typeof id === 'string' && id.length > 0)).toBe(true)
+    expect(new Set(todos).size).toBe(GROUP_COUNT * GROUP_SIZE)
+    expect(grupos[0][0]).toBe('aurora-paulista')
+    for (const grupo of grupos) expect(grupo).toHaveLength(GROUP_SIZE)
+  })
 })

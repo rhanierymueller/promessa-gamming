@@ -101,20 +101,25 @@ export const drawGroups = (
   const groups: string[][] = Array.from({ length: GROUP_COUNT }, () => [])
   let current = rng
 
-  // o clube do jogador abre o grupo A, saindo do pote dele
-  if (playerClubId) {
-    const potIndex = pots.findIndex((pot) => pot.includes(playerClubId))
-    if (potIndex >= 0) {
-      pots[potIndex].splice(pots[potIndex].indexOf(playerClubId), 1)
-      groups[0].push(playerClubId)
-    }
+  /*
+   * O clube do jogador abre o grupo A, saindo do pote dele — que NÃO é
+   * necessariamente o primeiro. Um clube de força 3 pode terminar entre os
+   * quatro primeiros da Série A numa temporada de zebra e cair num pote baixo.
+   * Inferir o pote pelo tamanho do grupo assumia o contrário e, quando a
+   * suposição falhava, sumia com um clube do sorteio e empurrava `undefined`
+   * para dentro de um grupo.
+   */
+  const playerPot = playerClubId ? pots.findIndex((pot) => pot.includes(playerClubId)) : -1
+  if (playerClubId && playerPot >= 0) {
+    pots[playerPot].splice(pots[playerPot].indexOf(playerClubId), 1)
+    groups[0].push(playerClubId)
   }
 
   for (let potIndex = 0; potIndex < POT_COUNT; potIndex++) {
-    // o grupo do jogador já recebeu o clube dele neste pote
+    // o grupo do jogador não espera clube do pote de onde ele já saiu
     const pending = groups
       .map((_, index) => index)
-      .filter((index) => groups[index].length === potIndex)
+      .filter((index) => index !== 0 || potIndex !== playerPot)
     const shuffled = shuffle(pots[potIndex], current)
     current = shuffled.next
     const nationsByGroup = pending.map((index) => groups[index].map(nationOf))
