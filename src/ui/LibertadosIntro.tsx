@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import trophyLibertados from '../assets/trophies/libertados.png'
 import { clubById } from '../data/clubs'
 import { nationOf } from '../engine/libertados/draw'
-import { LIBERTADOS_NAME, type LibertadosState } from '../engine/libertados/types'
+import { GROUP_SIZE, LIBERTADOS_NAME, type LibertadosState } from '../engine/libertados/types'
 import { nationById } from '../data/nations'
 import { ClubCrest } from './ClubCrest'
 import { NationFlag } from './NationFlag'
@@ -39,9 +39,17 @@ export const LibertadosIntro = ({
 }: LibertadosIntroProps) => {
   const [phase, setPhase] = useState<Phase>('show')
   const timers = useRef<number[]>([])
+  /*
+   * A guarda de saída mora numa ref, não no estado: o timer de HOLD_MS é
+   * agendado uma vez, na montagem, e carrega a `phase` congelada daquela
+   * renderização. Lendo o estado, ele acharia que a cerimônia ainda está
+   * rodando mesmo depois de o jogador ter pulado, e chamaria `onDone` de novo.
+   */
+  const leaving = useRef(false)
 
   const leave = (): void => {
-    if (phase !== 'show') return
+    if (leaving.current) return
+    leaving.current = true
     setPhase('dark')
     timers.current.push(window.setTimeout(() => setPhase('reveal'), DARKEN_MS))
     timers.current.push(window.setTimeout(onDone, DARKEN_MS + REVEAL_MS))
@@ -56,8 +64,14 @@ export const LibertadosIntro = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  /*
+   * Os adversários do grupo. O corte em GROUP_SIZE - 1 protege a edição sem
+   * jogador: ali o filtro não tira ninguém, e o quarto card entraria sem
+   * atraso próprio, fora da cascata de revelação.
+   */
   const rivals = state.groups[0]
     .filter((id) => id !== state.playerClubId)
+    .slice(0, GROUP_SIZE - 1)
     .map((id) => clubById(id))
     .filter((club): club is NonNullable<typeof club> => club !== null)
 
