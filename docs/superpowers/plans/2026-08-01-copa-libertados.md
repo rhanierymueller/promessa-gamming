@@ -2299,6 +2299,26 @@ describe('Copa Libertados no save', () => {
     expect(proxima.libertados!.groups.flat()).toContain(save.clubId)
   })
 
+  test('dispensar o torneio não faz a virada do ano gravar um segundo campeão', () => {
+    /*
+     * Arrange: torneio disputado e encerrado, campeão já no histórico, e o
+     * card dispensado — o que zera `save.libertados`. Sem guarda por ano, a
+     * virada leria isso como "ano sem jogador" e simularia outra edição.
+     */
+    const save = base()
+    const edicao = createLibertados(9, save.careerYear, save.clubId, [save.clubId, 'mare-rubra', 'imperial', 'atlantico'])
+    const encerrado = withLibertadosState(save, { ...edicao, stage: 'eliminated', championId: 'sa-inti' })
+    const dispensado = applyLibertados(encerrado, null)
+
+    // Act
+    const proxima = startNewSeason(dispensado, () => 0.5)
+
+    // Assert
+    const doAno = proxima.continentalChampions.filter((title) => title.year === save.careerYear)
+    expect(doAno).toHaveLength(1)
+    expect(doAno[0].clubId).toBe('sa-inti')
+  })
+
   test('sem classificação, a edição do ano roda simulada e vira histórico', () => {
     // Arrange: clube da Série D nunca entra no top 4 da Série A
     const save = createSave({ playerName: 'Tuca', clubId: 'real-vila' })!
@@ -2463,16 +2483,34 @@ Em `src/state/save.ts`, dentro de `startNewSeason` (linha 923), adicionar depois
     : null
 
   /*
-   * Ano sem você: a edição que acabou de passar roda inteira simulada, para o
+   * Ano sem você: a edição que se encerra agora roda simulada, para o
    * continente ter campeão de qualquer jeito. Com você, o campeão já foi
    * registrado quando o torneio terminou.
+   *
+   * Quem disputou essa edição saiu da Série A do ano PASSADO, e aquela tabela
+   * não fica guardada — então ela é reconstruída pela seed do próprio ano.
+   * Reaproveitar os classificados recém-apurados colocaria na edição que
+   * acabou justamente os clubes que só entram na próxima.
+   *
+   * A guarda por ano é o que impede um segundo campeão para a mesma
+   * temporada: dispensar o card de fim de torneio zera `save.libertados`, e
+   * sem ela a virada do ano trataria uma edição já disputada como ano sem
+   * jogador, simulando uma segunda por cima.
    */
-  const finishedEdition = save.libertados
-    ? null
-    : simulateEdition(
-        createLibertados(editionSeed ^ 0x7f4a7c15, save.careerYear, null, qualifiers),
-        createRng(editionSeed ^ 0x1b873593),
-      ).value
+  const alreadyLogged = save.continentalChampions.some(
+    (title) => title.year === save.careerYear,
+  )
+  const pastQualifiers = simulateDivisionOrder(
+    save.divisions[0],
+    createRng((editionSeed ^ 0x7f4a7c15) >>> 0),
+  ).value.slice(0, LIBERTADOS_SPOTS)
+  const finishedEdition =
+    save.libertados || alreadyLogged
+      ? null
+      : simulateEdition(
+          createLibertados(editionSeed ^ 0x2545f491, save.careerYear, null, pastQualifiers),
+          createRng(editionSeed ^ 0x1b873593),
+        ).value
   const continentalChampions =
     finishedEdition?.championId
       ? [
