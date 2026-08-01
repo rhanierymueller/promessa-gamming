@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, test } from 'vitest'
 import { CLUBS } from '../data/clubs'
+import { CONTINENTAL_CLUBS } from '../data/continentalClubs'
 import {
   crestIdentityFor,
   hasNamedCrestIdentity,
@@ -42,5 +43,20 @@ describe('identidade visual dos clubes', () => {
       crestIdentityFor('clube-do-futuro'),
     )
     expect(hasNamedCrestIdentity('clube-do-futuro')).toBe(false)
+  })
+})
+
+describe('identidade de escudo dos clubes continentais', () => {
+  test('todo clube sul-americano tem identidade declarada, sem cair no fallback', () => {
+    for (const club of CONTINENTAL_CLUBS) {
+      expect(hasNamedCrestIdentity(club.id)).toBe(true)
+    }
+  })
+
+  test('os oito emblemas novos são usados por algum clube', () => {
+    const usados = new Set(CONTINENTAL_CLUBS.map((club) => crestIdentityFor(club.id).emblem))
+    for (const emblem of ['condor', 'jaguar', 'volcano', 'harp', 'llama', 'orchid', 'maize', 'cordillera']) {
+      expect(usados.has(emblem as never)).toBe(true)
+    }
   })
 })

@@ -67,6 +67,14 @@ export type EmblemKind =
   | 'fish'
   | 'mangrove'
   | 'rain'
+  | 'condor'
+  | 'jaguar'
+  | 'volcano'
+  | 'harp'
+  | 'llama'
+  | 'orchid'
+  | 'maize'
+  | 'cordillera'
 
 export interface ClubCrestIdentity {
   readonly shield: ShieldKind
@@ -144,6 +152,52 @@ const CLUB_CREST_IDENTITIES: Readonly<Record<string, ClubCrestIdentity>> = {
   manguezal:            { shield: 'rounded', pattern: 'halves',   emblem: 'mangrove',   plate: 'banner' },
   cerrado:              { shield: 'classic', pattern: 'rays',     emblem: 'tree',       plate: 'diamond' },
   garoa:                { shield: 'roundel', pattern: 'hoops',    emblem: 'rain',       plate: 'round' },
+
+  // ==== Copa Libertados ====
+  'sa-riachuelo':   { shield: 'rounded', pattern: 'band',     emblem: 'anchor',     plate: 'round' },
+  'sa-pampero':     { shield: 'pennant', pattern: 'sash',     emblem: 'wind',       plate: 'diamond' },
+  'sa-cordobes':    { shield: 'classic', pattern: 'quarters', emblem: 'tower',      plate: 'banner' },
+  'sa-andino':      { shield: 'diamond', pattern: 'chevron',  emblem: 'cordillera', plate: 'diamond' },
+
+  'sa-charrua':     { shield: 'crowned', pattern: 'halves',   emblem: 'sun',        plate: 'round' },
+  'sa-rambla':      { shield: 'roundel', pattern: 'waves',    emblem: 'wave',       plate: 'round' },
+  'sa-salteno':     { shield: 'banner',  pattern: 'stripes',  emblem: 'maize',      plate: 'banner' },
+  'sa-esteno':      { shield: 'classic', pattern: 'waves',    emblem: 'lighthouse', plate: 'round' },
+
+  'sa-nanduti':     { shield: 'rounded', pattern: 'rays',     emblem: 'harp',       plate: 'round' },
+  'sa-ypacarai':    { shield: 'roundel', pattern: 'waves',    emblem: 'drop',       plate: 'round' },
+  'sa-chaqueno':    { shield: 'pennant', pattern: 'chevron',  emblem: 'cactus',     plate: 'diamond' },
+  'sa-mburucuya':   { shield: 'diamond', pattern: 'quarters', emblem: 'orchid',     plate: 'round' },
+
+  'sa-cordillera':  { shield: 'classic', pattern: 'chevron',  emblem: 'condor',     plate: 'round' },
+  'sa-atacama':     { shield: 'banner',  pattern: 'rays',     emblem: 'crystal',    plate: 'diamond' },
+  'sa-porteno':     { shield: 'rounded', pattern: 'hoops',    emblem: 'ship',       plate: 'banner' },
+  'sa-araucano':    { shield: 'crowned', pattern: 'halves',   emblem: 'tree',       plate: 'round' },
+
+  'sa-cafetero':    { shield: 'classic', pattern: 'band',     emblem: 'coffee',     plate: 'round' },
+  'sa-vallenato':   { shield: 'pennant', pattern: 'rays',     emblem: 'star',       plate: 'diamond' },
+  'sa-esmeralda':   { shield: 'diamond', pattern: 'halves',   emblem: 'crystal',    plate: 'round' },
+  'sa-tayrona':     { shield: 'banner',  pattern: 'chevron',  emblem: 'jaguar',     plate: 'banner' },
+
+  'sa-mitad-mundo': { shield: 'roundel', pattern: 'quarters', emblem: 'globe',      plate: 'round' },
+  'sa-manabita':    { shield: 'classic', pattern: 'waves',    emblem: 'fish',       plate: 'diamond' },
+  'sa-guayaco':     { shield: 'rounded', pattern: 'stripes',  emblem: 'hook',       plate: 'round' },
+  'sa-cotopaxi':    { shield: 'pennant', pattern: 'chevron',  emblem: 'volcano',    plate: 'none' },
+
+  'sa-inti':        { shield: 'crowned', pattern: 'rays',     emblem: 'sun',        plate: 'round' },
+  'sa-chimu':       { shield: 'diamond', pattern: 'quarters', emblem: 'maize',      plate: 'diamond' },
+  'sa-misti':       { shield: 'classic', pattern: 'chevron',  emblem: 'volcano',    plate: 'banner' },
+  'sa-vicuna':      { shield: 'rounded', pattern: 'band',     emblem: 'llama',      plate: 'round' },
+
+  'sa-altiplano':   { shield: 'banner',  pattern: 'halves',   emblem: 'cordillera', plate: 'banner' },
+  'sa-illimani':    { shield: 'diamond', pattern: 'chevron',  emblem: 'peak',       plate: 'diamond' },
+  'sa-camba':       { shield: 'classic', pattern: 'quarters', emblem: 'palm',       plate: 'round' },
+  'sa-salar':       { shield: 'roundel', pattern: 'hoops',    emblem: 'crystal',    plate: 'none' },
+
+  'sa-orinoco':     { shield: 'rounded', pattern: 'waves',    emblem: 'wave',       plate: 'round' },
+  'sa-avila':       { shield: 'crowned', pattern: 'chevron',  emblem: 'orchid',     plate: 'round' },
+  'sa-llanero':     { shield: 'pennant', pattern: 'band',     emblem: 'horseshoe',  plate: 'diamond' },
+  'sa-tepuy':       { shield: 'diamond', pattern: 'halves',   emblem: 'mesa',       plate: 'diamond' },
 }
 
 const FALLBACK_SHIELDS: readonly ShieldKind[] = [
