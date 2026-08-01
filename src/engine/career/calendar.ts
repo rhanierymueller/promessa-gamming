@@ -74,14 +74,24 @@ export const roundDate = (
   return addDays(opening, round * (inLibertados ? FORTNIGHT_DAYS : WEEK_DAYS))
 }
 
-/** Data real de um jogo da Libertados (0-13): abril, de quinze em quinze dias. */
+/**
+ * Data real de um jogo da Libertados (0-13): abril, de quinze em quinze dias.
+ *
+ * A âncora sai do calendário da LIGA, não de uma data própria. O jogo
+ * continental é sempre o meio de semana que antecede uma rodada — é isso que
+ * faz as duas competições dividirem a semana. Ancorar as duas de forma
+ * independente (primeiro sábado de março de um lado, primeira quarta de abril
+ * do outro) alinhava por sorte: a distância entre as âncoras muda de ano para
+ * ano e, fora do ano de estreia, nenhum jogo caía perto de uma rodada.
+ */
 export const libertadosDate = (careerYear: number, matchIndex: number): CalendarDate => {
-  const opening = firstWeekdayOf(
-    seasonYearFor(careerYear),
-    LIBERTADOS_MONTH,
-    cupWeekdayFor(careerYear),
-  )
-  return addDays(opening, matchIndex * FORTNIGHT_DAYS)
+  const leagueWeekday = leagueWeekdayFor(careerYear)
+  const daysBefore = (leagueWeekday - cupWeekdayFor(careerYear) + 7) % 7
+  const opening = firstWeekdayOf(seasonYearFor(careerYear), OPENING_MONTH, leagueWeekday)
+  // a edição abre em abril: anda de quinzena em quinzena até chegar no mês
+  let first = addDays(opening, -daysBefore)
+  while (first.month < LIBERTADOS_MONTH) first = addDays(first, FORTNIGHT_DAYS)
+  return addDays(first, matchIndex * FORTNIGHT_DAYS)
 }
 
 const firstSundayOf = (year: number, month: number): CalendarDate =>
