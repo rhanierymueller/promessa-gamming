@@ -140,3 +140,50 @@
     transform: none;
   }
 }
+
+.libertados-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.libertados-groups {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 720px) {
+  .libertados-groups { grid-template-columns: 1fr 1fr; }
+}
+
+.libertados-tie {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.libertados-tie:last-child { border-bottom: none; }
+
+.libertados-tie-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  opacity: 0.72;
+}
+
+.libertados-tie-side:last-child { justify-content: flex-end; }
+
+.libertados-tie-won {
+  opacity: 1;
+  font-weight: 700;
+}
+
+.libertados-tie-score {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  opacity: 0.85;
+}
