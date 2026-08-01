@@ -7,14 +7,19 @@ import { createTournament } from '../engine/tournament/tournament'
 import { userSlotIndex } from '../engine/squad/formation'
 import { USER_SQUAD_INDEX } from '../engine/squad/players'
 import { divisionOf } from '../engine/pyramid/pyramid'
-import { SEASON_TEAMS } from '../engine/season/types'
+import { SEASON_ROUNDS, SEASON_TEAMS } from '../engine/season/types'
+import { createLibertados } from '../engine/libertados/libertados'
 import {
+  applyLibertados,
   applyTournament,
   displayClub,
   HISTORY_LIMIT,
+  isInLibertados,
+  LIBERTADOS_PRIZE,
   setClubColors,
   setPlayerName,
   signPlayer,
+  withLibertadosState,
   withTournamentState,
   CELEBRATION_COUNT,
   clubDisplayName,
@@ -871,5 +876,97 @@ describe('gols sofridos na carreira', () => {
     const carregado = parseSave(JSON.stringify({ ...save, career: semCampo }))!
 
     expect(carregado.career.goalsAgainst).toBe(2)
+  })
+})
+
+describe('Copa Libertados no save', () => {
+  const base = () => createSave({ playerName: 'Tuca', clubId: 'leoes-capital' })!
+
+  test('carreira nova nasce sem Libertados e sem vaga', () => {
+    const save = base()
+    expect(save.libertados).toBeNull()
+    expect(save.libertadosQualified).toBe(false)
+    expect(save.continentalChampions).toEqual([])
+    expect(isInLibertados(save)).toBe(false)
+  })
+
+  test('vencer a Libertados dá taça e prêmio uma vez só', () => {
+    const save = base()
+    const edicao = createLibertados(9, save.careerYear, save.clubId, [save.clubId, 'mare-rubra', 'imperial', 'atlantico'])
+    const campeao = { ...edicao, stage: 'champion' as const, championId: save.clubId }
+    const primeiro = withLibertadosState(save, campeao)
+    const segundo = withLibertadosState(primeiro, campeao)
+
+    expect(primeiro.trophies).toHaveLength(1)
+    expect(primeiro.trophies[0].kind).toBe('libertados')
+    expect(primeiro.budget).toBe(save.budget + LIBERTADOS_PRIZE)
+    expect(segundo.trophies).toHaveLength(1)
+    expect(segundo.budget).toBe(primeiro.budget)
+  })
+
+  test('campeão continental entra no histórico mesmo sem o título ser seu', () => {
+    const save = base()
+    const edicao = createLibertados(9, save.careerYear, save.clubId, [save.clubId, 'mare-rubra', 'imperial', 'atlantico'])
+    const eliminado = { ...edicao, stage: 'eliminated' as const, championId: 'sa-charrua' }
+    const updated = withLibertadosState(save, eliminado)
+
+    expect(updated.continentalChampions).toEqual([{ year: save.careerYear, clubId: 'sa-charrua' }])
+    expect(updated.trophies).toHaveLength(0)
+  })
+
+  test('dispensar o torneio limpa o estado sem perder o histórico', () => {
+    const save = base()
+    const edicao = createLibertados(9, save.careerYear, save.clubId, [save.clubId, 'mare-rubra', 'imperial', 'atlantico'])
+    const comHistorico = withLibertadosState(save, { ...edicao, stage: 'eliminated', championId: 'sa-inti' })
+    const limpo = applyLibertados(comHistorico, null)
+
+    expect(limpo.libertados).toBeNull()
+    expect(limpo.continentalChampions).toHaveLength(1)
+  })
+
+  test('terminar no topo da Série A classifica para o ano seguinte', () => {
+    // Arrange: clube da Série A com a temporada encerrada em 1º lugar
+    const save = base()
+    const encerrada = {
+      ...save.season,
+      currentRound: SEASON_ROUNDS,
+      results: save.season.participants
+        .filter((id) => id !== save.clubId)
+        .map((id, index) => ({ round: index, homeId: save.clubId, awayId: id, homeGoals: 5, awayGoals: 0 })),
+    }
+
+    // Act
+    const proxima = startNewSeason({ ...save, season: encerrada }, () => 0.5)
+
+    // Assert
+    expect(proxima.libertadosQualified).toBe(true)
+    expect(proxima.libertados).not.toBeNull()
+    expect(proxima.libertados!.playerClubId).toBe(save.clubId)
+    expect(proxima.libertados!.groups.flat()).toContain(save.clubId)
+  })
+
+  test('sem classificação, a edição do ano roda simulada e vira histórico', () => {
+    // Arrange: clube da Série D nunca entra no top 4 da Série A
+    const save = createSave({ playerName: 'Tuca', clubId: 'real-vila' })!
+
+    // Act
+    const proxima = startNewSeason(save, () => 0.5)
+
+    // Assert
+    expect(proxima.libertadosQualified).toBe(false)
+    expect(proxima.libertados).toBeNull()
+    expect(proxima.continentalChampions).toHaveLength(1)
+    expect(proxima.continentalChampions[0].year).toBe(save.careerYear)
+    expect(proxima.continentalChampions[0].clubId).not.toBe(save.clubId)
+  })
+
+  test('save da versão anterior carrega sem Libertados', () => {
+    const antigo = JSON.stringify({ ...base(), version: 19, libertados: undefined })
+    const carregado = parseSave(antigo)
+
+    expect(carregado).not.toBeNull()
+    expect(carregado!.version).toBe(SAVE_VERSION)
+    expect(carregado!.libertados).toBeNull()
+    expect(carregado!.continentalChampions).toEqual([])
   })
 })

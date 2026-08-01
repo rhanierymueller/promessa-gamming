@@ -33,8 +33,11 @@ import {
   applyPromotionRelegation,
   divisionOf,
   initialDivisions,
+  simulateDivisionOrder,
   type Divisions,
 } from '../engine/pyramid/pyramid'
+import type { LibertadosState } from '../engine/libertados/types'
+import { createLibertados, simulateEdition } from '../engine/libertados/libertados'
 import { FORMATION_IDS, userSlotIndex, type FormationId, type PlayerFieldPosition } from '../engine/squad/formation'
 import { allowanceFor, titlePrizeFor, type MarketPlayer, type Signing } from '../engine/market/market'
 import { USER_PLAYER_ID, USER_SQUAD_INDEX } from '../engine/squad/players'
@@ -50,7 +53,7 @@ import { isOffensiveName } from './moderation'
  * (nacionalidade padrão Brasil + temporada nova).
  */
 
-export const SAVE_VERSION = 19
+export const SAVE_VERSION = 20
 const SAVE_KEY = 'promessa.save'
 export const MAX_PLAYER_NAME = 16
 const DEFAULT_SHIRT_NUMBER = 10
@@ -125,7 +128,7 @@ export const DEFAULT_APPEARANCE: PlayerAppearance = {
   gender: 'masculino',
 }
 
-export type Competition = 'liga' | 'amistoso' | 'selecao'
+export type Competition = 'liga' | 'amistoso' | 'selecao' | 'libertados'
 
 export interface MatchRecord {
   readonly opponentId: string
@@ -148,6 +151,12 @@ export interface PlayerSave {
   /** Já disputou o torneio de seleções desta temporada. */
   readonly tournamentPlayed: boolean
   readonly tournament: TournamentState | null
+  /** Edição da Copa Libertados em andamento — null fora do torneio. */
+  readonly libertados: LibertadosState | null
+  /** Vaga conquistada na temporada passada: joga a Libertados deste ano. */
+  readonly libertadosQualified: boolean
+  /** Campeões continentais recentes, com ou sem você. */
+  readonly continentalChampions: readonly ContinentalTitle[]
   readonly season: SeasonState
   readonly history: readonly MatchRecord[]
   readonly attributes: PlayerAttributes
@@ -223,12 +232,24 @@ export interface PerkOffer {
   readonly options: readonly PerkId[]
 }
 
-export type TrophyKind = 'serie-a' | 'serie-b' | 'serie-c' | 'serie-d' | TournamentKind
+export type TrophyKind = 'serie-a' | 'serie-b' | 'serie-c' | 'serie-d' | TournamentKind | 'libertados'
 
 export interface Trophy {
   readonly kind: TrophyKind
   readonly year: number
 }
+
+export interface ContinentalTitle {
+  readonly year: number
+  readonly clubId: string
+}
+
+/** Prêmio do título continental — acima do da Série A, como o peso da taça. */
+export const LIBERTADOS_PRIZE = 10_000_000
+/** Quantos clubes da Série A vão à Libertados. */
+export const LIBERTADOS_SPOTS = 4
+/** Quantos campeões continentais o save guarda. */
+const CONTINENTAL_HISTORY_LIMIT = 10
 
 const DIVISION_TROPHIES: readonly TrophyKind[] = ['serie-a', 'serie-b', 'serie-c', 'serie-d']
 
@@ -328,6 +349,9 @@ export const createSave = (
     careerYear: 1,
     tournamentPlayed: false,
     tournament: null,
+    libertados: null,
+    libertadosQualified: false,
+    continentalChampions: [],
     savedAt: 0,
     consent: input.consent ?? null,
     season: createSeason(clubId, seasonSeed(roll), divisions[divisionOf(divisions, clubId)]),
@@ -530,6 +554,40 @@ export const withTournamentState = (save: PlayerSave, state: TournamentState): P
   return updated
 }
 
+/** O clube está na Libertados nesta temporada? Decide o ritmo do calendário. */
+export const isInLibertados = (save: PlayerSave): boolean => save.libertados !== null
+
+/**
+ * Aplica o estado da Libertados. Título dá TAÇA e prêmio em dinheiro; o campeão
+ * da edição — seja quem for — entra no histórico continental. Os dois só
+ * acontecem uma vez, para reaplicar o mesmo estado não pagar de novo.
+ */
+export const withLibertadosState = (save: PlayerSave, state: LibertadosState): PlayerSave => {
+  const becameChampion = state.stage === 'champion' && save.libertados?.stage !== 'champion'
+  const alreadyLogged = save.continentalChampions.some((title) => title.year === state.year)
+  const logChampion = state.championId !== null && !alreadyLogged
+
+  return {
+    ...save,
+    libertados: state,
+    trophies: becameChampion
+      ? [...save.trophies, { kind: 'libertados', year: save.careerYear }]
+      : save.trophies,
+    budget: becameChampion ? save.budget + LIBERTADOS_PRIZE : save.budget,
+    continentalChampions: logChampion
+      ? [...save.continentalChampions, { year: state.year, clubId: state.championId! }].slice(
+          -CONTINENTAL_HISTORY_LIMIT,
+        )
+      : save.continentalChampions,
+  }
+}
+
+/** Guarda ou dispensa a edição sem mexer no histórico já registrado. */
+export const applyLibertados = (
+  save: PlayerSave,
+  state: LibertadosState | null,
+): PlayerSave => (state === null ? { ...save, libertados: null } : withLibertadosState(save, state))
+
 /** Contrata um jogador do mercado: desconta a verba e grava o reforço. */
 export const signPlayer = (save: PlayerSave, player: MarketPlayer): PlayerSave => {
   if (player.price > save.budget) return save
@@ -628,7 +686,7 @@ const normalizeSignings = (value: unknown): readonly Signing[] =>
   Array.isArray(value) ? value.filter(isValidSigning) : []
 
 const VALID_TROPHIES: readonly string[] = [
-  'serie-a', 'serie-b', 'serie-c', 'serie-d', 'copa-america', 'liga-nacoes', 'copa-mundo',
+  'serie-a', 'serie-b', 'serie-c', 'serie-d', 'copa-america', 'liga-nacoes', 'copa-mundo', 'libertados',
 ]
 
 const normalizePerks = (value: unknown): readonly PerkId[] =>
@@ -935,6 +993,42 @@ export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random)
   )
   const nextDivision = divisionOf(shift.value.divisions, save.clubId)
   const nextSeason = createSeason(save.clubId, seasonSeed(roll), shift.value.divisions[nextDivision])
+
+  /*
+   * Libertados do ano que vem: os 4 primeiros da Série A. A tabela da SUA
+   * divisão é real; se você não está na Série A, a ordem dela é simulada.
+   */
+  const serieAOrder =
+    playerDivision === 0
+      ? finalOrder
+      : simulateDivisionOrder(save.divisions[0], createRng(shiftSeed ^ 0x2c1b3a5f)).value
+  const qualifiers = serieAOrder.slice(0, LIBERTADOS_SPOTS)
+  const nextQualified = qualifiers.includes(save.clubId)
+  const nextYear = save.careerYear + 1
+  const editionSeed = seasonSeed(roll)
+  const nextLibertados = nextQualified
+    ? createLibertados(editionSeed, nextYear, save.clubId, qualifiers)
+    : null
+
+  /*
+   * Ano sem você: a edição que acabou de passar roda inteira simulada, para o
+   * continente ter campeão de qualquer jeito. Com você, o campeão já foi
+   * registrado quando o torneio terminou.
+   */
+  const finishedEdition = save.libertados
+    ? null
+    : simulateEdition(
+        createLibertados(editionSeed ^ 0x7f4a7c15, save.careerYear, null, qualifiers),
+        createRng(editionSeed ^ 0x1b873593),
+      ).value
+  const continentalChampions =
+    finishedEdition?.championId
+      ? [
+          ...save.continentalChampions,
+          { year: save.careerYear, clubId: finishedEdition.championId },
+        ].slice(-CONTINENTAL_HISTORY_LIMIT)
+      : save.continentalChampions
+
   // o nêmesis te persegue: sempre arruma clube na SUA divisão
   const rival = save.rival
     ? {
@@ -951,6 +1045,9 @@ export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random)
     // temporadas por cima dela. Somar aqui também envelhecia dois anos por ano.
     tournamentPlayed: false,
     tournament: null,
+    libertados: nextLibertados,
+    libertadosQualified: nextQualified,
+    continentalChampions,
     divisions: shift.value.divisions,
     divisionMovement: shift.value.movement,
     season: nextSeason,
@@ -993,7 +1090,9 @@ const normalizeHistory = (raw: unknown): MatchRecord[] => {
   return raw.filter(isMatchRecord).map((record) => ({
     ...record,
     competition:
-      record.competition === 'amistoso' || record.competition === 'selecao'
+      record.competition === 'amistoso' ||
+      record.competition === 'selecao' ||
+      record.competition === 'libertados'
         ? record.competition
         : 'liga',
   }))
@@ -1069,6 +1168,33 @@ const migrateLegacy = (candidate: Record<string, unknown>): PlayerSave | null =>
   }
 }
 
+const isValidLibertados = (value: unknown): value is LibertadosState => {
+  if (typeof value !== 'object' || value === null) return false
+  const state = value as Record<string, unknown>
+  return (
+    typeof state.seed === 'number' &&
+    typeof state.year === 'number' &&
+    Array.isArray(state.groups) &&
+    state.groups.length > 0 &&
+    state.groups.every((group) => Array.isArray(group)) &&
+    typeof state.stage === 'string' &&
+    Array.isArray(state.results)
+  )
+}
+
+const normalizeContinentalChampions = (value: unknown): readonly ContinentalTitle[] => {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter(
+      (entry): entry is ContinentalTitle =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        typeof (entry as ContinentalTitle).year === 'number' &&
+        typeof (entry as ContinentalTitle).clubId === 'string',
+    )
+    .slice(-CONTINENTAL_HISTORY_LIMIT)
+}
+
 const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => {
   if (typeof candidate.playerName !== 'string' || typeof candidate.clubId !== 'string') return null
   const name = sanitizePlayerName(candidate.playerName)
@@ -1112,6 +1238,9 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
     savedAt: typeof candidate.savedAt === 'number' ? candidate.savedAt : 0,
     consent: parseConsent(candidate.consent),
     tournament,
+    libertados: isValidLibertados(candidate.libertados) ? candidate.libertados : null,
+    libertadosQualified: candidate.libertadosQualified === true,
+    continentalChampions: normalizeContinentalChampions(candidate.continentalChampions),
     season,
     history: normalizeHistory(candidate.history).slice(-HISTORY_LIMIT),
     attributes,
@@ -1182,6 +1311,7 @@ export const parseSave = (raw: string | null): PlayerSave | null => {
       candidate.version === 16 ||
       candidate.version === 17 ||
       candidate.version === 18 ||
+      candidate.version === 19 ||
       candidate.version === SAVE_VERSION
     ) {
       return parseCurrent(fixInflatedAge(candidate))
