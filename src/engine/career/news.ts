@@ -284,13 +284,15 @@ export const newsFor = (save: PlayerSave): readonly NewsItem[] => {
     const champion = clubById(continental.clubId)
     const isPlayer = continental.clubId === save.clubId
     if (champion) {
+      // o batismo local vale para qualquer clube da pirâmide, não só o seu
+      const championName = clubDisplayName(save, champion.id)
       news.push(
         item(
           `libertados-${continental.year}`,
           'comentarista',
           isPlayer
-            ? `${clubDisplayName(save, champion.id)} é campeão da ${LIBERTADOS_NAME}!`
-            : `${champion.name} levanta a ${LIBERTADOS_NAME}`,
+            ? `${championName} é campeão da ${LIBERTADOS_NAME}!`
+            : `${championName} levanta a ${LIBERTADOS_NAME}`,
           isPlayer
             ? 'O continente inteiro assistiu. A taça mais pesada do lado de cá do mundo é sua.'
             : `A América do Sul tem novo dono. Enquanto a taça não passar por aqui, ela vai continuar pesando na estante dos outros.`,
