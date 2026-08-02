@@ -187,3 +187,8 @@
   font-size: 0.82rem;
   opacity: 0.85;
 }
+
+.cal-day-libertados {
+  border-color: rgba(242, 194, 48, 0.45);
+  background: rgba(242, 194, 48, 0.08);
+}

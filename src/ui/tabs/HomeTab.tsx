@@ -1,5 +1,5 @@
 import { Flame, PartyPopper, Play, Sparkles, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
-import type { Club } from '../../data/clubs'
+import { clubById, type Club } from '../../data/clubs'
 import { nationById } from '../../data/nations'
 import { isTournamentRunning, seasonEndAction } from '../../engine/career/seasonEnd'
 import { eventById } from '../../engine/career/events'
@@ -13,6 +13,13 @@ import {
   tournamentKindForYear,
   type TournamentKind,
 } from '../../engine/tournament/tournament'
+import { nextFixture } from '../../engine/career/nextFixture'
+import {
+  isLibertadosRunning,
+  LIBERTADOS_NAME,
+  STAGE_NAMES as LIBERTADOS_STAGE_NAMES,
+} from '../../engine/libertados/types'
+import { playerOpponentId as libertadosOpponentId } from '../../engine/libertados/fixtures'
 import { useState } from 'react'
 import treinoChute from '../../assets/backgrounds/gramado.jpg'
 import treinoGoleiro from '../../assets/backgrounds/estadio-medio.jpg'
@@ -25,7 +32,7 @@ import trophySerieD from '../../assets/trophies/serie-d.png'
 import { titlePrizeFor, formatMoney } from '../../engine/market/market'
 import { myTeamSectors, opponentSectors } from '../../engine/squad/myTeam'
 import { SectorBars } from '../SectorBars'
-import type { PlayerSave } from '../../state/save'
+import { displayClub, type PlayerSave } from '../../state/save'
 import { ClubCrest } from '../ClubCrest'
 import { usePlayerPortrait } from '../usePlayerPortrait'
 import { NewsCarousel } from '../NewsCarousel'
@@ -39,6 +46,8 @@ interface HomeTabProps {
   readonly onStartTournament: (kind: TournamentKind) => void
   readonly onPlayTournamentMatch: () => void
   readonly onDismissTournament: () => void
+  readonly onPlayLibertadosMatch: () => void
+  readonly onDismissLibertados: () => void
   readonly onNewSeason: () => void
   readonly onDismissMovement: () => void
   readonly onTraining: () => void
@@ -65,6 +74,8 @@ export const HomeTab = ({
   onStartTournament,
   onPlayTournamentMatch,
   onDismissTournament,
+  onPlayLibertadosMatch,
+  onDismissLibertados,
   onNewSeason,
   onDismissMovement,
   onTraining,
@@ -96,6 +107,14 @@ export const HomeTab = ({
   const tournamentOpponent = tournamentActive
     ? nationById(playerTournamentOpponentId(tournament) ?? '')
     : null
+
+  const libertados = save.libertados
+  const libertadosActive = libertados !== null && isLibertadosRunning(libertados.stage)
+  const libertadosDone = libertados !== null && !isLibertadosRunning(libertados.stage)
+  const libertadosRivalBase = libertadosActive ? clubById(libertadosOpponentId(libertados) ?? '') : null
+  const libertadosRival = libertadosRivalBase ? displayClub(save, libertadosRivalBase) : null
+  // com duas competições, quem joga primeiro é quem tem a data mais próxima
+  const upNext = nextFixture(save)?.kind ?? 'liga'
 
   return (
     <div className="tab-panel">
@@ -232,6 +251,44 @@ export const HomeTab = ({
           >
             Apresentar-se
           </button>
+        </div>
+      )}
+
+      {libertadosActive && libertadosRival && (
+        <div className="card callup-card">
+          <div>
+            <strong>{LIBERTADOS_NAME} · {LIBERTADOS_STAGE_NAMES[libertados.stage]}</strong>
+            <p className="muted">
+              {libertados.stage === 'groups'
+                ? `Jogo ${libertados.round + 1}/6 do grupo: `
+                : libertados.round === 0
+                  ? 'Jogo de ida: '
+                  : 'Jogo de volta: '}
+              {club.name} × {libertadosRival.name}
+            </p>
+            {upNext === 'liga' && (
+              <p className="muted">A rodada da liga vem antes deste jogo.</p>
+            )}
+          </div>
+          <button className="btn callup-btn" onClick={onPlayLibertadosMatch}>Jogar</button>
+        </div>
+      )}
+
+      {libertadosDone && (
+        <div className="card callup-card">
+          <div>
+            <strong>
+              {libertados.stage === 'champion'
+                ? `CAMPEÃO DA ${LIBERTADOS_NAME.toUpperCase()}!`
+                : `Fim de linha na ${LIBERTADOS_NAME}.`}
+            </strong>
+            <p className="muted">
+              {libertados.stage === 'champion'
+                ? 'O continente é seu. A taça já está na estante.'
+                : `Quem levou a taça foi ${clubById(libertados.championId ?? '')?.name ?? 'outro clube'}. Ano que vem tem mais.`}
+            </p>
+          </div>
+          <button className="btn btn-secondary callup-btn" onClick={onDismissLibertados}>OK</button>
         </div>
       )}
 

@@ -15,6 +15,9 @@ import {
   playerTournamentOpponentId,
   type TournamentKind,
 } from '../engine/tournament/tournament'
+import { advanceLibertados } from '../engine/libertados/libertados'
+import { isLibertadosRunning, LIBERTADOS_NAME } from '../engine/libertados/types'
+import { playerOpponentId as libertadosOpponentId } from '../engine/libertados/fixtures'
 import { initAudio, setVolume, startAmbience, stopMatchAudio } from '../game/audio'
 import { setMusicVolume } from '../game/music'
 import {
@@ -31,6 +34,7 @@ import { MatchScreen } from '../game/MatchScreen'
 import { ShotStage } from '../game/ShotStage'
 import { DiceDuelStage } from '../game/DiceDuelStage'
 import {
+  applyLibertados,
   applySeason,
   applyTournament,
   currentPlayerAge,
@@ -42,6 +46,7 @@ import {
   recordMatch,
   resolvePendingEvent,
   startNewSeason,
+  withLibertadosState,
   withTournamentState,
   type MatchRecord,
   type PlayerSave,
@@ -60,6 +65,8 @@ import { CharacterCreate } from './CharacterCreate'
 import { Landing } from './Landing'
 import { PasswordReset } from './PasswordReset'
 import { HomeTab } from './tabs/HomeTab'
+import { LibertadosIntro } from './LibertadosIntro'
+import { LibertadosTab } from './tabs/LibertadosTab'
 import { MarketTab } from './tabs/MarketTab'
 import { deleteCloudSave, pushSave, syncSave } from '../online/cloudSave'
 import { clearAllLocalData, clearCareerData } from '../state/localData'
@@ -72,7 +79,7 @@ import { TeamTab } from './tabs/TeamTab'
 import './styles/home.css'
 import './styles/match.css'
 
-type Tab = 'home' | 'matches' | 'selecao' | 'team' | 'market' | 'profile'
+type Tab = 'home' | 'matches' | 'selecao' | 'libertados' | 'team' | 'market' | 'profile'
 type Screen = 'tabs' | 'match' | 'training' | 'gk-training' | 'freekick-training' | 'dice-training'
 
 /** Telas com gramado na tela — são as que ligam a torcida. */
@@ -80,16 +87,16 @@ const PITCH_SCREENS: readonly Screen[] = ['match', 'training', 'gk-training', 'f
 
 interface MatchSetup {
   readonly seed: number
-  readonly kind: 'liga' | 'torneio'
+  readonly kind: 'liga' | 'torneio' | 'libertados'
   readonly club: Club
   readonly opponent: Club
 }
 
-/** Aplica um resultado no save: histórico + liga (ou torneio) avançam juntos. */
+/** Aplica um resultado no save: histórico + liga (ou torneio/Libertados) avançam juntos. */
 const applyMatchOutcome = (
   save: PlayerSave,
   record: MatchRecord,
-  kind: 'liga' | 'torneio',
+  kind: 'liga' | 'torneio' | 'libertados',
   seed: number,
 ): PlayerSave => {
   let updated = recordMatch(save, record)
@@ -101,7 +108,7 @@ const applyMatchOutcome = (
       createRng((seed ^ 0x9e3779b9) >>> 0),
     )
     updated = applySeason(updated, simulated.value)
-  } else if (updated.tournament) {
+  } else if (kind === 'torneio' && updated.tournament) {
     const advanced = advanceTournament(
       updated.tournament,
       record.teamGoals,
@@ -111,6 +118,15 @@ const applyMatchOutcome = (
       shootoutFor(seed).playerWon,
     )
     updated = withTournamentState(updated, advanced.value.state)
+  } else if (kind === 'libertados' && updated.libertados) {
+    const advanced = advanceLibertados(
+      updated.libertados,
+      record.teamGoals,
+      record.opponentGoals,
+      createRng((seed ^ 0x3c6ef372) >>> 0),
+      shootoutFor(seed).playerWon,
+    )
+    updated = withLibertadosState(updated, advanced.value.state)
   }
   return updated
 }
@@ -195,6 +211,8 @@ const TAB_ITEMS: readonly { id: Tab; icon: LucideIcon; label: string }[] = [
   { id: 'matches', icon: CalendarDays, label: 'Liga' },
   // a aba da seleção só entra na barra quando há convocação em andamento
   { id: 'selecao', icon: Trophy, label: 'Seleção' },
+  // idem para a Libertados: só existe barra enquanto a edição está em jogo
+  { id: 'libertados', icon: Trophy, label: 'Libertados' },
   { id: 'team', icon: Shield, label: 'Time' },
   { id: 'market', icon: BadgeDollarSign, label: 'Mercado' },
   { id: 'profile', icon: User, label: 'Perfil' },
@@ -295,10 +313,15 @@ export const App = () => {
     applyVolume(0)
   }
 
-  // a Seleção só ocupa lugar na barra durante a convocação
+  // a Seleção e a Libertados só ocupam lugar na barra enquanto duram
   const visibleTabs = useMemo(
-    () => TAB_ITEMS.filter((item) => item.id !== 'selecao' || save?.tournament),
-    [save?.tournament],
+    () =>
+      TAB_ITEMS.filter(
+        (item) =>
+          (item.id !== 'selecao' || save?.tournament) &&
+          (item.id !== 'libertados' || save?.libertados),
+      ),
+    [save?.tournament, save?.libertados],
   )
 
   const club = useMemo(() => {
@@ -371,6 +394,31 @@ export const App = () => {
     setScreen('match')
   }
 
+  /* a abertura da Libertados roda uma vez, antes do primeiro jogo da edição */
+  const [libertadosCeremony, setLibertadosCeremony] = useState(false)
+
+  const startLibertadosMatch = (): void => {
+    if (!save?.libertados || !club) return
+    const opponentId = libertadosOpponentId(save.libertados)
+    const base = opponentId ? clubById(opponentId) : null
+    if (!base) return
+    if (save.libertados.results.length === 0) {
+      setLibertadosCeremony(true)
+      return
+    }
+    initAudio()
+    const seed = Date.now() & 0xffffffff
+    const opponent = displayClub(save, base)
+    markPendingMatch(localStorage, { opponentId: opponent.id, kind: 'libertados', seed })
+    setMatchSetup({ seed, kind: 'libertados', club, opponent })
+    setScreen('match')
+  }
+
+  const finishLibertadosCeremony = (): void => {
+    setLibertadosCeremony(false)
+    startLibertadosMatch()
+  }
+
   const onMatchFinished = (record: MatchRecord): void => {
     clearPendingMatch(localStorage)
     if (save && matchSetup) {
@@ -381,7 +429,9 @@ export const App = () => {
     }
     setMatchSetup(null)
     setScreen('tabs')
-    setTab('matches')
+    // A Copa continua pela Home (próximo jogo, classificação ou encerramento).
+    // Só a rodada da liga desemboca diretamente no histórico de partidas.
+    setTab(matchSetup?.kind === 'torneio' ? 'home' : 'matches')
   }
 
   const onNewSeason = (): void => {
@@ -511,7 +561,9 @@ export const App = () => {
           <span className="tabs-brand">
             {matchSetup.kind === 'torneio'
               ? 'Jogo da seleção'
-              : `Rodada ${save.season.currentRound + 1}`}
+              : matchSetup.kind === 'libertados'
+                ? LIBERTADOS_NAME
+                : `Rodada ${save.season.currentRound + 1}`}
           </span>
           <h1 className="tabs-title">Dia de jogo</h1>
         </header>
@@ -521,13 +573,25 @@ export const App = () => {
           playerName={save.playerName}
           club={matchSetup.club}
           opponent={matchSetup.opponent}
-          competition={matchSetup.kind === 'torneio' ? 'selecao' : 'liga'}
-          /* mata-mata não aceita empate: o lance dos dados decide a vaga */
+          competition={
+            matchSetup.kind === 'torneio'
+              ? 'selecao'
+              : matchSetup.kind === 'libertados'
+                ? 'libertados'
+                : 'liga'
+          }
+          /* mata-mata não aceita empate: o lance dos dados decide a vaga. Na
+             Libertados só a VOLTA é decisiva — a ida pode terminar empatada. */
           decisive={
-            matchSetup.kind === 'torneio' &&
-            save.tournament !== null &&
-            save.tournament.stage !== 'groups' &&
-            isTournamentRunning(save.tournament.stage)
+            (matchSetup.kind === 'torneio' &&
+              save.tournament !== null &&
+              save.tournament.stage !== 'groups' &&
+              isTournamentRunning(save.tournament.stage)) ||
+            (matchSetup.kind === 'libertados' &&
+              save.libertados !== null &&
+              save.libertados.stage !== 'groups' &&
+              save.libertados.round === 1 &&
+              isLibertadosRunning(save.libertados.stage))
           }
           attributes={save.attributes}
           perks={save.perks}
@@ -546,9 +610,17 @@ export const App = () => {
               matchSetup.kind === 'torneio' ? 'selecao' : 'liga',
             ),
           )}
-          opponentDivision={matchSetup.kind === 'liga' ? divisionOf(save.divisions, matchSetup.opponent.id) : -1}
-          lineup={matchSetup.kind === 'liga' ? save.lineup : undefined}
-          signings={matchSetup.kind === 'liga' ? save.signings : undefined}
+          /* Libertados trata o adversário como clube de Série A — os
+             continentais não entram na pirâmide de divisões nacional. */
+          opponentDivision={
+            matchSetup.kind === 'torneio'
+              ? -1
+              : matchSetup.kind === 'libertados'
+                ? 0
+                : divisionOf(save.divisions, matchSetup.opponent.id)
+          }
+          lineup={matchSetup.kind === 'torneio' ? undefined : save.lineup}
+          signings={matchSetup.kind === 'torneio' ? undefined : save.signings}
           onExit={onMatchFinished}
         />
         <footer className="footer">PROMESSA · em desenvolvimento</footer>
@@ -666,6 +738,15 @@ export const App = () => {
         />
       )}
 
+      {libertadosCeremony && save.libertados && (
+        <LibertadosIntro
+          state={save.libertados}
+          clubName={club.name}
+          playerName={save.playerName}
+          onDone={finishLibertadosCeremony}
+        />
+      )}
+
       {tab === 'home' && (
         <HomeTab
           save={save}
@@ -676,6 +757,8 @@ export const App = () => {
           onStartTournament={startTournament}
           onPlayTournamentMatch={startTournamentMatch}
           onDismissTournament={() => save && updateSave(applyTournament(save, null))}
+          onPlayLibertadosMatch={startLibertadosMatch}
+          onDismissLibertados={() => save && updateSave(applyLibertados(save, null))}
           onDismissMovement={() => save && updateSave({ ...save, divisionMovement: null })}
           onNewSeason={onNewSeason}
           onTraining={() => setScreen('training')}
@@ -691,6 +774,7 @@ export const App = () => {
       {tab === 'selecao' && save.tournament && (
         <NationalTab save={save} onSaveChange={updateSave} />
       )}
+      {tab === 'libertados' && <LibertadosTab save={save} />}
       {tab === 'team' && <TeamTab save={save} club={club} onSaveChange={updateSave} />}
       {tab === 'market' && <MarketTab save={save} onSaveChange={updateSave} />}
       {tab === 'profile' && (

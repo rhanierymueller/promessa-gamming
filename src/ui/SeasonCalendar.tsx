@@ -2,12 +2,21 @@ import { ChevronLeft, ChevronRight, Trophy } from 'lucide-react'
 import { useState } from 'react'
 import { clubById } from '../data/clubs'
 import { nationById } from '../data/nations'
-import { matchDaysFor, roundDate, seasonYearFor, tournamentDate } from '../engine/career/calendar'
+import {
+  leagueWeekdayFor,
+  cupWeekdayFor,
+  libertadosDate,
+  roundDate,
+  seasonYearFor,
+  tournamentDate,
+} from '../engine/career/calendar'
+import { libertadosMatchIndex, MATCHES_PER_EDITION, LIBERTADOS_NAME } from '../engine/libertados/types'
 import { fixturesForRound } from '../engine/season/season'
 import { SEASON_ROUNDS } from '../engine/season/types'
 import { TOURNAMENT_NAMES, tournamentKindForYear } from '../engine/tournament/tournament'
-import { clubDisplayName, displayClub, type PlayerSave } from '../state/save'
+import { clubDisplayName, displayClub, isInLibertados, type PlayerSave } from '../state/save'
 import { ClubCrest } from './ClubCrest'
+import './styles/libertados.css'
 
 /** Calendário mensal estilo FIFA: cada dia é uma célula; jogo aparece no dia dele. */
 
@@ -42,7 +51,7 @@ const buildSchedule = (save: PlayerSave): ReadonlyMap<string, DayMatch> => {
     const record = played
       ? leagueGames[leagueGames.length - save.season.currentRound + round] ?? null
       : null
-    const date = roundDate(save.careerYear, round)
+    const date = roundDate(save.careerYear, round, isInLibertados(save))
     schedule.set(`${date.month}-${date.day}`, {
       opponentId: fixture.homeId === save.clubId ? fixture.awayId : fixture.homeId,
       isHome: fixture.homeId === save.clubId,
@@ -57,10 +66,29 @@ const WEEKDAY_NAMES = ['domingos', 'segundas', 'terças', 'quartas', 'quintas', 
 
 export const SeasonCalendar = ({ save }: SeasonCalendarProps) => {
   const year = seasonYearFor(save.careerYear)
-  const matchDayLabel = matchDaysFor(save.careerYear)
-    .map((weekday) => WEEKDAY_NAMES[weekday])
-    .join(' e ')
+  const inLibertados = isInLibertados(save)
+  const matchDayLabel = WEEKDAY_NAMES[leagueWeekdayFor(save.careerYear)]
+  const cupDayLabel = WEEKDAY_NAMES[cupWeekdayFor(save.careerYear)]
   const schedule = buildSchedule(save)
+
+  /** Datas da Libertados indexadas por "mês-dia", com o adversário quando houver. */
+  const cupSchedule = new Map<string, string | null>()
+  if (save.libertados) {
+    const state = save.libertados
+    for (let index = 0; index < MATCHES_PER_EDITION; index++) {
+      const date = libertadosDate(save.careerYear, index)
+      const played = state.results.find(
+        (result) =>
+          libertadosMatchIndex(result.stage, result.round) === index &&
+          (result.homeId === save.clubId || result.awayId === save.clubId),
+      )
+      const opponentId = played
+        ? played.homeId === save.clubId ? played.awayId : played.homeId
+        : null
+      cupSchedule.set(`${date.month}-${date.day}`, opponentId)
+    }
+  }
+
   const nextRound = Math.min(save.season.currentRound, SEASON_ROUNDS - 1)
   const initialMonth = save.season.currentRound >= SEASON_ROUNDS
     ? 11
@@ -149,6 +177,31 @@ export const SeasonCalendar = ({ save }: SeasonCalendarProps) => {
               </div>
             )
           }
+          const libertadosOpponentId = cupSchedule.get(`${month}-${day}`)
+          if (libertadosOpponentId !== undefined) {
+            const rival = libertadosOpponentId ? clubById(libertadosOpponentId) : null
+            return (
+              <div key={day} className="cal-day cal-day-match cal-day-libertados" role="gridcell">
+                <span className="cal-day-num">{day}</span>
+                {rival ? (
+                  <>
+                    <ClubCrest
+                      club={displayClub(save, rival)}
+                      customUrl={save.customClubCrests[rival.id]}
+                      size={18}
+                    />
+                    <span className="cal-day-opponent">{clubDisplayName(save, rival.id)}</span>
+                  </>
+                ) : (
+                  <>
+                    <Trophy size={16} aria-hidden="true" className="cal-day-cup-icon" />
+                    <span className="cal-day-opponent">{LIBERTADOS_NAME}</span>
+                  </>
+                )}
+                <span className="cal-day-venue">continental</span>
+              </div>
+            )
+          }
           if (isCupDay) {
             return (
               <div key={day} className="cal-day cal-day-match cal-day-cup" role="gridcell">
@@ -167,8 +220,9 @@ export const SeasonCalendar = ({ save }: SeasonCalendarProps) => {
         })}
       </div>
       <p className="muted table-note">
-        Rodadas às {matchDayLabel}
-        {cupName ? ` · ${cupName} em dezembro.` : ' · sem competição de seleção neste ano.'}
+        Rodadas {inLibertados ? 'quinzenais' : 'semanais'} às {matchDayLabel}
+        {inLibertados ? ` · ${LIBERTADOS_NAME} às ${cupDayLabel}, de quinze em quinze dias.` : ''}
+        {cupName ? ` · ${cupName} em dezembro.` : ''}
       </p>
     </div>
   )
