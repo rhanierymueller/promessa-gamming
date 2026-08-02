@@ -4,9 +4,11 @@
  * O alternador daqui não usa .subtabs: reaproveita o grupo de botões da
  * partida (.live-group/.live-btn), e por isso continuou com o bloco dourado
  * chapado depois que as subabas da Liga mudaram. Escopo no .national-switch
- * de propósito — a partida usa as mesmas classes e não está neste passo.
+ * e no .libertados-switch de propósito — a partida usa as mesmas classes e
+ * não está neste passo.
  */
-.tab-panel .national-switch {
+.tab-panel .national-switch,
+.tab-panel .libertados-switch {
   gap: 0;
   padding: 0;
   background: none;
@@ -14,7 +16,8 @@
   border-bottom: 1px solid var(--line);
 }
 
-.tab-panel .national-switch .live-btn {
+.tab-panel .national-switch .live-btn,
+.tab-panel .libertados-switch .live-btn {
   position: relative;
   flex: 1;
   padding: 11px 6px;
@@ -28,16 +31,19 @@
   text-transform: uppercase;
 }
 
-.tab-panel .national-switch .live-btn:hover {
+.tab-panel .national-switch .live-btn:hover,
+.tab-panel .libertados-switch .live-btn:hover {
   color: var(--text);
 }
 
-.tab-panel .national-switch .live-btn-active {
+.tab-panel .national-switch .live-btn-active,
+.tab-panel .libertados-switch .live-btn-active {
   background: none;
   color: var(--accent);
 }
 
-.tab-panel .national-switch .live-btn-active::after {
+.tab-panel .national-switch .live-btn-active::after,
+.tab-panel .libertados-switch .live-btn-active::after {
   content: '';
   position: absolute;
   right: 0;
@@ -48,7 +54,8 @@
   box-shadow: 0 0 12px rgba(255, 210, 63, 0.85);
 }
 
-.tab-panel .national-switch .live-btn:focus-visible {
+.tab-panel .national-switch .live-btn:focus-visible,
+.tab-panel .libertados-switch .live-btn:focus-visible {
   outline: none;
   color: var(--text);
   background: rgba(255, 210, 63, 0.1);

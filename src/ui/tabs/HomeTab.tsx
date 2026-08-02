@@ -254,7 +254,7 @@ export const HomeTab = ({
         </div>
       )}
 
-      {libertadosActive && libertadosRival && (
+      {libertadosActive && libertadosRival && upNext === 'libertados' && (
         <div className="card callup-card">
           <div>
             <strong>{LIBERTADOS_NAME} · {LIBERTADOS_STAGE_NAMES[libertados.stage]}</strong>
@@ -266,9 +266,6 @@ export const HomeTab = ({
                   : 'Jogo de volta: '}
               {club.name} × {libertadosRival.name}
             </p>
-            {upNext === 'liga' && (
-              <p className="muted">A rodada da liga vem antes deste jogo.</p>
-            )}
           </div>
           <button className="btn callup-btn" onClick={onPlayLibertadosMatch}>Jogar</button>
         </div>

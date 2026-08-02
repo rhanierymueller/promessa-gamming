@@ -2277,6 +2277,7 @@ h1 {
   .tab-panel > .next-match,
   .tab-panel > .callup-card,
   .tab-panel > .news-center,
+  .tab-panel > .libertados-groups,
   .tab-panel > .card-wide {
     grid-column: 1 / -1;
   }
