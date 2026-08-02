@@ -111,6 +111,25 @@ describe('newsFor', () => {
   })
 })
 
+describe('notícia do campeão continental', () => {
+  test('o título de outro clube vira manchete no feed', () => {
+    const save = createSave({ playerName: 'Tuca', clubId: 'leoes-capital' })!
+    const comCampeao = {
+      ...save,
+      continentalChampions: [{ year: save.careerYear, clubId: 'sa-charrua' }],
+    }
+
+    const manchetes = newsFor(comCampeao)
+
+    expect(manchetes.some((item) => item.headline.includes('Club Charrúa'))).toBe(true)
+  })
+
+  test('sem campeão continental, nenhuma manchete continental aparece', () => {
+    const save = createSave({ playerName: 'Tuca', clubId: 'leoes-capital' })!
+    expect(newsFor(save).some((item) => item.id.startsWith('libertados'))).toBe(false)
+  })
+})
+
 describe('rival seleção no noticiário', () => {
   test('jogo de seleção mostra os dois países, nunca o clube nem ???', () => {
     // Arrange
