@@ -212,3 +212,23 @@
 .next-match-cup > .card-label {
   color: #f2c230;
 }
+
+/* nome do clube com o país embaixo: em jogo de Copa, de onde vem o rival conta */
+.next-club-id {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+
+.next-club-away .next-club-id {
+  align-items: flex-end;
+}
+
+.next-club-nation {
+  font-size: 0.5em;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.62;
+}

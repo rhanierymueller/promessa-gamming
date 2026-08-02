@@ -1,6 +1,7 @@
 import { Flame, PartyPopper, Play, Sparkles, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { clubById, type Club } from '../../data/clubs'
 import { nationById } from '../../data/nations'
+import { nationOf } from '../../engine/libertados/draw'
 import { isTournamentRunning, seasonEndAction } from '../../engine/career/seasonEnd'
 import { eventById } from '../../engine/career/events'
 import { PERK_OFFER_REASON, perkById, type PerkId } from '../../engine/career/perks'
@@ -64,6 +65,10 @@ interface HomeTabProps {
 }
 
 const ordinal = (position: number): string => `${position}º`
+
+/** País do clube, para o card de Copa dizer de onde vem o adversário. */
+const countryNameOf = (clubId: string): string =>
+  nationById(nationOf(clubId))?.name ?? ''
 
 // STAGE_NAMES cobre todas as fases, inclusive oitavas e quartas — a lista
 // local ficava desatualizada a cada mudança de formato
@@ -362,11 +367,21 @@ export const HomeTab = ({
             <div className="next-match-clubs">
               <span className="next-club">
                 <ClubCrest club={homeClub} customUrl={save.customClubCrests[homeClub.id]} size={30} />
-                {homeClub.name}
+                <span className="next-club-id">
+                  {homeClub.name}
+                  {isCupNext && (
+                    <small className="next-club-nation">{countryNameOf(homeClub.id)}</small>
+                  )}
+                </span>
               </span>
               <span className="next-vs">×</span>
-              <span className="next-club">
-                {awayClub.name}
+              <span className="next-club next-club-away">
+                <span className="next-club-id">
+                  {awayClub.name}
+                  {isCupNext && (
+                    <small className="next-club-nation">{countryNameOf(awayClub.id)}</small>
+                  )}
+                </span>
                 <ClubCrest club={awayClub} customUrl={save.customClubCrests[awayClub.id]} size={30} />
               </span>
             </div>
