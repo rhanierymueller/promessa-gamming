@@ -3506,15 +3506,12 @@ Ainda em `src/ui/App.tsx`, adicionar depois de `startTournamentMatch` (linha 372
   /* a abertura da Libertados roda uma vez, antes do primeiro jogo da edição */
   const [libertadosCeremony, setLibertadosCeremony] = useState(false)
 
-  const startLibertadosMatch = (): void => {
+  /** Abre a tela de partida da Libertados, sem passar pela cerimônia. */
+  const openLibertadosMatch = (): void => {
     if (!save?.libertados || !club) return
     const opponentId = libertadosOpponentId(save.libertados)
     const base = opponentId ? clubById(opponentId) : null
     if (!base) return
-    if (save.libertados.results.length === 0) {
-      setLibertadosCeremony(true)
-      return
-    }
     initAudio()
     const seed = Date.now() & 0xffffffff
     const opponent = displayClub(save, base)
@@ -3523,9 +3520,26 @@ Ainda em `src/ui/App.tsx`, adicionar depois de `startTournamentMatch` (linha 372
     setScreen('match')
   }
 
+  const startLibertadosMatch = (): void => {
+    if (!save?.libertados) return
+    // a edição estreia pela cerimônia; dela se vai direto para o jogo
+    if (save.libertados.results.length === 0) {
+      setLibertadosCeremony(true)
+      return
+    }
+    openLibertadosMatch()
+  }
+
+  /*
+   * Sair da cerimônia abre a partida DIRETO. Voltar por `startLibertadosMatch`
+   * caía de novo no teste de "edição sem jogos" — que continua verdadeiro
+   * antes do primeiro jogo — e reabria a cerimônia no mesmo ciclo de
+   * renderização: a tela ficava transparente, mas o overlay seguia montado por
+   * cima de tudo, engolindo os cliques.
+   */
   const finishLibertadosCeremony = (): void => {
     setLibertadosCeremony(false)
-    startLibertadosMatch()
+    openLibertadosMatch()
   }
 ```
 
