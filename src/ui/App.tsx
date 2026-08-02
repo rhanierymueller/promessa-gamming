@@ -37,6 +37,7 @@ import {
   applyLibertados,
   applySeason,
   applyTournament,
+  continentalTitleYears,
   currentPlayerAge,
   choosePerk,
   dismissEventNote,
@@ -636,6 +637,7 @@ export const App = () => {
                 ? 0
                 : divisionOf(save.divisions, matchSetup.opponent.id)
           }
+          continentalTitleYears={continentalTitleYears(save, matchSetup.opponent.id)}
           lineup={matchSetup.kind === 'torneio' ? undefined : save.lineup}
           signings={matchSetup.kind === 'torneio' ? undefined : save.signings}
           onExit={onMatchFinished}

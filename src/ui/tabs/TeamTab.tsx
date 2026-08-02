@@ -18,6 +18,7 @@ import { myTeamRating } from '../../engine/squad/myTeam'
 import { FORMATIONS, formationIdFor } from '../../engine/squad/formation'
 import {
   clubDisplayName,
+  continentalTitleYears,
   currentPlayerAge,
   displayClub,
   MAX_CLUB_NAME,
@@ -73,7 +74,13 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
   const squad = useMemo(() => {
     const generated = squadPlayersFor(squadClub, save.careerYear, save.appearance.gender)
     if (squadClub.id !== save.clubId) {
-      return rivalSquadFor(squadClub, divisionOf(save.divisions, squadClub.id), save.careerYear, save.appearance.gender)
+      return rivalSquadFor(
+        squadClub,
+        divisionOf(save.divisions, squadClub.id),
+        save.careerYear,
+        save.appearance.gender,
+        continentalTitleYears(save, squadClub.id),
+      )
     }
     const base = squadWithSignings(generated, save.signings, save.careerYear)
     // o SEU craque entra com atributos reais; os demais ganham o batismo local
@@ -87,7 +94,7 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
           ? { ...player, name: save.customPlayerNames[player.id] }
           : player,
     )
-  }, [squadClub, save.careerYear, save.clubId, save.divisions, save.playerName, save.attributes, save.shirtNumber, save.playerPosition, save.customPlayerNames, save.signings])
+  }, [squadClub, save.careerYear, save.clubId, save.divisions, save.playerName, save.attributes, save.shirtNumber, save.playerPosition, save.customPlayerNames, save.signings, save.continentalChampions])
 
   // a etiqueta REFORÇO só vale na temporada da chegada
   const newSigningIds = useMemo(

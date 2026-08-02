@@ -36,7 +36,7 @@ import trophySerieD from '../../assets/trophies/serie-d.png'
 import { titlePrizeFor, formatMoney } from '../../engine/market/market'
 import { myTeamSectors, opponentSectors } from '../../engine/squad/myTeam'
 import { SectorBars } from '../SectorBars'
-import { displayClub, type PlayerSave } from '../../state/save'
+import { continentalTitleYears, displayClub, type PlayerSave } from '../../state/save'
 import { ClubCrest } from '../ClubCrest'
 import { usePlayerPortrait } from '../usePlayerPortrait'
 import { NewsCarousel } from '../NewsCarousel'
@@ -394,6 +394,7 @@ export const HomeTab = ({
                 // adversário continental joga a primeira divisão do país dele
                 isCupNext ? 0 : divisionOf(save.divisions, rival.id),
                 save.appearance.gender,
+                continentalTitleYears(save, rival.id),
               )}
               myAbbr={club.abbr}
               theirAbbr={rival.abbr}

@@ -244,8 +244,12 @@ export interface ContinentalTitle {
   readonly clubId: string
 }
 
-/** Prêmio do título continental — acima do da Série A, como o peso da taça. */
-export const LIBERTADOS_PRIZE = 10_000_000
+/**
+ * Prêmio do título continental — acima do da Série A, como o peso da taça.
+ * Dinheiro pesado o bastante para mudar o mercado: veja `continentalTitleYears`
+ * e o reforço de campeão em `engine/market/aiTransfers.ts`.
+ */
+export const LIBERTADOS_PRIZE = 50_000_000
 /** Quantos clubes da Série A vão à Libertados. */
 export const LIBERTADOS_SPOTS = 4
 /** Quantos campeões continentais o save guarda. */
@@ -556,6 +560,15 @@ export const withTournamentState = (save: PlayerSave, state: TournamentState): P
 
 /** O clube está na Libertados nesta temporada? Decide o ritmo do calendário. */
 export const isInLibertados = (save: PlayerSave): boolean => save.libertados !== null
+
+/**
+ * Anos em que este clube foi campeão continental. Alimenta o reforço de
+ * pós-título do mercado da IA (`engine/market/aiTransfers.ts`): o cofre de
+ * `LIBERTADOS_PRIZE` compra um craque na janela seguinte ao título — por
+ * baixo dos panos, sem tela dedicada.
+ */
+export const continentalTitleYears = (save: PlayerSave, clubId: string): readonly number[] =>
+  save.continentalChampions.filter((title) => title.clubId === clubId).map((title) => title.year)
 
 /**
  * Aplica o estado da Libertados. Título dá TAÇA e prêmio em dinheiro; o campeão

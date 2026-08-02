@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { clubById, CLUBS } from '../../data/clubs'
+import { clubById, CLUBS, type Club } from '../../data/clubs'
 import { SQUAD_SIZE } from '../squad/players'
 import { aiTransfersFor, blockbusterOfTheYear, rivalSquadFor } from './aiTransfers'
 
@@ -92,6 +92,116 @@ describe('mercado dos rivais (contratações da IA)', () => {
       expect(bomb!.overallAtSigning).toBeGreaterThanOrEqual(80)
       expect(clubById(bomb!.clubId)).toBeDefined()
       expect(bomb!.clubId).not.toBe(clubD.id)
+    }
+  })
+})
+
+describe('reforço do campeão continental (cofre de 50 milhões)', () => {
+  const aiClubs = CLUBS.filter((club) => club.division <= 1)
+  const SCAN_YEARS = 15
+
+  /**
+   * Varredura determinística: acha um clube+ano em que o sorteio NATURAL
+   * (sem título nenhum) não traria ninguém — a base dos testes de "contrata
+   * mesmo quando o sorteio diria que não".
+   */
+  const anoSemContratacaoNatural = (): { club: Club; year: number } => {
+    for (const club of aiClubs) {
+      for (let year = 1; year <= SCAN_YEARS; year++) {
+        const contratacoesDoAno = aiTransfersFor(club, club.division, year).filter((t) => t.year === year)
+        if (contratacoesDoAno.length === 0) return { club, year }
+      }
+    }
+    throw new Error('nenhum ano sem contratação natural encontrado na varredura — ajuste SCAN_YEARS')
+  }
+
+  /**
+   * Varredura determinística: acha um clube+ano em que a PRIMEIRA contratação
+   * do ano já é uma bomba pelo sorteio natural — permite comparar a mesma
+   * rolagem de atributos com e sem o título (só o alvo de força muda).
+   */
+  const anoComBombaNatural = (): { club: Club; year: number } => {
+    for (const club of aiClubs) {
+      for (let year = 1; year <= SCAN_YEARS; year++) {
+        const primeiraDoAno = aiTransfersFor(club, club.division, year).filter((t) => t.year === year)[0]
+        if (primeiraDoAno?.isBlockbuster) return { club, year }
+      }
+    }
+    throw new Error('nenhuma bomba natural encontrada na varredura — ajuste SCAN_YEARS')
+  }
+
+  test('clube campeão contrata no ano seguinte mesmo quando o sorteio diria que não', () => {
+    // Arrange: ano em que o sorteio natural não traria ninguém para este clube
+    const { club, year } = anoSemContratacaoNatural()
+
+    // Act
+    const semTitulo = aiTransfersFor(club, club.division, year).filter((t) => t.year === year)
+    const comTitulo = aiTransfersFor(club, club.division, year, [year - 1]).filter((t) => t.year === year)
+
+    // Assert
+    expect(semTitulo).toHaveLength(0)
+    expect(comTitulo.length).toBeGreaterThanOrEqual(1)
+  })
+
+  test('a contratação forçada do pós-título é sempre uma bomba', () => {
+    // Arrange: mesmo cenário acima — sem o título, este clube não contrataria ninguém
+    const { club, year } = anoSemContratacaoNatural()
+
+    // Act
+    const [forcada] = aiTransfersFor(club, club.division, year, [year - 1]).filter((t) => t.year === year)
+
+    // Assert
+    expect(forcada.isBlockbuster).toBe(true)
+  })
+
+  test('a bomba do campeão é mais forte que uma bomba comum do mesmo clube, mesmo ano', () => {
+    // Arrange: ano em que a bomba SAI de qualquer jeito — mesma rolagem de posição,
+    // idade, potencial e atributos; só o alvo de força muda com o título
+    const { club, year } = anoComBombaNatural()
+
+    // Act
+    const bombaComum = aiTransfersFor(club, club.division, year).find((t) => t.year === year)!
+    const bombaDeCampeao = aiTransfersFor(club, club.division, year, [year - 1]).find((t) => t.year === year)!
+
+    // Assert
+    expect(bombaComum.isBlockbuster).toBe(true)
+    expect(bombaDeCampeao.isBlockbuster).toBe(true)
+    expect(bombaDeCampeao.signing.name).toBe(bombaComum.signing.name)
+    expect(bombaDeCampeao.overallAtSigning).toBeGreaterThan(bombaComum.overallAtSigning)
+  })
+
+  test('clube sem título nenhum tem exatamente as mesmas contratações de antes da mudança', () => {
+    // Arrange + Act: impressão digital das contratações do clubA em 12 temporadas,
+    // capturada da implementação ANTES desta mudança — prova de que o
+    // determinismo dos clubes sem título continua intacto
+    const impressaoDigital = aiTransfersFor(clubA, clubA.division, 12)
+      .map((t) => `${t.year}|${t.isBlockbuster}|${t.overallAtSigning}|${t.signing.name}|${t.signing.price}`)
+      .join(';')
+
+    // Assert
+    expect(impressaoDigital).toBe(
+      '1|false|60|Rodrigo Sagredo|560000;2|false|85|Marco Ríos|65920000;6|false|71|Rodrigo Dias|11080000;' +
+        '7|false|62|Felipe Silva|4590000;8|false|76|Rodrigo Araya|15880000;9|false|58|Fábio Vieira|220000;' +
+        '10|false|59|Sven Meijer|360000;12|false|61|Márcio Costa|770000;12|false|71|Eduard Ferraresi|11300000',
+    )
+  })
+
+  test('rivalSquadFor também recebe o reforço do campeão mesmo com o sorteio dizendo não', () => {
+    // Arrange
+    const { club, year } = anoSemContratacaoNatural()
+    const idsForcados = aiTransfersFor(club, club.division, year, [year - 1])
+      .filter((t) => t.year === year)
+      .map((t) => t.signing.id)
+
+    // Act
+    const semTitulo = rivalSquadFor(club, club.division, year)
+    const comTitulo = rivalSquadFor(club, club.division, year, 'masculino', [year - 1])
+
+    // Assert
+    expect(idsForcados.length).toBeGreaterThanOrEqual(1)
+    for (const id of idsForcados) {
+      expect(semTitulo.some((player) => player.id === id)).toBe(false)
+      expect(comTitulo.some((player) => player.id === id)).toBe(true)
     }
   })
 })

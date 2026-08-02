@@ -109,6 +109,8 @@ interface MatchScreenProps {
   readonly opponent: Club
   /** Divisão do adversário (-1 = seleção/sem mercado da IA). */
   readonly opponentDivision?: number
+  /** Anos em que o ADVERSÁRIO levantou a taça continental — cofre cheio na janela seguinte. */
+  readonly continentalTitleYears?: readonly number[]
   readonly competition?: Competition
   /**
    * Jogo que não pode terminar empatado (mata-mata de seleção). Empatou no
@@ -177,6 +179,7 @@ export const MatchScreen = ({
   stadiumUrl,
   signings = [],
   opponentDivision = -1,
+  continentalTitleYears = [],
   onExit,
 }: MatchScreenProps) => {
   const userPortrait = usePlayerPortrait(appearance)
@@ -207,10 +210,10 @@ export const MatchScreen = ({
     [effectiveLineup, teamPlayers, formation],
   )
   const opponentRating = useMemo(() => {
-    const squad = rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender)
+    const squad = rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender, continentalTitleYears)
     const lineup = bestLineup(squad, FORMATIONS['4-3-3'])
     return lineupRating(lineup.map((index) => squad[index]), FORMATIONS['4-3-3'].slots)
-  }, [opponent, opponentDivision, careerYear, appearance.gender])
+  }, [opponent, opponentDivision, careerYear, appearance.gender, continentalTitleYears])
 
   /* setores do SEU time e do rival: é o confronto entre eles que decide o jogo */
   const mySectors = useMemo(
@@ -222,13 +225,13 @@ export const MatchScreen = ({
     [effectiveLineup, teamPlayers, formation],
   )
   const theirSectors = useMemo(() => {
-    const squad = rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender)
+    const squad = rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender, continentalTitleYears)
     // o rival entra com o melhor time dele, não com os 11 primeiros da lista
     return sectorRatings(
       bestLineup(squad, FORMATIONS['4-3-3']).map((index) => squad[index]),
       FORMATIONS['4-3-3'],
     )
-  }, [opponent, opponentDivision, careerYear, appearance.gender])
+  }, [opponent, opponentDivision, careerYear, appearance.gender, continentalTitleYears])
 
   const config = useMemo(() => {
     const byRatings = matchConfigForSectors(DEFAULT_MATCH_CONFIG, mySectors, theirSectors)
@@ -286,9 +289,9 @@ export const MatchScreen = ({
   }, [teamSquad, formation, userIndex])
   const opponentPitchPlayers = useMemo(() => {
     // os nomes em campo são os da MELHOR escalação do rival, não os 11 primeiros
-    const squad = rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender)
+    const squad = rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender, continentalTitleYears)
     return bestLineup(squad, FORMATIONS['4-3-3']).map((index) => squad[index])
-  }, [opponent, opponentDivision, careerYear, appearance.gender])
+  }, [opponent, opponentDivision, careerYear, appearance.gender, continentalTitleYears])
   const opponentSquad = useMemo(
     () => opponentPitchPlayers.map((player) => player.name),
     [opponentPitchPlayers],

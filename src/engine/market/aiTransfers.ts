@@ -37,6 +37,11 @@ const AI_MIN_AGE = 18
 const AI_MAX_AGE = 31
 const ATTR_SPREAD = 5
 const BLOCKBUSTER_BOOST = 14
+/**
+ * Reforço do clube campeão continental, na janela seguinte ao título — o
+ * dobro da bomba comum, porque 50 milhões (LIBERTADOS_PRIZE) compram melhor.
+ */
+const CONTINENTAL_CHAMPION_BOOST = 28
 const GOALKEEPER_SHARE = 0.06
 
 const LINE_POSITIONS: readonly SquadPosition[] = ['LD', 'ZAG', 'LE', 'VOL', 'MEI', 'PON', 'ATA']
@@ -57,6 +62,8 @@ export const aiTransfersFor = (
   club: Club,
   division: number,
   careerYear: number,
+  /** Anos em que o clube levantou a taça continental — cofre cheio na janela seguinte. */
+  continentalTitleYears: readonly number[] = [],
 ): readonly AiTransfer[] => {
   if (division > AI_DIVISION_LIMIT || division < 0) return []
   const transfers: AiTransfer[] = []
@@ -67,8 +74,17 @@ export const aiTransfersFor = (
     let state = hashSeed(`${club.id}-mercado-ia-${year}`)
     const [countRoll, s1] = nextRoll(state)
     state = s1
-    const count =
+    const rolledCount =
       countRoll < NO_SIGNING_SHARE ? 0 : countRoll < 1 - DOUBLE_SIGNING_SHARE ? 1 : 2
+    /*
+     * Cofre cheio na janela seguinte ao título: o campeão continental do ano
+     * passado contrata pelo menos um reforço, mesmo que o sorteio natural
+     * desse zero. O roll acima já aconteceu igual para todo mundo — só o
+     * RESULTADO é sobrescrito, e só neste ano; anos sem título (a imensa
+     * maioria) seguem com a mesma contagem de sempre.
+     */
+    const isPostTitleYear = continentalTitleYears.includes(year - 1)
+    const count = isPostTitleYear ? Math.max(rolledCount, 1) : rolledCount
 
     for (let index = 0; index < count; index++) {
       const [positionRoll, s2] = nextRoll(state)
@@ -87,7 +103,10 @@ export const aiTransfersFor = (
 
       const [bombRoll, s4] = nextRoll(state)
       state = s4
-      const isBlockbuster = bombRoll < BLOCKBUSTER_SHARE
+      // a PRIMEIRA contratação do ano pós-título é garantidamente uma bomba —
+      // de novo, o roll aconteceu igual; só o resultado muda, e só para ela
+      const isChampionSigning = isPostTitleYear && index === 0
+      const isBlockbuster = isChampionSigning ? true : bombRoll < BLOCKBUSTER_SHARE
 
       const [potentialRoll, s5] = nextRoll(state)
       state = s5
@@ -98,7 +117,8 @@ export const aiTransfersFor = (
             ? 'medio'
             : 'baixo'
 
-      const target = clubBase + (isBlockbuster ? BLOCKBUSTER_BOOST : 0)
+      const target =
+        clubBase + (isChampionSigning ? CONTINENTAL_CHAMPION_BOOST : isBlockbuster ? BLOCKBUSTER_BOOST : 0)
       const attrs = {} as Record<'pac' | 'fin' | 'pas' | 'dri' | 'def' | 'fis', number>
       for (const key of ['pac', 'fin', 'pas', 'dri', 'def', 'fis'] as const) {
         const [attrRoll, sN] = nextRoll(state)
@@ -156,10 +176,12 @@ export const rivalSquadFor = (
   division: number,
   careerYear: number,
   gender: PlayerGender = 'masculino',
+  /** Anos em que o clube levantou a taça continental — repassa a aiTransfersFor. */
+  continentalTitleYears: readonly number[] = [],
 ): readonly SquadPlayer[] =>
   squadWithSignings(
     squadPlayersFor(club, careerYear, gender),
-    aiTransfersFor(club, division, careerYear).map((transfer) => transfer.signing),
+    aiTransfersFor(club, division, careerYear, continentalTitleYears).map((transfer) => transfer.signing),
     careerYear,
     -1,
   )

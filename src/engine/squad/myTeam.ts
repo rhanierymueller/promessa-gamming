@@ -36,8 +36,14 @@ export const myTeamRating = (save: PlayerSave, club: Club): number => {
  * Força padrão de um clube rival (11 titulares, formação clássica).
  * Com a divisão informada, inclui as contratações da IA (Séries A/B).
  */
-export const opponentTeamRating = (club: Club, careerYear: number, division = -1): number => {
-  const squad = rivalSquadFor(club, division, careerYear)
+export const opponentTeamRating = (
+  club: Club,
+  careerYear: number,
+  division = -1,
+  /** Anos em que o clube levantou a taça continental — repassa a rivalSquadFor. */
+  continentalTitleYears: readonly number[] = [],
+): number => {
+  const squad = rivalSquadFor(club, division, careerYear, 'masculino', continentalTitleYears)
   const lineup = bestLineup(squad, FORMATIONS['4-3-3'])
   return lineupRating(lineup.map((index) => squad[index]), FORMATIONS['4-3-3'].slots)
 }
@@ -55,5 +61,10 @@ export const opponentSectors = (
   careerYear: number,
   division = -1,
   gender: PlayerGender = 'masculino',
+  /** Anos em que o clube levantou a taça continental — repassa a rivalSquadFor. */
+  continentalTitleYears: readonly number[] = [],
 ): SectorRatings =>
-  sectorRatings(rivalSquadFor(club, division, careerYear, gender).slice(0, 11), FORMATIONS['4-3-3'])
+  sectorRatings(
+    rivalSquadFor(club, division, careerYear, gender, continentalTitleYears).slice(0, 11),
+    FORMATIONS['4-3-3'],
+  )

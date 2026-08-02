@@ -12,6 +12,7 @@ import { createLibertados } from '../engine/libertados/libertados'
 import {
   applyLibertados,
   applyTournament,
+  continentalTitleYears,
   displayClub,
   HISTORY_LIMIT,
   isInLibertados,
@@ -902,6 +903,26 @@ describe('Copa Libertados no save', () => {
     expect(primeiro.budget).toBe(save.budget + LIBERTADOS_PRIZE)
     expect(segundo.trophies).toHaveLength(1)
     expect(segundo.budget).toBe(primeiro.budget)
+  })
+
+  test('prêmio da Libertados é de 50 milhões — dinheiro pesado o suficiente para mudar o mercado', () => {
+    expect(LIBERTADOS_PRIZE).toBe(50_000_000)
+  })
+
+  test('continentalTitleYears lista só os anos em que O CLUBE informado foi campeão', () => {
+    const save = base()
+    const edicao1 = createLibertados(9, save.careerYear, save.clubId, [save.clubId, 'mare-rubra', 'imperial', 'atlantico'])
+    // ano 1: o SEU clube é campeão
+    const comTituloProprio = withLibertadosState(save, { ...edicao1, stage: 'champion' as const, championId: save.clubId })
+
+    const anoSeguinte = { ...comTituloProprio, careerYear: comTituloProprio.careerYear + 1 }
+    const edicao2 = createLibertados(11, anoSeguinte.careerYear, save.clubId, [save.clubId, 'mare-rubra', 'imperial', 'atlantico'])
+    // ano 2: você caiu e outro clube levanta a taça
+    const comDoisCampeoes = withLibertadosState(anoSeguinte, { ...edicao2, stage: 'eliminated' as const, championId: 'mare-rubra' })
+
+    expect(continentalTitleYears(comDoisCampeoes, save.clubId)).toEqual([save.careerYear])
+    expect(continentalTitleYears(comDoisCampeoes, 'mare-rubra')).toEqual([anoSeguinte.careerYear])
+    expect(continentalTitleYears(comDoisCampeoes, 'clube-inexistente')).toEqual([])
   })
 
   test('campeão continental entra no histórico mesmo sem o título ser seu', () => {
