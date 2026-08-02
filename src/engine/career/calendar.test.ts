@@ -7,6 +7,7 @@ import {
   roundDate,
   seasonYearFor,
   tournamentDate,
+  tournamentMatchDate,
 } from './calendar'
 import { SEASON_ROUNDS } from '../season/types'
 import { MATCHES_PER_EDITION } from '../libertados/types'
@@ -33,23 +34,40 @@ describe('calendário real da temporada', () => {
     expect(seasonYearFor(10)).toBe(2035)
   })
 
-  test('a liga joga sábado ou domingo, alternando por temporada', () => {
-    expect(leagueWeekdayFor(1)).toBe(SATURDAY)
-    expect(leagueWeekdayFor(2)).toBe(SUNDAY)
-    expect(leagueWeekdayFor(3)).toBe(SATURDAY)
+  test('a liga joga sempre no fim de semana, ora sábado ora domingo', () => {
+    for (const careerYear of ANOS) {
+      const dias = Array.from({ length: SEASON_ROUNDS }, (_, round) =>
+        weekdayOf(roundDate(careerYear, round)),
+      )
+      for (const dia of dias) expect([SATURDAY, SUNDAY]).toContain(dia)
+      // e o ano NÃO cai inteiro no mesmo dia — era o que acontecia antes
+      expect(new Set(dias).size).toBe(2)
+    }
   })
 
-  test('a copa continental joga quarta ou quinta, alternando por temporada', () => {
-    expect(cupWeekdayFor(1)).toBe(WEDNESDAY)
-    expect(cupWeekdayFor(2)).toBe(THURSDAY)
+  test('a copa joga sempre no meio de semana, ora quarta ora quinta', () => {
+    for (const careerYear of ANOS) {
+      const dias = Array.from({ length: MATCHES_PER_EDITION }, (_, index) =>
+        weekdayOf(libertadosDate(careerYear, index)),
+      )
+      for (const dia of dias) expect([WEDNESDAY, THURSDAY]).toContain(dia)
+      expect(new Set(dias).size).toBe(2)
+    }
+  })
+
+  test('o dia sorteado é estável: a mesma rodada cai sempre no mesmo dia', () => {
+    expect(roundDate(4, 6)).toEqual(roundDate(4, 6))
+    expect(leagueWeekdayFor(4, 6)).toBe(leagueWeekdayFor(4, 6))
+    expect(cupWeekdayFor(3, 5)).toBe(cupWeekdayFor(3, 5))
   })
 
   test('sem Libertados a liga é semanal e fecha em maio', () => {
     const datas = Array.from({ length: SEASON_ROUNDS }, (_, round) => roundDate(1, round))
     expect(datas[0].month).toBe(2)
-    expect(weekdayOf(datas[0])).toBe(SATURDAY)
     for (let i = 1; i < datas.length; i++) {
-      expect(daysBetween(datas[i - 1], datas[i])).toBe(7)
+      // uma semana de distância, com a folga de um dia que a variação sáb/dom cria
+      expect(daysBetween(datas[i - 1], datas[i])).toBeGreaterThanOrEqual(6)
+      expect(daysBetween(datas[i - 1], datas[i])).toBeLessThanOrEqual(8)
     }
     expect(datas[datas.length - 1].month).toBe(4)
   })
@@ -57,7 +75,8 @@ describe('calendário real da temporada', () => {
   test('com Libertados a liga é quinzenal e se estica até agosto', () => {
     const datas = Array.from({ length: SEASON_ROUNDS }, (_, round) => roundDate(1, round, true))
     for (let i = 1; i < datas.length; i++) {
-      expect(daysBetween(datas[i - 1], datas[i])).toBe(14)
+      expect(daysBetween(datas[i - 1], datas[i])).toBeGreaterThanOrEqual(13)
+      expect(daysBetween(datas[i - 1], datas[i])).toBeLessThanOrEqual(15)
     }
     expect(datas[datas.length - 1].month).toBe(7)
   })
@@ -69,10 +88,9 @@ describe('calendário real da temporada', () => {
   test('a Libertados abre em abril e joga de quinze em quinze dias', () => {
     const datas = Array.from({ length: MATCHES_PER_EDITION }, (_, index) => libertadosDate(1, index))
     expect(datas[0].month).toBe(3)
-    expect(weekdayOf(datas[0])).toBe(WEDNESDAY)
     for (let i = 1; i < datas.length; i++) {
-      expect(daysBetween(datas[i - 1], datas[i])).toBe(14)
-      expect(weekdayOf(datas[i])).toBe(WEDNESDAY)
+      expect(daysBetween(datas[i - 1], datas[i])).toBeGreaterThanOrEqual(13)
+      expect(daysBetween(datas[i - 1], datas[i])).toBeLessThanOrEqual(15)
     }
   })
 
@@ -80,7 +98,7 @@ describe('calendário real da temporada', () => {
     for (const careerYear of ANOS) {
       const abertura = libertadosDate(careerYear, 0)
       expect(abertura.month).toBe(3)
-      expect(weekdayOf(abertura)).toBe(cupWeekdayFor(careerYear))
+      expect([WEDNESDAY, THURSDAY]).toContain(weekdayOf(abertura))
     }
   })
 
@@ -107,7 +125,8 @@ describe('calendário real da temporada', () => {
       for (let index = 0; index < MATCHES_PER_EDITION; index++) {
         const jogo = libertadosDate(careerYear, index)
         if (daysBetween(jogo, ultimaRodada) < 0) continue
-        const acompanhado = rodadas.some((rodada) => Math.abs(daysBetween(jogo, rodada)) <= 3)
+        // qua/qui contra sáb/dom da mesma semana: de 2 a 4 dias de distância
+        const acompanhado = rodadas.some((rodada) => Math.abs(daysBetween(jogo, rodada)) <= 4)
         expect(acompanhado).toBe(true)
       }
     }
@@ -123,5 +142,49 @@ describe('calendário real da temporada', () => {
     expect(date.year).toBe(2027)
     expect(date.month).toBe(11)
     expect(weekdayOf(date)).toBe(SUNDAY)
+  })
+})
+
+/** O máximo de jogos que uma copa de seleções tem: 3 de grupo + 4 de mata-mata. */
+const COPA_MATCHES = 7
+
+describe('copa de seleções, jogo a jogo', () => {
+  test('a abertura é o primeiro jogo — o marco de dezembro não se move', () => {
+    for (const careerYear of ANOS) {
+      expect(tournamentMatchDate(careerYear, 0)).toEqual(tournamentDate(careerYear))
+    }
+  })
+
+  test('a copa inteira cabe em dezembro, em qualquer ano', () => {
+    for (const careerYear of ANOS) {
+      for (let index = 0; index < COPA_MATCHES; index++) {
+        expect(tournamentMatchDate(careerYear, index).month).toBe(11)
+      }
+    }
+  })
+
+  test('um jogo depois do outro, sempre para a frente', () => {
+    for (const careerYear of ANOS) {
+      for (let index = 1; index < COPA_MATCHES; index++) {
+        const anterior = tournamentMatchDate(careerYear, index - 1)
+        const atual = tournamentMatchDate(careerYear, index)
+        expect(compareDates(anterior, atual)).toBeLessThan(0)
+      }
+    }
+  })
+
+  test('nenhum jogo de seleção cai em dia de Libertados', () => {
+    for (const careerYear of ANOS) {
+      const continental = new Set(
+        Array.from({ length: MATCHES_PER_EDITION }, (_, index) => {
+          const date = libertadosDate(careerYear, index)
+          return `${date.month}-${date.day}`
+        }),
+      )
+      for (let index = 0; index < COPA_MATCHES; index++) {
+        const date = tournamentMatchDate(careerYear, index)
+        expect(continental.has(`${date.month}-${date.day}`)).toBe(false)
+      }
+    }
   })
 })

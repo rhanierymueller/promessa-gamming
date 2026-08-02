@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react'
+import { Bracket } from '../Bracket'
+import { libertadosBracket } from '../../engine/libertados/bracket'
+import { competitionClass } from '../calendar/competitionStyle'
 import { clubById } from '../../data/clubs'
 import { nationById } from '../../data/nations'
 import { nationOf } from '../../engine/libertados/draw'
@@ -8,6 +11,7 @@ import {
   groupLetter,
   KNOCKOUT_ORDER,
   LIBERTADOS_NAME,
+  isKnockoutStage,
   STAGE_NAMES,
   type LibertadosKnockoutStage,
   type LibertadosState,
@@ -28,7 +32,7 @@ interface LibertadosTabProps {
   readonly save: PlayerSave
 }
 
-type View = 'chave' | 'artilharia'
+type View = 'chave' | 'mata-mata' | 'artilharia'
 
 /** Placar somado do confronto: "3 × 2", "1 × 1 (ida)" ou "2 × 2 nos pênaltis". */
 const aggregateLabel = (
@@ -110,13 +114,13 @@ export const LibertadosTab = ({ save }: LibertadosTabProps) => {
       </div>
 
       <div className="live-group libertados-switch" role="group" aria-label="Seção da Libertados">
-        {(['chave', 'artilharia'] as const).map((option) => (
+        {(['chave', 'mata-mata', 'artilharia'] as const).map((option) => (
           <button
             key={option}
             className={`live-btn${view === option ? ' live-btn-active' : ''}`}
             onClick={() => setView(option)}
           >
-            {option === 'chave' ? 'Grupos e chave' : 'Artilharia'}
+            {option === 'chave' ? 'Grupos' : option === 'mata-mata' ? 'Chaveamento' : 'Artilharia'}
           </button>
         ))}
       </div>
@@ -203,6 +207,30 @@ export const LibertadosTab = ({ save }: LibertadosTabProps) => {
             </div>
           ))}
         </>
+      )}
+
+      {view === 'mata-mata' && (
+        <div className={`card card-wide bracket-card ${competitionClass('libertados')}`}>
+          <div className="bracket-head">
+            <span className="card-label">Caminho até a final</span>
+            <span className="bracket-status">
+              {isKnockoutStage(state.stage) ? STAGE_NAMES[state.stage] : 'fase de grupos'}
+            </span>
+          </div>
+          {isKnockoutStage(state.stage) || state.stage === 'champion' ? (
+            <Bracket
+              save={save}
+              stages={libertadosBracket(state)}
+              currentStageId={isKnockoutStage(state.stage) ? state.stage : undefined}
+              myId={state.playerClubId}
+            />
+          ) : (
+            <p className="muted">
+              A chave se forma quando a fase de grupos terminar: passam os dois
+              primeiros de cada grupo.
+            </p>
+          )}
+        </div>
       )}
 
       {view === 'artilharia' && (

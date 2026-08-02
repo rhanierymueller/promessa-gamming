@@ -2,7 +2,7 @@ import { ArrowLeftRight, LoaderCircle, X } from 'lucide-react'
 import { useState } from 'react'
 import { FORMATION_IDS, FORMATIONS, type Formation, type FormationId } from '../engine/squad/formation'
 import { overallAt, positionFit, type SquadPlayer } from '../engine/squad/players'
-import { sectorRatings } from '../engine/squad/sectors'
+import { lineupStrength } from '../engine/squad/teamStrength'
 import { FormationBoard } from './FormationBoard'
 import { ovrClass } from '../engine/squad/overallTier'
 import type { PlayerGender } from '../state/save'
@@ -35,6 +35,8 @@ interface SquadBoardProps {
   readonly onSelect: (player: SquadPlayer) => void
   /** Ids marcados como reforço recém-chegado. */
   readonly signingIds?: ReadonlySet<string>
+  /** Vagas livres: preservam o índice interno, mas não aparecem no elenco. */
+  readonly hiddenSquadIndices?: ReadonlySet<number>
 }
 
 /**
@@ -59,13 +61,16 @@ export const SquadBoard = ({
   onSwap,
   onSelect,
   signingIds,
+  hiddenSquadIndices = new Set<number>(),
 }: SquadBoardProps) => {
   /** Troca aberta, esperando o outro lado. */
   const [pending, setPending] = useState<PendingSwap | null>(null)
 
   const shape: Formation = FORMATIONS[formation]
   const starters = lineup.slice(0, 11)
-  const bench = squad.map((_, index) => index).filter((index) => !starters.includes(index))
+  const bench = squad
+    .map((_, index) => index)
+    .filter((index) => !starters.includes(index) && !hiddenSquadIndices.has(index))
 
   const applySwap = (slot: number, squadIndex: number): void => {
     onSwap?.(slot, squadIndex)
@@ -80,10 +85,11 @@ export const SquadBoard = ({
     : undefined
 
   /* recalculado a cada troca: o efeito da escalação aparece na hora */
-  const sectors = sectorRatings(
-    starters.map((squadIndex) => squad[squadIndex]),
+  const sectors = lineupStrength(
+    squad,
+    starters.map((squadIndex) => hiddenSquadIndices.has(squadIndex) ? -1 : squadIndex),
     shape,
-  )
+  ).sectors
 
   return (
     <>
@@ -146,7 +152,7 @@ export const SquadBoard = ({
         <div className="squad-board-holder">
           <FormationBoard
             formation={shape}
-            players={starters.map((squadIndex) => squad[squadIndex])}
+            players={starters.map((squadIndex) => hiddenSquadIndices.has(squadIndex) ? undefined : squad[squadIndex])}
             userSlot={starters.indexOf(userIndex)}
             gender={gender}
             userFaceUrl={userFaceUrl}
@@ -157,6 +163,7 @@ export const SquadBoard = ({
 
         <div className="squad-list">
           {starters.map((squadIndex, slot) => {
+            if (hiddenSquadIndices.has(squadIndex)) return null
             const player = squad[squadIndex]
             if (!player) return null
             const isUser = squadIndex === userIndex

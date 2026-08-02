@@ -5,7 +5,7 @@ import { createRng } from '../engine/rng'
 import { advanceSeason } from '../engine/season/season'
 import { createTournament } from '../engine/tournament/tournament'
 import { userSlotIndex } from '../engine/squad/formation'
-import { USER_SQUAD_INDEX } from '../engine/squad/players'
+import { squadPlayersFor, USER_PLAYER_ID, USER_SQUAD_INDEX, userAsSquadPlayer } from '../engine/squad/players'
 import { divisionOf } from '../engine/pyramid/pyramid'
 import { SEASON_ROUNDS, SEASON_TEAMS } from '../engine/season/types'
 import { createLibertados } from '../engine/libertados/libertados'
@@ -20,6 +20,8 @@ import {
   setClubColors,
   setPlayerName,
   signPlayer,
+  playerSaleValue,
+  sellPlayer,
   withLibertadosState,
   withTournamentState,
   CELEBRATION_COUNT,
@@ -32,6 +34,8 @@ import {
   persistSave,
   recordMatch,
   renameClub,
+  setClubAbbr,
+  setClubCity,
   SAVE_VERSION,
   setAppearance,
   setCelebration,
@@ -41,6 +45,8 @@ import {
   startNewSeason,
   swapLineup,
   type MatchRecord,
+  type PlayerSave,
+  type TrophyKind,
 } from './save'
 
 const fixedRoll = (value = 0.4): (() => number) => () => value
@@ -366,6 +372,48 @@ describe('verba e contratações (transfermarket)', () => {
     expect(signPlayer(rich, listed)).toBe(rich)
   })
 
+  test('venda credita o valor, persiste a saída e não vende o protagonista', () => {
+    const club = clubById(base.clubId)!
+    const squad = squadPlayersFor(club, base.careerYear, base.appearance.gender, club.division)
+    const player = squad[0]
+    const value = playerSaleValue(base, player)
+
+    const after = sellPlayer(base, player, 0, squad)
+    const user = userAsSquadPlayer(squad[USER_SQUAD_INDEX], base.playerName, base.attributes)
+
+    expect(after.budget).toBe(base.budget + value)
+    expect(after.playerSales).toContainEqual({
+      playerId: player.id,
+      soldYear: base.careerYear,
+      price: value,
+      slotIndex: 0,
+      position: player.position,
+    })
+    expect(sellPlayer(after, user, USER_SQUAD_INDEX, squad)).toBe(after)
+    expect(user.id).toBe(USER_PLAYER_ID)
+  })
+
+  test('pode vender mais de um jogador na temporada e titular dá lugar ao banco', () => {
+    const club = clubById(base.clubId)!
+    const squad = squadPlayersFor(club, base.careerYear, base.appearance.gender, club.division)
+    const first = sellPlayer(base, squad[0], 0, squad)
+    const second = sellPlayer(first, squad[1], 1, squad)
+
+    expect(first.lineup).not.toContain(0)
+    expect(second.playerSales).toHaveLength(2)
+  })
+
+  test('contratação ocupa uma vaga livre e a fecha', () => {
+    const club = clubById(base.clubId)!
+    const squad = squadPlayersFor(club, base.careerYear, base.appearance.gender, club.division)
+    const sold = sellPlayer({ ...base, budget: 200_000_000 }, squad[0], 0, squad)
+
+    const after = signPlayer(sold, listed)
+
+    expect(after.signings.at(-1)?.slotIndex).toBe(0)
+    expect(after.playerSales[0].filledByPlayerId).toBe(listed.id)
+  })
+
   test('virada de temporada ACUMULA: sobra + cota da nova divisão', () => {
     // Act
     const renewed = startNewSeason({ ...base, budget: 300_000 }, fixedRoll(0.9))
@@ -445,15 +493,20 @@ describe('verba e contratações (transfermarket)', () => {
     expect(parseSave(broken)!.trophies).toHaveLength(0)
   })
 
-  test('contratações sobrevivem ao parse; verba inválida volta ao padrão', () => {
+  test('contratações e vendas sobrevivem ao parse; verba inválida volta ao padrão', () => {
     // Arrange
     const rich = signPlayer({ ...base, budget: 200_000_000 }, listed)
-    const raw = JSON.stringify(rich)
+    const club = clubById(rich.clubId)!
+    const player = squadPlayersFor(club, rich.careerYear, rich.appearance.gender, club.division)[0]
+    const squad = squadPlayersFor(club, rich.careerYear, rich.appearance.gender, club.division)
+    const traded = sellPlayer(rich, player, 0, squad)
+    const raw = JSON.stringify(traded)
     const broken = JSON.stringify({ ...rich, budget: 'muito', signings: [{ id: 1 }] })
 
     // Act & Assert
     expect(parseSave(raw)!.signings).toHaveLength(1)
-    expect(parseSave(raw)!.budget).toBe(rich.budget)
+    expect(parseSave(raw)!.playerSales).toHaveLength(1)
+    expect(parseSave(raw)!.budget).toBe(traded.budget)
     expect(parseSave(broken)!.signings).toHaveLength(0)
     expect(parseSave(broken)!.budget).toBe(500_000)
   })
@@ -1031,5 +1084,87 @@ describe('Copa Libertados no save', () => {
     expect(carregado!.version).toBe(SAVE_VERSION)
     expect(carregado!.libertados).toBeNull()
     expect(carregado!.continentalChampions).toEqual([])
+  })
+})
+
+describe('editor: região e sigla do clube', () => {
+  const base = () => createSave({ playerName: 'Tuca', clubId: 'leoes-capital' })!
+
+  test('trocar a região aparece no clube exibido', () => {
+    const save = setClubCity(base(), 'leoes-capital', 'Recife')
+    expect(displayClub(save, clubById('leoes-capital')!).city).toBe('Recife')
+  })
+
+  test('campo em branco devolve a região original', () => {
+    const original = clubById('leoes-capital')!.city
+    const trocado = setClubCity(base(), 'leoes-capital', 'Recife')
+    const limpo = setClubCity(trocado, 'leoes-capital', '   ')
+    expect(displayClub(limpo, clubById('leoes-capital')!).city).toBe(original)
+  })
+
+  test('a sigla vira três letras maiúsculas, sem acento nem símbolo', () => {
+    const save = setClubAbbr(base(), 'leoes-capital', 'ç?ãx')
+    expect(displayClub(save, clubById('leoes-capital')!).abbr).toBe('CAX')
+  })
+
+  test('sigla com menos de três letras é ignorada', () => {
+    // meia sigla quebraria o alinhamento do placar
+    const original = clubById('leoes-capital')!.abbr
+    const save = setClubAbbr(base(), 'leoes-capital', 'CO')
+    expect(displayClub(save, clubById('leoes-capital')!).abbr).toBe(original)
+  })
+
+  test('a sigla escolhida à mão ganha da que o nome novo geraria', () => {
+    // renomear gera sigla automática; quem digitou as três letras quer as dele
+    const renomeado = renameClub(base(), 'leoes-capital', 'Corinthians')
+    expect(displayClub(renomeado, clubById('leoes-capital')!).abbr).toBe('COR')
+    const comSigla = setClubAbbr(renomeado, 'leoes-capital', 'SCP')
+    expect(displayClub(comSigla, clubById('leoes-capital')!).abbr).toBe('SCP')
+  })
+})
+
+describe('troféus sobrevivem ao recarregamento', () => {
+  /*
+   * A lista de kinds válidos vive na normalização e é fácil de esquecer ao
+   * criar competição nova. Quando isso acontece a taça some sozinha no
+   * primeiro reload, sem erro nenhum — foi o que ocorreu com a Copa do Brasil.
+   */
+  const TODOS: readonly TrophyKind[] = [
+    'serie-a',
+    'serie-b',
+    'serie-c',
+    'serie-d',
+    'copa-america',
+    'liga-nacoes',
+    'copa-mundo',
+    'libertados',
+    'copa-brasil',
+  ]
+
+  test('toda taça do jogo sobrevive a salvar e carregar', () => {
+    // Arrange: uma de cada
+    const save = createSave({ playerName: 'Tuca', clubId: 'leoes-capital' })!
+    const comTudo: PlayerSave = {
+      ...save,
+      trophies: TODOS.map((kind, index) => ({ kind, year: index + 1 })),
+    }
+
+    // Act: passa pelo ciclo de persistência
+    const storage = fakeStorage()
+    persistSave(storage, comTudo)
+    const carregado = loadSave(storage)!
+
+    // Assert: nenhuma sumiu no caminho
+    expect(carregado.trophies).toHaveLength(TODOS.length)
+    for (const kind of TODOS) {
+      expect(carregado.trophies.some((trophy) => trophy.kind === kind)).toBe(true)
+    }
+  })
+
+  test('a taça da Copa do Brasil especificamente sobrevive', () => {
+    const save = createSave({ playerName: 'Tuca', clubId: 'leoes-capital' })!
+    const storage = fakeStorage()
+    persistSave(storage, { ...save, trophies: [{ kind: 'copa-brasil', year: 3 }] })
+    expect(loadSave(storage)!.trophies).toEqual([{ kind: 'copa-brasil', year: 3 }])
   })
 })

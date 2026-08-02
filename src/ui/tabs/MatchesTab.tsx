@@ -7,7 +7,6 @@ import { SEASON_ROUNDS } from '../../engine/season/types'
 import { DIVISION_NAMES, divisionOf, PROMOTED_COUNT, RELEGATED_COUNT, DIVISION_TEAMS } from '../../engine/pyramid/pyramid'
 import { clubDisplayName, displayClub, type PlayerSave } from '../../state/save'
 import { FriendsLeagues } from '../FriendsLeagues'
-import { SeasonCalendar } from '../SeasonCalendar'
 import { ClubCrest } from '../ClubCrest'
 import { faceUrlFor } from '../../game/faces'
 import { usePlayerPortrait } from '../usePlayerPortrait'
@@ -26,7 +25,7 @@ const opponentName = (save: PlayerSave, opponentId: string): string => {
   return clubDisplayName(save, opponentId)
 }
 
-type LeagueSection = 'tabela' | 'calendario' | 'historico' | 'amigos'
+type LeagueSection = 'tabela' | 'historico' | 'amigos'
 
 export const MatchesTab = ({ save }: MatchesTabProps) => {
   const { season } = save
@@ -66,7 +65,6 @@ export const MatchesTab = ({ save }: MatchesTabProps) => {
 
   const sections: readonly { id: LeagueSection; label: string }[] = [
     { id: 'tabela', label: 'Tabela' },
-    { id: 'calendario', label: 'Calendário' },
     { id: 'historico', label: 'Jogos' },
     { id: 'amigos', label: 'Amigos' },
   ]
@@ -178,8 +176,6 @@ export const MatchesTab = ({ save }: MatchesTabProps) => {
         )}
         </div>
       )}
-
-      {section === 'calendario' && <SeasonCalendar save={save} />}
 
       {section === 'amigos' && <FriendsLeagues save={save} />}
 

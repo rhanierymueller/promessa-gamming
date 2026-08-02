@@ -63,6 +63,8 @@ export interface MatchConfig {
   readonly playerDecisions: number
   /** Faltas DO adversário que você defende no gol. */
   readonly opponentFreeKicks: number
+  /** Chance de cada defesa acontecer — sem isso toda partida teria as duas. */
+  readonly opponentFreeKickChance: number
   /**
    * Chance de a partida ter o lance de dado — a dividida que a sorte decide.
    * É sorteado, não fixo: o dado tem que ser uma variação entre as outras

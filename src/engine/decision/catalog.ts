@@ -49,6 +49,13 @@ const jogada = (
   contra: number,
 ): Jogada => ({ id, atributo, faixa, pesos: { gol, chance, nada, perdeu, contra } })
 
+/*
+ * Os pesos de CONTRA das faixas média e baixa subiram junto com o piso de risco
+ * em weights.ts. Estavam em 1 e 2: normalizados, davam 1% na tela, e uma
+ * decisão de 1% de risco não é decisão — a opção segura saía de graça e o perk
+ * que corta contra-ataque não tinha o que cortar. A hierarquia continua de pé:
+ * ousada arrisca mais que média, que arrisca mais que segura.
+ */
 export const CATALOGO: readonly Jogada[] = [
   // ── faixa alta: decide a partida, para os dois lados ──────────────────────
   jogada('driblar-zaga', 'finalizacao', 'alta', 22, 15, 20, 25, 18),
@@ -56,19 +63,19 @@ export const CATALOGO: readonly Jogada[] = [
   jogada('voleio-de-fora', 'finalizacao', 'alta', 16, 6, 40, 24, 14),
 
   // ── faixa média: o meio do caminho, onde mora a maior parte do jogo ───────
-  jogada('girar-e-finalizar', 'finalizacao', 'media', 17, 10, 45, 19, 9),
-  jogada('tabela-e-infiltrar', 'passe', 'media', 15, 20, 38, 18, 9),
-  jogada('toque-de-primeira', 'passe', 'media', 14, 25, 40, 14, 7),
-  jogada('lancamento-nas-costas', 'passe', 'media', 12, 24, 42, 15, 7),
-  jogada('cruzamento-rasteiro', 'passe', 'media', 10, 26, 45, 13, 6),
-  jogada('chutar-de-fora', 'finalizacao', 'media', 11, 8, 62, 15, 4),
+  jogada('girar-e-finalizar', 'finalizacao', 'media', 17, 10, 45, 19, 11),
+  jogada('tabela-e-infiltrar', 'passe', 'media', 15, 20, 38, 18, 11),
+  jogada('toque-de-primeira', 'passe', 'media', 14, 25, 40, 14, 9),
+  jogada('lancamento-nas-costas', 'passe', 'media', 12, 24, 42, 15, 9),
+  jogada('cruzamento-rasteiro', 'passe', 'media', 10, 26, 45, 13, 8),
+  jogada('chutar-de-fora', 'finalizacao', 'media', 11, 8, 62, 15, 6),
 
   // ── faixa baixa: constrói ou preserva, quase nunca decide ─────────────────
-  jogada('segunda-trave', 'cobranca', 'baixa', 6, 28, 58, 7, 1),
-  jogada('devolver-capitao', 'passe', 'baixa', 4, 20, 70, 5, 1),
-  jogada('segurar-a-bola', 'passe', 'baixa', 3, 18, 73, 5, 1),
-  jogada('cavar-a-falta', 'cobranca', 'baixa', 2, 30, 55, 11, 2),
-  jogada('recuar-pro-goleiro', 'passe', 'baixa', 1, 12, 82, 4, 1),
+  jogada('segunda-trave', 'cobranca', 'baixa', 6, 28, 58, 7, 4),
+  jogada('devolver-capitao', 'passe', 'baixa', 4, 20, 70, 5, 4),
+  jogada('segurar-a-bola', 'passe', 'baixa', 3, 18, 73, 5, 4),
+  jogada('cavar-a-falta', 'cobranca', 'baixa', 2, 30, 55, 11, 5),
+  jogada('recuar-pro-goleiro', 'passe', 'baixa', 1, 12, 82, 4, 3),
 ]
 
 export const jogadaPorId = (id: JogadaId): Jogada =>

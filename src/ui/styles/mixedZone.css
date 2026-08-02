@@ -1,0 +1,326 @@
+/*
+ * Zona mista: o modal da entrevista.
+ *
+ * O fundo apaga só o bastante para a Home sumir de vista sem virar tela preta —
+ * a entrevista acontece NO estádio, e o jogo continua atrás.
+ */
+
+.mixedzone-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(6, 5, 12, 0.78);
+  backdrop-filter: blur(3px);
+  animation: mixedzone-fade 0.22s ease both;
+}
+
+@keyframes mixedzone-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.mixedzone-modal {
+  position: relative;
+  width: min(520px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 26px 24px 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(255, 210, 63, 0.09), transparent 60%),
+    linear-gradient(#171227, #120e1e);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  text-align: center;
+  animation: mixedzone-rise 0.26s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes mixedzone-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.mixedzone-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.mixedzone-close:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ---------- o palco: repórter, microfone, você ---------- */
+
+.mixedzone-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.mixedzone-face {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 96px;
+}
+
+.mixedzone-face img,
+.mixedzone-face-empty {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* o repórter olha para o craque: espelhar aproxima os dois da conversa */
+.mixedzone-face-reporter img {
+  transform: scaleX(-1);
+  filter: saturate(0.7) brightness(0.85);
+}
+
+.mixedzone-face-player img {
+  image-rendering: pixelated;
+  border-color: rgba(255, 210, 63, 0.45);
+  box-shadow: 0 0 22px rgba(255, 210, 63, 0.16);
+}
+
+.mixedzone-face figcaption {
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--steel);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* o microfone entre os dois é o que diz "entrevista" sem escrever a palavra */
+.mixedzone-mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 210, 63, 0.4);
+  background: rgba(255, 210, 63, 0.08);
+  color: var(--accent);
+  animation: mixedzone-mic-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes mixedzone-mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 210, 63, 0.22); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 210, 63, 0); }
+}
+
+/* ---------- a pergunta ---------- */
+
+.mixedzone-eyebrow {
+  margin: 0 0 6px;
+  color: var(--steel);
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.mixedzone-prompt {
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.55;
+  font-style: italic;
+}
+
+/* ---------- as respostas ---------- */
+
+.mixedzone-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+.mixedzone-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--tone-color, var(--steel));
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.025);
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.mixedzone-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--tone-color, var(--accent));
+  transform: translateX(2px);
+}
+
+/* o tom da resposta é a cor: quanto mais quente, mais arriscada */
+.mixedzone-tone-seguro { --tone-color: #7acc6e; }
+.mixedzone-tone-ousado { --tone-color: var(--accent); }
+.mixedzone-tone-audacioso { --tone-color: #e8734a; }
+
+.mixedzone-option-label {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--tone-color, inherit);
+}
+
+.mixedzone-option-tone {
+  color: var(--steel);
+  font-size: 11px;
+  text-transform: lowercase;
+}
+
+/* sair sem falar é discreto de propósito: existe, mas não convida */
+.mixedzone-skip {
+  margin-top: 14px;
+  padding: 6px;
+  border: none;
+  background: none;
+  color: var(--steel);
+  font-size: 11.5px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.mixedzone-skip:hover {
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mixedzone-overlay,
+  .mixedzone-modal,
+  .mixedzone-mic {
+    animation: none;
+  }
+}
+
+/* ---------- oferta de habilidade (mesma casa da zona mista) ---------- */
+
+.perkoffer-modal {
+  width: min(500px, 100%);
+}
+
+/* o craque em destaque, com o brilho da conquista atrás */
+.perkoffer-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 104px;
+  margin-bottom: 14px;
+}
+
+.perkoffer-glow {
+  position: absolute;
+  width: 190px;
+  height: 100px;
+  background: radial-gradient(50% 60% at 50% 60%, rgba(255, 210, 63, 0.3), transparent 70%);
+  filter: blur(4px);
+}
+
+.perkoffer-portrait {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 210, 63, 0.5);
+  background: rgba(255, 255, 255, 0.04);
+  image-rendering: pixelated;
+  box-shadow: 0 0 26px rgba(255, 210, 63, 0.22);
+}
+
+/* o selo marca o momento: é ele que diz "algo foi destravado" */
+.perkoffer-badge {
+  position: absolute;
+  right: calc(50% - 62px);
+  bottom: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 210, 63, 0.55);
+  background: #1a1428;
+  color: var(--accent);
+  animation: perkoffer-badge-pop 2.6s ease-in-out infinite;
+}
+
+@keyframes perkoffer-badge-pop {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+.perkoffer-title {
+  margin: 0 0 8px;
+  font-family: var(--display);
+  font-size: clamp(21px, 4.4vw, 28px);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.perkoffer-reason {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+/* a habilidade não tem "tom": a faixa é sempre dourada */
+.perkoffer-option {
+  --tone-color: var(--accent);
+}
+
+.perkoffer-desc {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* o aviso fecha o modal onde a saída ficaria — aqui não existe saída */
+.perkoffer-warning {
+  margin: 16px 0 0;
+  color: var(--steel);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .perkoffer-badge {
+    animation: none;
+  }
+}

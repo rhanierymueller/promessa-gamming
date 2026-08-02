@@ -1,39 +1,17 @@
-import { Download, FileText, Lock, LogOut, RotateCcw, Trash2 } from 'lucide-react'
+import { Download, FileText, LogOut, RotateCcw, Trash2 } from 'lucide-react'
 import '../styles/profile.css'
-import { TrophyRoom } from '../TrophyRoom'
 import { useEffect, useRef, useState } from 'react'
 import { Legal } from '../Legal'
 import portraitUrl from '../../assets/sprites/s_portrait.png'
 import portraitFUrl from '../../assets/sprites/f_portrait.png'
 import type { Club } from '../../data/clubs'
-import {
-  ATTRIBUTE_KEYS,
-  ATTRIBUTE_LABELS,
-  canUpgrade,
-  MAX_ATTRIBUTE,
-  upgradeCost,
-} from '../../engine/career/attributes'
-import { perkById } from '../../engine/career/perks'
-import { applyAppearance, HAIR_COLORS, KIT_COLORS, SKIN_TONES } from '../../game/appearance'
-import { celebrationUrlsFor } from '../../game/assets'
-import { CELEBRATION_NAMES } from '../../game/assets'
+import { applyAppearance } from '../../game/appearance'
 import {
   currentPlayerAge,
-  setAppearance,
-  setCelebration,
   setShirtNumber,
-  trainAttribute,
   type PlayerAppearance,
   type PlayerSave,
 } from '../../state/save'
-
-/** Cores dos swatches quando o índice 0 mantém a arte original. */
-const ORIGINAL_SKIN_SWATCH = '#C08850'
-const ORIGINAL_HAIR_SWATCH = '#2A1E14'
-const ORIGINAL_KIT_SWATCH = '#E0C000'
-
-const swatchColor = (rgb: readonly [number, number, number] | null, fallback: string): string =>
-  rgb ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : fallback
 
 /** Retrato do craque com a aparência aplicada em tempo real. */
 const AppearancePortrait = ({ appearance }: { appearance: PlayerAppearance }) => {
@@ -68,13 +46,6 @@ interface ProfileTabProps {
   readonly onLogout: () => void
   /** Apaga conta online + carreira local. Retorna mensagem de erro ou null. */
   readonly onDeleteAccount: () => Promise<string | null>
-}
-
-const ATTRIBUTE_HINTS: Record<string, string> = {
-  finalizacao: 'chute mais preciso',
-  passe: 'passes com mais chance',
-  cobranca: 'barreira pula menos',
-  defesa: 'luva mais comprida',
 }
 
 export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout, onDeleteAccount }: ProfileTabProps) => {
@@ -130,158 +101,6 @@ export const ProfileTab = ({ save, club, onSaveChange, onResetCareer, onLogout, 
           <div className="stat"><dt className="stat-label">Temporadas</dt><dd className="stat-value">{save.careerYear}</dd></div>
         </dl>
       </div>
-
-      <div className="card">
-        <div className="attr-header">
-          <span className="card-label">Atributos</span>
-          <span className="attr-points">{save.trainingPoints} pts de treino</span>
-        </div>
-        {ATTRIBUTE_KEYS.map((key) => {
-          const level = save.attributes[key]
-          const cost = upgradeCost(level)
-          const affordable = canUpgrade(save.attributes, key, save.trainingPoints)
-          return (
-            <div key={key} className="attr-row">
-              <div className="attr-info">
-                <span className="attr-name">{ATTRIBUTE_LABELS[key]}</span>
-                <span className="attr-hint">{ATTRIBUTE_HINTS[key]}</span>
-              </div>
-              <div className="attr-bar" aria-label={`${ATTRIBUTE_LABELS[key]} nível ${level} de ${MAX_ATTRIBUTE}`}>
-                {Array.from({ length: MAX_ATTRIBUTE }, (_, i) => (
-                  <span key={i} className={`attr-pip${i < level ? ' attr-pip-on' : ''}`} />
-                ))}
-              </div>
-              <button
-                className="btn attr-btn"
-                disabled={!affordable}
-                onClick={() => onSaveChange(trainAttribute(save, key))}
-              >
-                {level >= MAX_ATTRIBUTE ? 'MAX' : `+1 (${cost}pt)`}
-              </button>
-            </div>
-          )
-        })}
-        <p className="muted table-note">
-          Pontos vêm das suas notas: 8.0+ rende 3, 6.5+ rende 2, 5.0+ rende 1.
-          Treinar encarece no topo: dobra do nível 6 e triplica do nível 8 — lenda se constrói em anos.
-        </p>
-      </div>
-
-      <div className="card">
-        <span className="card-label">Habilidades</span>
-        {save.perks.length === 0 ? (
-          <p className="muted">
-            Nenhuma ainda — habilidades destravam em marcos da carreira: nota 8+, 10 gols,
-            acesso, título… Faça história que elas aparecem.
-          </p>
-        ) : (
-          <div className="perk-list">
-            {save.perks.map((perkId) => {
-              const perk = perkById(perkId)
-              return (
-                <div key={perkId} className="perk-owned">
-                  <span className="perk-name">{perk.name}</span>
-                  <span className="perk-desc">{perk.description}</span>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="card">
-        <span className="card-label">Aparência</span>
-        <div className="appearance-row">
-          <span className="appearance-label">Pele</span>
-          <div className="swatch-row" role="radiogroup" aria-label="Tom de pele">
-            {SKIN_TONES.map((tone, index) => (
-              <button
-                key={tone.name}
-                type="button"
-                role="radio"
-                aria-checked={save.appearance.skin === index}
-                aria-label={tone.name}
-                title={tone.name}
-                className={`swatch${save.appearance.skin === index ? ' swatch-active' : ''}`}
-                style={{ background: swatchColor(tone.rgb, ORIGINAL_SKIN_SWATCH) }}
-                onClick={() => onSaveChange(setAppearance(save, { ...save.appearance, skin: index }))}
-              />
-            ))}
-          </div>
-        </div>
-        <div className="appearance-row">
-          <span className="appearance-label">Cabelo</span>
-          <div className="swatch-row" role="radiogroup" aria-label="Cor de cabelo">
-            {HAIR_COLORS.map((color, index) => (
-              <button
-                key={color.name}
-                type="button"
-                role="radio"
-                aria-checked={save.appearance.hair === index}
-                aria-label={color.name}
-                title={color.name}
-                className={`swatch${save.appearance.hair === index ? ' swatch-active' : ''}`}
-                style={{ background: swatchColor(color.rgb, ORIGINAL_HAIR_SWATCH) }}
-                onClick={() => onSaveChange(setAppearance(save, { ...save.appearance, hair: index }))}
-              />
-            ))}
-          </div>
-        </div>
-        <div className="appearance-row">
-          <span className="appearance-label">Uniforme</span>
-          <div className="swatch-row" role="radiogroup" aria-label="Cor do uniforme">
-            {KIT_COLORS.map((color, index) => (
-              <button
-                key={color.name}
-                type="button"
-                role="radio"
-                aria-checked={save.appearance.kit === index}
-                aria-label={color.name}
-                title={color.name}
-                className={`swatch${save.appearance.kit === index ? ' swatch-active' : ''}`}
-                style={{ background: swatchColor(color.rgb, ORIGINAL_KIT_SWATCH) }}
-                onClick={() => onSaveChange(setAppearance(save, { ...save.appearance, kit: index }))}
-              />
-            ))}
-          </div>
-        </div>
-        <div className="appearance-row">
-          <span className="appearance-label">Gênero</span>
-          {/* escolhido no cadastro: define arte, nomes do mundo e narração */}
-          <div className="swatch-row">
-            <span className="appearance-locked">
-              {save.appearance.gender === 'masculino' ? 'Masculino' : 'Feminino'}
-              <Lock size={12} aria-hidden="true" />
-            </span>
-            <span className="muted appearance-locked-note">definido no cadastro</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="card">
-        <span className="card-label">Comemoração</span>
-        <p className="muted table-note">Como você celebra os seus gols.</p>
-        <div className="celebration-grid" role="radiogroup" aria-label="Escolha de comemoração">
-          {celebrationUrlsFor(save.appearance.gender).map((url, index) => {
-            const isActive = save.celebrationId === index
-            return (
-              <button
-                key={url}
-                type="button"
-                role="radio"
-                aria-checked={isActive}
-                className={`celebration-option${isActive ? ' celebration-active' : ''}`}
-                onClick={() => onSaveChange(setCelebration(save, index))}
-              >
-                <img src={url} alt={CELEBRATION_NAMES[index]} />
-                <span>{CELEBRATION_NAMES[index]}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      <TrophyRoom trophies={save.trophies} />
 
       <div className="card card-wide account-card">
         <span className="card-label">Conta e dados</span>

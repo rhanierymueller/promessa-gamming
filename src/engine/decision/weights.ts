@@ -56,6 +56,13 @@ export const NEUTRO: Modificadores = {
   travamento: 0,
 }
 
+/**
+ * Fração do risco original que sobra por mais favorável que o cenário esteja.
+ * No futebol se perde bola até com o time todo por trás — e é esse resto de
+ * risco que dá peso à escolha e valor ao perk que o corta.
+ */
+const CONTRA_PISO = 0.5
+
 /** 0 no nível mínimo, 1 no máximo. Nível fora da faixa é aparado. */
 const fatorNivel = (nivel: number): number =>
   (Math.min(NIVEL_MAX, Math.max(NIVEL_MIN, nivel)) - NIVEL_MIN) / (NIVEL_MAX - NIVEL_MIN)
@@ -77,15 +84,36 @@ const pesosModificados = (pesos: Pesos, mod: Modificadores): Pesos => {
     // âncora: nunca multiplicada
     nada: pesos.nada,
     perdeu: pesos.perdeu * ruim,
-    contra:
-      pesos.contra *
-      ruim *
-      (1 - mod.edgeDefesa * PESO_DEFESA) *
-      travado *
-      mod.taticaContra *
-      (1 - mod.momentum * PESO_MOMENTUM_CONTRA) *
-      mod.cortaContra,
+    contra: contraCom(pesos.contra, mod, ruim, travado),
   }
+}
+
+/**
+ * Peso do contra-ataque, com PISO.
+ *
+ * Seis fatores empurram esse peso para baixo (atributo, defesa, travamento,
+ * tática, momentum e o perk). Multiplicados, chegavam a derrubar o risco para
+ * 1% — e uma decisão sem consequência não é decisão: a opção ousada virava
+ * grátis e a Frieza, que corta 25% do risco, não mudava nada visível.
+ *
+ * O piso é aplicado ANTES do perk de propósito. Assim a Frieza sempre morde
+ * alguma coisa: ela corta um quarto de um risco que nunca é zero, em vez de um
+ * quarto de quase nada.
+ */
+const contraCom = (
+  base: number,
+  mod: Modificadores,
+  ruim: number,
+  travado: number,
+): number => {
+  const reduzido =
+    base *
+    ruim *
+    (1 - mod.edgeDefesa * PESO_DEFESA) *
+    travado *
+    mod.taticaContra *
+    (1 - mod.momentum * PESO_MOMENTUM_CONTRA)
+  return Math.max(base * CONTRA_PISO, reduzido) * mod.cortaContra
 }
 
 /**

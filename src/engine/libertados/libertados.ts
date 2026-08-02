@@ -112,6 +112,18 @@ const tieMatchesOf = (
       result.stage === stage && pair.includes(result.homeId) && pair.includes(result.awayId),
   )
 
+/** Saldo que o jogador traz da ida para a volta do confronto atual. */
+export const libertadosAggregateLeadBeforeMatch = (state: LibertadosState): number => {
+  if (!state.playerClubId || !isKnockoutStage(state.stage) || state.round !== 1) return 0
+  const pair = knockoutPairs(state, state.stage).find((candidate) =>
+    candidate.includes(state.playerClubId!),
+  )
+  if (!pair) return 0
+  const opponentId = pair[0] === state.playerClubId ? pair[1] : pair[0]
+  const firstLeg = tieMatchesOf(state, state.stage, pair)
+  return aggregateOf(firstLeg, state.playerClubId) - aggregateOf(firstLeg, opponentId)
+}
+
 /** Simula todos os jogos da data atual, pulando o do jogador. */
 const simulateDate = (state: LibertadosState, rng: RngState): RngResult<readonly LibertadosMatch[]> => {
   const played: LibertadosMatch[] = []

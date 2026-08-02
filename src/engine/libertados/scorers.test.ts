@@ -57,8 +57,9 @@ describe('artilharia da Copa Libertados', () => {
       .filter((match) => match.homeId === rival || match.awayId === rival)
       .reduce((sum, match) => sum + (match.homeId === rival ? match.homeGoals : match.awayGoals), 0)
 
-    // Act
-    const golsDoRival = libertadosScorers(base, 99)
+    // Act: limite folgado de propósito — 99 já cortava artilheiros de 1 gol
+    // do rival e a soma "sumia" com gols que na verdade existiam
+    const golsDoRival = libertadosScorers(base, 9999)
       .filter((row) => row.clubId === rival)
       .reduce((sum, row) => sum + row.goals, 0)
 

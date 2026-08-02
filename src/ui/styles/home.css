@@ -320,8 +320,13 @@
     grid-column: 1 / 2;
   }
 
-  .shell-tabs .tab-panel > .news-center {
+  /*
+   * A tabela divide a linha de cima com os treinos e termina junto com eles:
+   * as duas bordas fecham no mesmo lugar, sem card boiando.
+   */
+  .shell-tabs .tab-panel > .standings-peek {
     grid-column: 2 / -1;
+    align-self: stretch;
   }
 
   /* meia largura: 2×2 respira melhor que quatro cartões espremidos */
@@ -335,59 +340,38 @@
   }
 
   /*
-   * Uma notícia por vez, como no celular — mas no computador ela ocupa a
-   * coluna inteira em vez de flutuar num card baixo com um buraco embaixo.
-   * O retrato cresce, a manchete vira manchete de verdade e o card sobe para
-   * a altura da grade de treinos ao lado.
+   * A notícia fecha a Home na largura inteira. Numa coluna estreita ela
+   * precisava empilhar retrato e texto; aqui volta a ser manchete de jornal —
+   * retrato à esquerda, título grande ao lado.
    */
   .shell-tabs .tab-panel > .news-center {
-    position: relative;
-    align-self: stretch;
-    min-height: 0;
-  }
-
-  .shell-tabs .tab-panel > .news-center .news-track {
-    flex: 1;
-    min-height: 0;
-  }
-
-  /*
-   * As bolinhas saem do fluxo e flutuam sobre o rodapé do card. Empilhadas
-   * embaixo dele, elas comiam altura e a base do card parava antes da grade
-   * de treinos ao lado — que é justamente o alinhamento que se quer ver.
-   */
-  .shell-tabs .tab-panel > .news-center .news-dots {
-    position: absolute;
-    right: 0;
-    bottom: 16px;
-    left: 0;
+    grid-column: 1 / -1;
   }
 
   .shell-tabs .tab-panel > .news-center .news-card {
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
-    gap: 20px;
-    padding: 30px 30px 52px;
+    gap: 26px;
+    padding: 26px 32px;
+    min-height: 150px;
   }
 
   .shell-tabs .tab-panel > .news-center .news-media,
   .shell-tabs .tab-panel > .news-center .news-portrait {
-    width: 132px;
-    height: 132px;
+    width: 116px;
+    height: 116px;
   }
 
   .shell-tabs .tab-panel > .news-center .news-headline {
     font-family: var(--display);
-    font-size: 30px;
+    font-size: 28px;
     font-weight: 400;
-    line-height: 1.02;
+    line-height: 1.04;
     letter-spacing: 0.01em;
   }
 
   .shell-tabs .tab-panel > .news-center .news-body {
     font-size: 14px;
     line-height: 1.65;
+    max-width: 62ch;
   }
 }
 
@@ -397,5 +381,136 @@
   }
   .tab-panel .training-card:hover {
     transform: none;
+  }
+}
+
+/* ---------- recorte da tabela na Home ---------- */
+
+/*
+ * O recorte da tabela: cinco linhas em volta da sua. A tabela cheia mora na
+ * aba Liga — aqui só interessa quem está ao seu alcance.
+ */
+/* mesmo esqueleto do bloco de treinos: rótulo, depois o card */
+.standings-peek {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.standings-peek .peek-table {
+  /*
+   * As linhas se distribuem pela altura disponível: a primeira encosta no
+   * topo do card e a última no rodapé. Com `center` sobrava um buraco em cima
+   * e só a base ficava alinhada com os treinos.
+   */
+  flex: 1;
+  justify-content: space-between;
+  padding: 14px 10px;
+}
+
+.peek-head {
+  /*
+   * Mesma caixa do rótulo dos treinos: sem altura mínima e sem centralização
+   * própria, senão o cabeçalho fica um par de pixels mais alto e o card abaixo
+   * desce junto — que era o resto de desalinhamento entre as duas colunas.
+   */
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  /* a métrica do card-label manda na altura da linha */
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.peek-position {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  /* herda a altura da linha: sem isso o número esticava o cabeçalho e
+     empurrava o card alguns pixels abaixo do card de treinos */
+  line-height: inherit;
+}
+
+.peek-table {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.peek-row {
+  display: grid;
+  grid-template-columns: 22px auto minmax(0, 1fr) auto 28px 24px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 4px;
+  font-size: 12.5px;
+}
+
+/* as pontas desbotam: diz que a tabela continua, sem precisar de reticências */
+.peek-row-fade {
+  opacity: 0.42;
+}
+
+.peek-row-you {
+  opacity: 1;
+  background: rgba(255, 210, 63, 0.07);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.peek-pos {
+  color: var(--steel);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.peek-row-you .peek-pos {
+  color: var(--accent);
+}
+
+.peek-club {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.peek-row-you .peek-club {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.peek-form {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.peek-points {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.peek-played {
+  color: var(--steel);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* no celular a coluna some: os pontos falam, o resto aperta */
+@media (max-width: 420px) {
+  .peek-form {
+    display: none;
+  }
+
+  .peek-row {
+    grid-template-columns: 20px auto minmax(0, 1fr) 26px 22px;
   }
 }

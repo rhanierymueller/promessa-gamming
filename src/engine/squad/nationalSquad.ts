@@ -29,6 +29,7 @@ const fromMarket = (player: MarketPlayer): SquadPlayer => ({
   altPositions: player.altPositions,
   age: player.age,
   potential: player.potential,
+  peakAge: player.peakAge,
   shirt: 0,
   attrs: player.attrs,
   overall: player.overall,

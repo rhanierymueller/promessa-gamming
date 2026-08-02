@@ -885,3 +885,222 @@
     transform: none !important;
   }
 }
+
+/* ---------- noites de copa (Libertados e Copa do Brasil) ---------- */
+
+/*
+ * A cena é um estádio à noite: dois refletores cruzando de cima, névoa baixa e
+ * as taças sobre pedestais de luz. A seção fica entre a parede de figurinhas e
+ * a convocação, então precisa parecer OUTRO lugar — o túnel é fechado e seco,
+ * aqui é campo aberto e frio.
+ */
+.cupnights {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(64px, 9vw, 112px) clamp(16px, 6vw, 64px);
+  text-align: center;
+  background:
+    radial-gradient(120% 80% at 50% 120%, #12162a 0%, transparent 60%),
+    linear-gradient(#0b0912, #0e1220 55%, #0b0912);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+/* os dois refletores: um dourado (continente), um verde (país) */
+.cupnights-floodlight {
+  position: absolute;
+  top: -30%;
+  width: 60%;
+  height: 130%;
+  pointer-events: none;
+  filter: blur(6px);
+  opacity: 0.5;
+}
+
+.cupnights-floodlight-a {
+  left: -8%;
+  background: conic-gradient(from 150deg at 50% 0%, transparent 0deg, rgba(242, 194, 48, 0.16) 14deg, transparent 30deg);
+  animation: cupnights-sway 9s ease-in-out infinite alternate;
+}
+
+.cupnights-floodlight-b {
+  right: -8%;
+  background: conic-gradient(from 180deg at 50% 0%, transparent 0deg, rgba(79, 191, 114, 0.15) 15deg, transparent 32deg);
+  animation: cupnights-sway 11s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes cupnights-sway {
+  from { transform: rotate(-3deg); }
+  to { transform: rotate(3deg); }
+}
+
+/* névoa rasteira: separa o gramado do fundo sem desenhar gramado nenhum */
+.cupnights-haze {
+  position: absolute;
+  inset: auto 0 0;
+  height: 42%;
+  pointer-events: none;
+  background: linear-gradient(transparent, rgba(120, 150, 190, 0.07) 60%, rgba(120, 150, 190, 0.12));
+}
+
+.cupnights-head {
+  position: relative;
+  z-index: 2;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.cupnights-title {
+  margin: 0 0 14px;
+  font-family: var(--display);
+  font-size: clamp(30px, 6vw, 58px);
+  line-height: 0.92;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  text-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+}
+
+/* a segunda linha do título muda de cor: é a virada da frase */
+.cupnights-title em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+.cupnights-body {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+.cupnights-cups {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(24px, 5vw, 64px);
+  max-width: 900px;
+  margin: clamp(36px, 6vw, 64px) auto 0;
+}
+
+.cupnights-cup {
+  --cup-accent: var(--accent);
+  flex: 1 1 300px;
+  max-width: 360px;
+  padding: 26px 22px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 4px;
+  background: linear-gradient(rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+  backdrop-filter: blur(2px);
+}
+
+.cupnights-cup-libertados { --cup-accent: #f2c230; }
+.cupnights-cup-copa-brasil { --cup-accent: #4fbf72; }
+
+/* o pedestal é só luz: um facho subindo por trás da taça e a sombra no chão */
+.cupnights-pedestal {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  height: 132px;
+  margin-bottom: 18px;
+}
+
+.cupnights-beam {
+  position: absolute;
+  bottom: 6px;
+  width: 128px;
+  height: 118px;
+  background: radial-gradient(
+    50% 60% at 50% 100%,
+    color-mix(in srgb, var(--cup-accent) 26%, transparent),
+    transparent 72%
+  );
+  filter: blur(3px);
+}
+
+.cupnights-art {
+  position: relative;
+  height: 118px;
+  width: auto;
+  image-rendering: pixelated;
+  filter:
+    drop-shadow(0 14px 22px rgba(0, 0, 0, 0.7))
+    drop-shadow(0 0 16px color-mix(in srgb, var(--cup-accent) 34%, transparent));
+  animation: cupnights-float 5.5s ease-in-out infinite;
+}
+
+.cupnights-cup-copa-brasil .cupnights-art {
+  animation-delay: 1.2s;
+}
+
+@keyframes cupnights-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* a sombra fica no chão enquanto a taça flutua — é o que dá o peso */
+.cupnights-shadow {
+  position: absolute;
+  bottom: 0;
+  width: 84px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.62), transparent);
+}
+
+.cupnights-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--cup-accent) 45%, transparent);
+  border-radius: 2px;
+  color: var(--cup-accent);
+  font-size: 9.5px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.cupnights-name {
+  margin: 12px 0 4px;
+  font-family: var(--display);
+  font-size: clamp(21px, 3.2vw, 29px);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.cupnights-line {
+  margin: 0 0 12px;
+  color: var(--cup-accent);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.cupnights-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.cupnights-note {
+  position: relative;
+  z-index: 2;
+  max-width: 560px;
+  margin: clamp(30px, 5vw, 48px) auto 0;
+  color: var(--steel);
+  font-size: 12px;
+  line-height: 1.6;
+  font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cupnights-floodlight,
+  .cupnights-art {
+    animation: none;
+  }
+}

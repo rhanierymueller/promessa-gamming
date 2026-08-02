@@ -4,6 +4,7 @@ import {
   formatMoney,
   marketPoolFor,
   priceRangeFor,
+  saleValueFor,
   squadWithSignings,
   starsFor,
   type Signing,
@@ -52,6 +53,24 @@ describe('formatMoney', () => {
     expect(formatMoney(1_500_000)).toBe('R$ 1,5 mi')
     expect(formatMoney(12_000_000)).toBe('R$ 12 mi')
     expect(formatMoney(150_000_000)).toBe('R$ 150 mi')
+  })
+})
+
+describe('saleValueFor — oferta para vender jogador', () => {
+  test('jogador fraco e de baixo potencial rende só algumas centenas de milhares', () => {
+    expect(saleValueFor({ overall: 40, age: 30, potential: 'baixo' })).toBe(210_000)
+  })
+
+  test('craque de 35 anos cai para poucos milhões pela baixa liquidez', () => {
+    const veteran = saleValueFor({ overall: 90, age: 35, potential: 'alto' })
+
+    expect(veteran).toBeGreaterThanOrEqual(2_000_000)
+    expect(veteran).toBeLessThanOrEqual(6_000_000)
+  })
+
+  test('aceita teto para não lucrar revendendo contratação no mesmo ano', () => {
+    expect(saleValueFor({ overall: 90, age: 24, potential: 'alto' }, 750_000)).toBe(750_000)
+    expect(saleValueFor({ overall: 40, age: 30, potential: 'baixo' }, 90_000)).toBe(90_000)
   })
 })
 
@@ -153,6 +172,24 @@ describe('squadWithSignings — contratado ocupa uma vaga da posição dele', ()
     // Assert
     expect(older.find((player) => player.id === 'mkt-teste')!.age).toBe(29)
     expect(retired.some((player) => player.id === 'mkt-teste')).toBe(false)
+  })
+
+  test('reforço vendido sai e devolve a vaga original sem mover os outros reforços', () => {
+    const second = { ...signing, id: 'mkt-segundo', name: 'Outro Zagueiro' }
+    const withBoth = squadWithSignings(base, [signing, second], 1)
+    const secondSlot = withBoth.findIndex((player) => player.id === second.id)
+
+    const afterSale = squadWithSignings(
+      base,
+      [signing, second],
+      1,
+      9,
+      [{ playerId: signing.id }],
+    )
+
+    expect(afterSale.some((player) => player.id === signing.id)).toBe(false)
+    expect(afterSale[secondSlot].id).toBe(second.id)
+    expect(afterSale).toHaveLength(base.length)
   })
 })
 

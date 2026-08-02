@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'vitest'
-import { advanceLibertados, createLibertados, simulateEdition } from './libertados'
+import {
+  advanceLibertados,
+  createLibertados,
+  libertadosAggregateLeadBeforeMatch,
+  simulateEdition,
+} from './libertados'
 import { playerFixture, playerOpponentId } from './fixtures'
 import { createRng } from '../rng'
 import { GROUP_COUNT, GROUP_ROUNDS, GROUP_SIZE, isLibertadosRunning, type LibertadosState } from './types'
@@ -87,6 +92,20 @@ describe('edição da Copa Libertados', () => {
     const volta = advanceLibertados(ida.value.state, 1, 0, ida.next)
     expect(volta.value.state.stage).toBe('quarter')
     expect(volta.value.state.round).toBe(0)
+  })
+
+  test('a volta carrega o saldo da ida para decidir o agregado', () => {
+    let state = nova()
+    let rng = createRng(3)
+    for (let round = 0; round < GROUP_ROUNDS; round++) {
+      const advanced = advanceLibertados(state, 3, 0, rng)
+      state = advanced.value.state
+      rng = advanced.next
+    }
+
+    const ida = advanceLibertados(state, 0, 2, rng).value.state
+
+    expect(libertadosAggregateLeadBeforeMatch(ida)).toBe(-2)
   })
 
   test('agregado empatado no mata-mata vai aos pênaltis', () => {

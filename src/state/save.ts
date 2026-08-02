@@ -1,4 +1,10 @@
 import { clubById, type Club } from '../data/clubs'
+import {
+  addDays,
+  PRESEASON_DAYS,
+  roundDate,
+  type CalendarDate,
+} from '../engine/career/calendar'
 import { nationById } from '../data/nations'
 import {
   ATTRIBUTE_KEYS,
@@ -30,6 +36,14 @@ import {
 import { playerAgeInSeason } from '../engine/squad/aging'
 import { createRival, rivalRoundGoals, type RivalState } from '../engine/career/rival'
 import {
+  addAward,
+  wonGoldenBoot,
+  wonMvp,
+  type Award,
+} from '../engine/career/awards'
+import { createCopaBrasil } from '../engine/copaBrasil/copaBrasil'
+import type { CopaBrasilState } from '../engine/copaBrasil/types'
+import {
   applyPromotionRelegation,
   divisionOf,
   initialDivisions,
@@ -38,13 +52,22 @@ import {
 } from '../engine/pyramid/pyramid'
 import type { LibertadosState } from '../engine/libertados/types'
 import { createLibertados, simulateEdition } from '../engine/libertados/libertados'
-import { FORMATION_IDS, userSlotIndex, type FormationId, type PlayerFieldPosition } from '../engine/squad/formation'
-import { allowanceFor, titlePrizeFor, type MarketPlayer, type Signing } from '../engine/market/market'
-import { USER_PLAYER_ID, USER_SQUAD_INDEX } from '../engine/squad/players'
+import { FORMATION_IDS, FORMATIONS, userSlotIndex, type FormationId, type PlayerFieldPosition } from '../engine/squad/formation'
+import {
+  allowanceFor,
+  saleValueFor,
+  titlePrizeFor,
+  type MarketPlayer,
+  type PlayerSale,
+  type Signing,
+} from '../engine/market/market'
+import { overallAt, SQUAD_SIZE, USER_PLAYER_ID, USER_SQUAD_INDEX, type SquadPlayer } from '../engine/squad/players'
 import { computeTable, createSeason, isSeasonOver } from '../engine/season/season'
 import { createRng } from '../engine/rng'
 import type { TournamentKind, TournamentState } from '../engine/tournament/tournament'
-import { SEASON_TEAMS, type SeasonState } from '../engine/season/types'
+import { SEASON_ROUNDS, SEASON_TEAMS, type SeasonState } from '../engine/season/types'
+import { seasonScorers } from '../engine/season/scorers'
+import type { CompetitionId } from '../engine/career/schedule'
 import { parseConsent, type ConsentRecord } from './consent'
 import { isOffensiveName } from './moderation'
 
@@ -53,7 +76,7 @@ import { isOffensiveName } from './moderation'
  * (nacionalidade padrão Brasil + temporada nova).
  */
 
-export const SAVE_VERSION = 20
+export const SAVE_VERSION = 23
 const SAVE_KEY = 'promessa.save'
 export const MAX_PLAYER_NAME = 16
 const DEFAULT_SHIRT_NUMBER = 10
@@ -66,6 +89,10 @@ export const HAIR_COLOR_COUNT = 4
 export const KIT_COLOR_COUNT = 6
 
 export const MAX_CLUB_NAME = 24
+/** Cidade/região do clube: cabe num rodapé de card sem quebrar linha. */
+export const MAX_CLUB_CITY = 22
+/** A sigla do placar tem três casas — nem mais, nem menos. */
+export const CLUB_ABBR_LENGTH = 3
 
 /** Só as últimas partidas ficam gravadas — o resto vira total da carreira. */
 export const HISTORY_LIMIT = 10
@@ -128,7 +155,7 @@ export const DEFAULT_APPEARANCE: PlayerAppearance = {
   gender: 'masculino',
 }
 
-export type Competition = 'liga' | 'amistoso' | 'selecao' | 'libertados'
+export type Competition = 'liga' | 'amistoso' | 'selecao' | 'libertados' | 'copa-brasil'
 
 export interface MatchRecord {
   readonly opponentId: string
@@ -148,11 +175,15 @@ export interface PlayerSave {
   readonly shirtNumber: number
   /** Ano da carreira (temporada 1, 2, 3…) — define o torneio do calendário. */
   readonly careerYear: number
+  /** O dia em que a carreira está — o relógio que o botão de avançar move. */
+  readonly currentDate: CalendarDate
   /** Já disputou o torneio de seleções desta temporada. */
   readonly tournamentPlayed: boolean
   readonly tournament: TournamentState | null
   /** Edição da Copa Libertados em andamento — null fora do torneio. */
   readonly libertados: LibertadosState | null
+  /** Copa do Brasil da temporada — mata-mata com a pirâmide inteira. */
+  readonly copaBrasil: CopaBrasilState | null
   /** Vaga conquistada na temporada passada: joga a Libertados deste ano. */
   readonly libertadosQualified: boolean
   /** Campeões continentais recentes, com ou sem você. */
@@ -196,12 +227,20 @@ export interface PlayerSave {
   readonly customPlayerNames: Readonly<Record<string, string>>
   /** Cores LOCAIS dos clubes (clubId → {primary, secondary}). */
   readonly customClubColors: Readonly<Record<string, ClubColors>>
+  /** Cidade/região rebatizada pelo jogador (clubId → nome). */
+  readonly customClubCities: Readonly<Record<string, string>>
+  /** Sigla de três letras escolhida pelo jogador (clubId → sigla). */
+  readonly customClubAbbrs: Readonly<Record<string, string>>
   /** Verba de transferências da temporada (renova pela divisão). */
   readonly budget: number
   /** Reforços contratados no mercado. */
   readonly signings: readonly Signing[]
+  /** Vendas concluídas; preservam o saldo e renovam a vaga do elenco. */
+  readonly playerSales: readonly PlayerSale[]
   /** Sala de troféus: títulos conquistados com o ano. */
   readonly trophies: readonly Trophy[]
+  /** Prêmios individuais: chuteira de artilheiro e melhor jogador. */
+  readonly awards: readonly Award[]
   /** Habilidades de RPG adquiridas nos marcos da carreira. */
   readonly perks: readonly PerkId[]
   /** Escolha de perk pendente (1 de até 3) — null sem marco aberto. */
@@ -213,6 +252,10 @@ export interface PlayerSave {
   /** Evento de vida aguardando decisão (null = semana tranquila). */
   readonly pendingEvent: PendingLifeEvent | null
   /** Resultado do último evento — banner na Home até dispensar. */
+  /**
+   * Desfecho da última entrevista. Guardado, mas já não vira aviso na Home —
+   * o retorno agora acontece dentro da própria modal da zona mista.
+   */
   readonly eventNote: string | null
   /** O nêmesis: atacante rival que disputa a artilharia com você. */
   readonly rival: RivalState | null
@@ -232,7 +275,14 @@ export interface PerkOffer {
   readonly options: readonly PerkId[]
 }
 
-export type TrophyKind = 'serie-a' | 'serie-b' | 'serie-c' | 'serie-d' | TournamentKind | 'libertados'
+export type TrophyKind =
+  | 'serie-a'
+  | 'serie-b'
+  | 'serie-c'
+  | 'serie-d'
+  | TournamentKind
+  | 'libertados'
+  | 'copa-brasil'
 
 export interface Trophy {
   readonly kind: TrophyKind
@@ -250,6 +300,13 @@ export interface ContinentalTitle {
  * e o reforço de campeão em `engine/market/aiTransfers.ts`.
  */
 export const LIBERTADOS_PRIZE = 50_000_000
+
+/**
+ * Prêmio da Copa do Brasil. Abaixo do continental, acima do título de Série A:
+ * é a taça que um clube pequeno pode levantar, e o dinheiro dela muda o ano
+ * seguinte de quem está embaixo.
+ */
+export const COPA_BRASIL_PRIZE = 30_000_000
 /** Quantos clubes da Série A vão à Libertados. */
 export const LIBERTADOS_SPOTS = 4
 /** Quantos campeões continentais o save guarda. */
@@ -351,10 +408,14 @@ export const createSave = (
     nationalityId,
     shirtNumber: DEFAULT_SHIRT_NUMBER,
     careerYear: 1,
+    // a pré-temporada dá alguns dias de calendário antes do primeiro jogo
+    currentDate: addDays(roundDate(1, 0), -PRESEASON_DAYS),
     tournamentPlayed: false,
     tournament: null,
     libertados: null,
     libertadosQualified: false,
+    // a Copa do Brasil abre já no ano 1: o clube do jogador está sempre nela
+    copaBrasil: createCopaBrasil(seasonSeed(roll), 1, clubId, divisions),
     continentalChampions: [],
     savedAt: 0,
     consent: input.consent ?? null,
@@ -378,9 +439,13 @@ export const createSave = (
     career: EMPTY_CAREER,
     customPlayerNames: {},
     customClubColors: {},
+    customClubCities: {},
+    customClubAbbrs: {},
     budget: allowanceFor(divisionOf(divisions, clubId)),
     signings: [],
+    playerSales: [],
     trophies: [],
+    awards: [],
     perks: [],
     perkOffer: null,
     perfectGames: 0,
@@ -597,6 +662,29 @@ export const withLibertadosState = (save: PlayerSave, state: LibertadosState): P
   }
 }
 
+/**
+ * Aplica o estado da Copa do Brasil. O título entra na estante uma vez só —
+ * reaplicar o mesmo estado não pode render uma segunda taça.
+ */
+export const withCopaBrasilState = (save: PlayerSave, state: CopaBrasilState): PlayerSave => {
+  const becameChampion =
+    state.stage === 'champion' &&
+    state.championId === save.clubId &&
+    save.copaBrasil?.stage !== 'champion'
+  return {
+    ...save,
+    copaBrasil: state,
+    trophies: becameChampion
+      ? [...save.trophies, { kind: 'copa-brasil', year: save.careerYear }]
+      : save.trophies,
+    budget: becameChampion ? save.budget + COPA_BRASIL_PRIZE : save.budget,
+  }
+}
+
+/** Fecha o card de fim da Copa do Brasil; a taça já entrou na estante. */
+export const dismissCopaBrasil = (save: PlayerSave): PlayerSave =>
+  save.copaBrasil ? { ...save, copaBrasil: null } : save
+
 /** Guarda ou dispensa a edição sem mexer no histórico já registrado. */
 export const applyLibertados = (
   save: PlayerSave,
@@ -607,6 +695,10 @@ export const applyLibertados = (
 export const signPlayer = (save: PlayerSave, player: MarketPlayer): PlayerSave => {
   if (player.price > save.budget) return save
   if (save.signings.some((signing) => signing.id === player.id)) return save
+  const openSale =
+    save.playerSales.find(
+      (sale) => sale.filledByPlayerId === undefined && sale.position === player.position,
+    ) ?? save.playerSales.find((sale) => sale.filledByPlayerId === undefined)
   const signing: Signing = {
     id: player.id,
     name: player.name,
@@ -618,8 +710,86 @@ export const signPlayer = (save: PlayerSave, player: MarketPlayer): PlayerSave =
     potential: player.potential,
     peakAttrs: player.peakAttrs,
     price: player.price,
+    ...(openSale ? { slotIndex: openSale.slotIndex } : {}),
   }
-  return { ...save, budget: save.budget - player.price, signings: [...save.signings, signing] }
+  return {
+    ...save,
+    budget: save.budget - player.price,
+    signings: [...save.signings, signing],
+    playerSales: openSale
+      ? save.playerSales.map((sale) =>
+          sale === openSale ? { ...sale, filledByPlayerId: player.id } : sale,
+        )
+      : save.playerSales,
+  }
+}
+
+/** Valor líquido exibido e creditado — uma única fonte para UI e save. */
+export const playerSaleValue = (save: PlayerSave, player: SquadPlayer): number => {
+  const signing = save.signings.find((entry) => entry.id === player.id)
+  const sameSeasonMaximum = signing?.boughtYear === save.careerYear
+    ? signing.price * 0.75
+    : Number.POSITIVE_INFINITY
+  return saleValueFor(player, sameSeasonMaximum)
+}
+
+/**
+ * Vende um jogador do clube e credita a oferta na verba. O protagonista não
+ * pode ser vendido e cada slot faz no máximo uma negociação por temporada,
+ * fechando o atalho de vender infinitas promoções da base no mesmo ano.
+ */
+export const sellPlayer = (
+  save: PlayerSave,
+  player: SquadPlayer,
+  slotIndex: number,
+  squad: readonly SquadPlayer[],
+): PlayerSave => {
+  if (player.id === USER_PLAYER_ID) return save
+  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= SQUAD_SIZE) return save
+  if (squad[slotIndex]?.id !== player.id) return save
+  if (save.playerSales.some((sale) => sale.playerId === player.id)) return save
+  const openSlots = new Set(
+    save.playerSales
+      .filter((sale) => sale.filledByPlayerId === undefined)
+      .map((sale) => sale.slotIndex),
+  )
+  // Com 11 atletas disponíveis não há como disputar a próxima partida.
+  if (SQUAD_SIZE - openSlots.size <= 11) return save
+
+  const lineup = [...save.lineup]
+  const starterSlot = lineup.indexOf(slotIndex)
+  if (starterSlot >= 0) {
+    const used = new Set(lineup)
+    const position = FORMATIONS[save.formation].slots[starterSlot]
+    const replacement = squad
+      .map((candidate, index) => ({ candidate, index }))
+      .filter(({ index }) => !used.has(index) && !openSlots.has(index) && index !== slotIndex)
+      .sort(
+        (a, b) =>
+          overallAt(b.candidate, position) - overallAt(a.candidate, position) ||
+          a.index - b.index,
+      )[0]
+    if (!replacement) return save
+    lineup[starterSlot] = replacement.index
+  }
+
+  const price = playerSaleValue(save, player)
+  const customPlayerNames = { ...save.customPlayerNames }
+  delete customPlayerNames[player.id]
+  const sale: PlayerSale = {
+    playerId: player.id,
+    soldYear: save.careerYear,
+    price,
+    slotIndex,
+    position: player.position,
+  }
+  return {
+    ...save,
+    budget: save.budget + price,
+    playerSales: [...save.playerSales, sale],
+    customPlayerNames,
+    lineup,
+  }
 }
 
 /** Nome de exibição de um jogador do elenco, com o batismo local aplicado. */
@@ -647,6 +817,43 @@ export const currentPlayerAge = (save: PlayerSave): number =>
 
 export const clubDisplayName = (save: PlayerSave, clubId: string): string =>
   save.customClubNames[clubId] ?? clubById(clubId)?.name ?? '???'
+
+/**
+ * Renomeia a cidade/região do clube. Vazio ou igual ao original apaga o
+ * apelido — mesma regra do nome, para o campo em branco sempre significar
+ * "volte ao de fábrica".
+ */
+export const setClubCity = (save: PlayerSave, clubId: string, rawCity: string): PlayerSave => {
+  const club = clubById(clubId)
+  if (!club) return save
+  const city = rawCity.trim().slice(0, MAX_CLUB_CITY)
+  if (city.length > 0 && isOffensiveName(city)) return save
+  const next: Record<string, string> = { ...save.customClubCities }
+  if (city.length === 0 || city === club.city) delete next[clubId]
+  else next[clubId] = city
+  return { ...save, customClubCities: next }
+}
+
+/**
+ * Troca a sigla de três letras — a que aparece no placar e na tabela.
+ *
+ * Só entra com as três casas cheias: sigla pela metade quebraria o alinhamento
+ * do placar, e aceitar uma ou duas letras deixaria o jogador achando que
+ * salvou algo que o jogo ignora.
+ */
+export const setClubAbbr = (save: PlayerSave, clubId: string, rawAbbr: string): PlayerSave => {
+  const club = clubById(clubId)
+  if (!club) return save
+  const abbr = rawAbbr
+    .normalize('NFD')
+    .replace(/[^a-zA-Z]/g, '')
+    .toUpperCase()
+    .slice(0, CLUB_ABBR_LENGTH)
+  const next: Record<string, string> = { ...save.customClubAbbrs }
+  if (abbr.length < CLUB_ABBR_LENGTH || abbr === club.abbr) delete next[clubId]
+  else next[clubId] = abbr
+  return { ...save, customClubAbbrs: next }
+}
 
 const abbrFor = (name: string): string => {
   const letters = name.normalize('NFD').replace(/[^a-zA-Z]/g, '').toUpperCase()
@@ -700,8 +907,62 @@ const isValidSigning = (value: unknown): value is Signing => {
 const normalizeSignings = (value: unknown): readonly Signing[] =>
   Array.isArray(value) ? value.filter(isValidSigning) : []
 
-const VALID_TROPHIES: readonly string[] = [
-  'serie-a', 'serie-b', 'serie-c', 'serie-d', 'copa-america', 'liga-nacoes', 'copa-mundo', 'libertados',
+const normalizePlayerSale = (value: unknown): PlayerSale | null => {
+  if (typeof value !== 'object' || value === null) return null
+  const candidate = value as Record<string, unknown>
+  if (
+    typeof candidate.playerId !== 'string' ||
+    typeof candidate.soldYear !== 'number' ||
+    !Number.isInteger(candidate.soldYear) ||
+    candidate.soldYear < 1 ||
+    typeof candidate.price !== 'number' ||
+    !Number.isFinite(candidate.price) ||
+    candidate.price < 0 ||
+    typeof candidate.slotIndex !== 'number' ||
+    !Number.isInteger(candidate.slotIndex) ||
+    candidate.slotIndex < 0 ||
+    candidate.slotIndex >= SQUAD_SIZE
+  ) return null
+  return {
+    playerId: candidate.playerId,
+    soldYear: candidate.soldYear,
+    price: candidate.price,
+    slotIndex: candidate.slotIndex,
+    position: VALID_POSITIONS.includes(candidate.position as string)
+      ? candidate.position as PlayerSale['position']
+      : 'ATA',
+    ...(typeof candidate.filledByPlayerId === 'string'
+      ? { filledByPlayerId: candidate.filledByPlayerId }
+      : {}),
+  }
+}
+
+const normalizePlayerSales = (value: unknown): readonly PlayerSale[] => {
+  if (!Array.isArray(value)) return []
+  const seen = new Set<string>()
+  return value.map(normalizePlayerSale).filter((sale): sale is PlayerSale => sale !== null).filter((sale) => {
+    if (seen.has(sale.playerId)) return false
+    seen.add(sale.playerId)
+    return true
+  })
+}
+
+/*
+ * Precisa listar TODO `TrophyKind`. Uma taça fora daqui é silenciosamente
+ * descartada ao carregar o save: a Copa do Brasil ficou de fora quando a
+ * competição entrou, e o título sumia da estante no primeiro recarregamento —
+ * sem erro, sem aviso.
+ */
+const VALID_TROPHIES: readonly TrophyKind[] = [
+  'serie-a',
+  'serie-b',
+  'serie-c',
+  'serie-d',
+  'copa-america',
+  'liga-nacoes',
+  'copa-mundo',
+  'libertados',
+  'copa-brasil',
 ]
 
 const normalizePerks = (value: unknown): readonly PerkId[] =>
@@ -780,12 +1041,18 @@ const normalizeClubColors = (value: unknown): Readonly<Record<string, ClubColors
 export const displayClub = (save: PlayerSave, club: Club): Club => {
   const customName = save.customClubNames[club.id]
   const customColors = save.customClubColors[club.id]
-  if (!customName && !customColors) return club
+  const customCity = save.customClubCities[club.id]
+  const customAbbr = save.customClubAbbrs[club.id]
+  if (!customName && !customColors && !customCity && !customAbbr) return club
   return {
     ...club,
     // o apelido é do clube ORIGINAL: rebatizado, ele não vale mais e o nome
     // novo assume (senão a saudação segue chamando o time pelo nome antigo)
     ...(customName ? { name: customName, abbr: abbrFor(customName), nickname: customName } : {}),
+    // a sigla escolhida à mão vem DEPOIS do nome: quem digitou as três letras
+    // quer aquelas três, não as que o nome novo geraria sozinho
+    ...(customAbbr ? { abbr: customAbbr } : {}),
+    ...(customCity ? { city: customCity } : {}),
     ...(customColors ? { colors: customColors } : {}),
   }
 }
@@ -862,6 +1129,42 @@ const normalizeClubNames = (value: unknown): Readonly<Record<string, string>> =>
   return result
 }
 
+const normalizeClubCities = (value: unknown): Readonly<Record<string, string>> => {
+  if (typeof value !== 'object' || value === null) return {}
+  const result: Record<string, string> = {}
+  for (const [clubId, city] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof city === 'string' && city.trim().length > 0 && clubById(clubId)) {
+      result[clubId] = city.trim().slice(0, MAX_CLUB_CITY)
+    }
+  }
+  return result
+}
+
+/** Sigla só entra com as três letras: nada de meia sigla vinda de save torto. */
+const normalizeClubAbbrs = (value: unknown): Readonly<Record<string, string>> => {
+  if (typeof value !== 'object' || value === null) return {}
+  const result: Record<string, string> = {}
+  for (const [clubId, abbr] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof abbr !== 'string' || !clubById(clubId)) continue
+    const clean = abbr.replace(/[^a-zA-Z]/g, '').toUpperCase()
+    if (clean.length === CLUB_ABBR_LENGTH) result[clubId] = clean
+  }
+  return result
+}
+
+/** Prêmios individuais de save antigo: entram vazios em vez de quebrar. */
+const normalizeAwards = (value: unknown): readonly Award[] => {
+  if (!Array.isArray(value)) return []
+  return value.filter(
+    (entry): entry is Award =>
+      typeof entry === 'object' &&
+      entry !== null &&
+      (entry as Award).kind !== undefined &&
+      typeof (entry as Award).competition === 'string' &&
+      typeof (entry as Award).year === 'number',
+  )
+}
+
 const normalizeCrests = (value: unknown): Readonly<Record<string, string>> => {
   if (typeof value !== 'object' || value === null) return {}
   const result: Record<string, string> = {}
@@ -892,6 +1195,34 @@ const normalizeDivisions = (value: unknown, clubId: string): Divisions => {
   }
   if (new Set(flat).size !== flat.length || !flat.includes(clubId)) return fallback
   return divisions as Divisions
+}
+
+/**
+ * O dia da carreira num save antigo: sem relógio gravado, o jogador entra no
+ * dia da rodada que ele tem para jogar. Assim quem estava no meio da temporada
+ * não cai numa data qualquer nem precisa avançar semanas para voltar ao jogo.
+ */
+const normalizeCurrentDate = (
+  value: unknown,
+  careerYear: number,
+  season: SeasonState,
+  inLibertados: boolean,
+): CalendarDate => {
+  const raw = value as Partial<CalendarDate> | undefined
+  if (
+    raw &&
+    typeof raw.year === 'number' &&
+    typeof raw.month === 'number' &&
+    typeof raw.day === 'number' &&
+    raw.month >= 0 &&
+    raw.month <= 11 &&
+    raw.day >= 1 &&
+    raw.day <= 31
+  ) {
+    return { year: raw.year, month: raw.month, day: raw.day }
+  }
+  const round = Math.min(season.currentRound, SEASON_ROUNDS - 1)
+  return roundDate(careerYear, round, inLibertados)
 }
 
 const normalizeAppearance = (value: unknown): PlayerAppearance => {
@@ -966,7 +1297,14 @@ export const resolvePendingEvent = (save: PlayerSave, optionIndex: number): Play
   }
 }
 
-export const dismissEventNote = (save: PlayerSave): PlayerSave => ({ ...save, eventNote: null })
+/**
+ * Sai da zona mista sem falar. Não é uma quarta opção disfarçada: não move
+ * moral, não rende treino e não gera manchete — o silêncio custa nada e não
+ * ganha nada, e é isso que faz dele uma saída honesta em vez de a escolha
+ * ótima de quem não quer arriscar.
+ */
+export const declinePendingEvent = (save: PlayerSave): PlayerSave =>
+  save.pendingEvent ? { ...save, pendingEvent: null, eventNote: null } : save
 
 /** Gasta pontos de treino para subir um atributo — no-op se não puder pagar. */
 export const trainAttribute = (save: PlayerSave, key: AttributeKey): PlayerSave => {
@@ -989,11 +1327,94 @@ export const applyTournament = (save: PlayerSave, tournament: TournamentState | 
   tournamentPlayed: save.tournamentPlayed || tournament !== null,
 })
 
+/** Como o craque foi numa competição, pelo histórico da temporada. */
+interface SeasonRun {
+  readonly games: number
+  readonly goals: number
+  readonly averageRating: number
+}
+
+const runOf = (save: PlayerSave, competition: Competition): SeasonRun => {
+  const played = save.history.filter((record) => record.competition === competition)
+  if (played.length === 0) return { games: 0, goals: 0, averageRating: 0 }
+  return {
+    games: played.length,
+    goals: played.reduce((sum, record) => sum + record.playerGoals, 0),
+    averageRating: played.reduce((sum, record) => sum + record.rating, 0) / played.length,
+  }
+}
+
+/** Da competição do histórico para a do calendário. */
+const awardCompetitionFor = (competition: Competition): CompetitionId | null => {
+  if (competition === 'liga') return 'liga'
+  if (competition === 'libertados') return 'libertados'
+  if (competition === 'copa-brasil') return 'copa-brasil'
+  return null
+}
+
+/**
+ * Apura os prêmios INDIVIDUAIS da temporada que termina.
+ *
+ * Roda na virada do ano de propósito: é o único momento em que todas as
+ * competições já acabaram e o histórico está completo. Apurar a cada apito
+ * exigiria saber, em cada partida, se aquela era a última da competição.
+ *
+ * O artilheiro sai do sorteio de gols que já alimenta a artilharia da tela;
+ * o melhor jogador, da sua nota média na competição.
+ */
+const withSeasonAwards = (save: PlayerSave): PlayerSave => {
+  let awards = save.awards
+
+  for (const competition of ['liga', 'libertados', 'copa-brasil'] as const) {
+    const id = awardCompetitionFor(competition)
+    if (!id) continue
+    const run = runOf(save, competition)
+    if (run.games === 0) continue
+
+    // artilharia: o melhor rival da competição sai da mesma fonte da tela
+    const rivals = seasonScorers(
+      {
+        season: save.season,
+        careerYear: save.careerYear,
+        userClubId: save.clubId,
+        userName: save.playerName,
+        userGoals: run.goals,
+        customNames: save.customPlayerNames,
+        gender: save.appearance.gender,
+      },
+      20,
+    ).filter((row) => !row.isUser)
+    const bestRival = rivals.length > 0 ? Math.max(...rivals.map((row) => row.goals)) : 0
+
+    if (competition === 'liga' && wonGoldenBoot(run.goals, bestRival)) {
+      awards = addAward(awards, {
+        kind: 'chuteira',
+        competition: id,
+        year: save.careerYear,
+        value: run.goals,
+      })
+    }
+    if (wonMvp(run.games, run.averageRating)) {
+      awards = addAward(awards, {
+        kind: 'melhor-jogador',
+        competition: id,
+        year: save.careerYear,
+        value: Math.round(run.averageRating * 10) / 10,
+      })
+    }
+  }
+
+  return awards === save.awards ? save : { ...save, awards }
+}
+
 /**
  * Vira o ano: aplica ACESSO/QUEDA na pirâmide (tabela real da sua divisão,
  * demais simuladas) e monta a temporada da nova divisão do clube.
  */
-export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random): PlayerSave => {
+export const startNewSeason = (base: PlayerSave, roll: RandomRoll = Math.random): PlayerSave => {
+  // os prêmios são apurados ANTES de qualquer coisa: a partir daqui o
+  // histórico começa a ser o do ano novo
+  const save = withSeasonAwards(base)
   const playerDivision = divisionOf(save.divisions, save.clubId)
   const finalOrder = computeTable(save.season).map((row) => row.clubId)
   // título da divisão: prêmio em dinheiro + taça na estante
@@ -1074,12 +1495,18 @@ export const startNewSeason = (save: PlayerSave, roll: RandomRoll = Math.random)
   const updated: PlayerSave = {
     ...save,
     careerYear: save.careerYear + 1,
+    // o relógio volta para a pré-temporada do ano novo. Sem isto a carreira
+    // continuaria no dezembro que acabou de passar, com todos os jogos do ano
+    // seguinte na traseira do calendário e o avanço de dias sem destino.
+    currentDate: addDays(roundDate(nextYear, 0, nextQualified), -PRESEASON_DAYS),
     // playerAge é a idade de CRIAÇÃO e não muda: currentPlayerAge já soma as
     // temporadas por cima dela. Somar aqui também envelhecia dois anos por ano.
     tournamentPlayed: false,
     tournament: null,
     libertados: nextLibertados,
     libertadosQualified: nextQualified,
+    // toda temporada tem a sua Copa do Brasil, com sorteio novo
+    copaBrasil: createCopaBrasil(editionSeed ^ 0x5bf03635, nextYear, save.clubId, shift.value.divisions),
     continentalChampions,
     divisions: shift.value.divisions,
     divisionMovement: shift.value.movement,
@@ -1162,7 +1589,7 @@ const normalizeAttributes = (value: unknown): PlayerAttributes => {
  */
 const fixInflatedAge = (candidate: Record<string, unknown>): Record<string, unknown> => {
   const version = candidate.version
-  if (typeof version !== 'number' || version >= SAVE_VERSION) return candidate
+  if (typeof version !== 'number' || version >= 19) return candidate
   const age = candidate.playerAge
   const year = candidate.careerYear
   if (typeof age !== 'number' || typeof year !== 'number') return candidate
@@ -1215,6 +1642,19 @@ const isValidLibertados = (value: unknown): value is LibertadosState => {
   )
 }
 
+const isValidCopaBrasil = (value: unknown): value is CopaBrasilState => {
+  if (typeof value !== 'object' || value === null) return false
+  const state = value as Record<string, unknown>
+  return (
+    typeof state.seed === 'number' &&
+    typeof state.year === 'number' &&
+    Array.isArray(state.bracket) &&
+    state.bracket.length > 0 &&
+    typeof state.stage === 'string' &&
+    Array.isArray(state.results)
+  )
+}
+
 const normalizeContinentalChampions = (value: unknown): readonly ContinentalTitle[] => {
   if (!Array.isArray(value)) return []
   return value
@@ -1257,6 +1697,25 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
     candidate.celebrationId < CELEBRATION_COUNT
       ? candidate.celebrationId
       : 0
+  const parsedFormation = normalizeFormation(candidate.formation)
+  const parsedPosition = normalizePosition(candidate.playerPosition)
+  const playerSales = normalizePlayerSales(candidate.playerSales)
+  const parsedLineup = [...normalizeLineup(candidate.lineup, parsedFormation, parsedPosition)]
+  const openSaleSlots = new Set(
+    playerSales
+      .filter((sale) => sale.filledByPlayerId === undefined)
+      .map((sale) => sale.slotIndex),
+  )
+  const usedLineupIndices = new Set(parsedLineup)
+  parsedLineup.forEach((squadIndex, lineupSlot) => {
+    if (!openSaleSlots.has(squadIndex)) return
+    const replacement = Array.from({ length: SQUAD_SIZE }, (_, index) => index)
+      .find((index) => !usedLineupIndices.has(index) && !openSaleSlots.has(index))
+    if (replacement === undefined) return
+    usedLineupIndices.delete(squadIndex)
+    usedLineupIndices.add(replacement)
+    parsedLineup[lineupSlot] = replacement
+  })
   const base: PlayerSave = {
     version: SAVE_VERSION,
     playerName: name,
@@ -1268,10 +1727,26 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
         ? Math.floor(candidate.careerYear)
         : 1,
     tournamentPlayed: candidate.tournamentPlayed === true,
+    currentDate: normalizeCurrentDate(
+      candidate.currentDate,
+      typeof candidate.careerYear === 'number' ? candidate.careerYear : 1,
+      season,
+      isValidLibertados(candidate.libertados),
+    ),
     savedAt: typeof candidate.savedAt === 'number' ? candidate.savedAt : 0,
     consent: parseConsent(candidate.consent),
     tournament,
     libertados: isValidLibertados(candidate.libertados) ? candidate.libertados : null,
+    /* save antigo não tem Copa do Brasil: a edição do ano é criada na hora,
+       para quem já estava jogando entrar na competição sem virar o ano */
+    copaBrasil: isValidCopaBrasil(candidate.copaBrasil)
+      ? candidate.copaBrasil
+      : createCopaBrasil(
+          season.seed ^ 0x5bf03635,
+          typeof candidate.careerYear === 'number' ? candidate.careerYear : 1,
+          candidate.clubId as string,
+          divisions,
+        ),
     libertadosQualified: candidate.libertadosQualified === true,
     continentalChampions: normalizeContinentalChampions(candidate.continentalChampions),
     season,
@@ -1281,6 +1756,8 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
     celebrationId,
     appearance: normalizeAppearance(candidate.appearance),
     customClubNames: normalizeClubNames(candidate.customClubNames),
+    customClubCities: normalizeClubCities(candidate.customClubCities),
+    customClubAbbrs: normalizeClubAbbrs(candidate.customClubAbbrs),
     customClubCrests: normalizeCrests(candidate.customClubCrests),
     divisions,
     divisionMovement:
@@ -1296,10 +1773,10 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
       candidate.playerAge <= PLAYER_MAX_AGE
         ? candidate.playerAge
         : DEFAULT_PLAYER_AGE,
-    playerPosition: normalizePosition(candidate.playerPosition),
+    playerPosition: parsedPosition,
     account: normalizeAccount(candidate.account),
-    formation: normalizeFormation(candidate.formation),
-    lineup: normalizeLineup(candidate.lineup, normalizeFormation(candidate.formation), normalizePosition(candidate.playerPosition)),
+    formation: parsedFormation,
+    lineup: parsedLineup,
     nationalLineup: normalizeNationalLineup(candidate.nationalLineup),
     nationalFormation: normalizeFormation(candidate.nationalFormation),
     career: normalizeCareer(candidate.career, normalizeHistory(candidate.history)),
@@ -1307,7 +1784,9 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
     customClubColors: normalizeClubColors(candidate.customClubColors),
     budget: normalizeBudget(candidate.budget, divisions, candidate.clubId),
     signings: normalizeSignings(candidate.signings),
+    playerSales,
     trophies: normalizeTrophies(candidate.trophies),
+    awards: normalizeAwards(candidate.awards),
     perks: normalizePerks(candidate.perks),
     perkOffer: normalizePerkOffer(candidate.perkOffer, normalizePerks(candidate.perks)),
     perfectGames: normalizePerfectGames(candidate.perfectGames),
@@ -1345,6 +1824,9 @@ export const parseSave = (raw: string | null): PlayerSave | null => {
       candidate.version === 17 ||
       candidate.version === 18 ||
       candidate.version === 19 ||
+      candidate.version === 20 ||
+      candidate.version === 21 ||
+      candidate.version === 22 ||
       candidate.version === SAVE_VERSION
     ) {
       return parseCurrent(fixInflatedAge(candidate))

@@ -2,7 +2,7 @@ import { nationalName } from '../../data/nationalNames'
 import { NATIONS } from '../../data/nations'
 import { FIRST_NAMES, FIRST_NAMES_F, SURNAMES } from '../../data/squadNames'
 import { ageValueMultiplier } from './valuation'
-import { ageFactor, RETIRE_AGE, type Potential } from '../squad/aging'
+import { ageFactor, PEAK_AGE, RETIRE_AGE, type Potential } from '../squad/aging'
 import type { FifaAttributes, SquadPlayer, SquadPosition } from '../squad/players'
 import type { PlayerGender } from '../../state/save'
 
@@ -51,6 +51,18 @@ const PRICE_TIERS: readonly { readonly maxOverall: number; readonly range: Price
 const MIN_PRICE = 120_000
 
 /**
+ * Venda imediata de veterano tem pouca liquidez: depois dos 30, poucos clubes
+ * pagam o valor cheio por alguém sem tempo de revenda. É esse desconto que
+ * põe um craque de 35 anos na casa de poucos milhões, sem esmagar o valor de
+ * um jogador modesto ainda em idade útil.
+ */
+const veteranSaleLiquidity = (age: number): number => {
+  if (age <= 30) return 1
+  if (age >= 35) return 0.18
+  return 1 - ((age - 30) / 5) * 0.82
+}
+
+/**
  * Variação aleatória em torno do meio da faixa. Estreita de propósito: com o
  * sorteio na faixa inteira (até 1,9× entre extremos), o acaso engolia o efeito
  * da idade e um veterano saía mais caro que um garoto do mesmo overall.
@@ -65,6 +77,29 @@ const basePriceFor = (range: PriceRange, roll: number): number => {
 
 export const priceRangeFor = (overall: number): PriceRange =>
   (PRICE_TIERS.find((tier) => overall <= tier.maxOverall) ?? PRICE_TIERS[PRICE_TIERS.length - 1]).range
+
+/**
+ * Oferta à vista por um jogador do elenco. Reaproveita a mesma régua do
+ * mercado (overall + idade + potencial), sem o jitter aleatório da vitrine.
+ * `maximum` limita a oferta quando necessário — por exemplo, para impedir
+ * lucro revendendo no mesmo ano um reforço recém-comprado.
+ */
+export const saleValueFor = (
+  player: Pick<SquadPlayer, 'overall' | 'age' | 'potential'>,
+  maximum = Number.POSITIVE_INFINITY,
+): number => {
+  const range = priceRangeFor(player.overall)
+  const base = (range.min + range.max) / 2
+  const value = base * ageValueMultiplier(player.age, player.potential) * veteranSaleLiquidity(player.age)
+  const rounded = Math.round(value / 10_000) * 10_000
+  const roundedMaximum = Number.isFinite(maximum)
+    ? Math.max(0, Math.floor(maximum / 10_000) * 10_000)
+    : Number.POSITIVE_INFINITY
+  const capped = Math.min(rounded, roundedMaximum)
+  // Se o teto estiver abaixo do piso (revenda imediata muito barata), o teto
+  // vence: a proteção contra arbitragem precisa ser absoluta.
+  return Math.max(Math.min(MIN_PRICE, roundedMaximum), capped)
+}
 
 /** Estrelas de overall (0.5 a 5, como no FIFA): ~45=1★, ~67=3★, 88+=5★. */
 export const starsFor = (overall: number): number => {
@@ -105,6 +140,20 @@ export interface Signing {
   readonly potential: Potential
   readonly peakAttrs: FifaAttributes
   readonly price: number
+  /** Vaga aberta que esta contratação ocupou; ausente em saves antigos. */
+  readonly slotIndex?: number
+}
+
+/** Venda concluída; a vaga fica aberta até uma contratação ocupá-la. */
+export interface PlayerSale {
+  readonly playerId: string
+  readonly soldYear: number
+  readonly price: number
+  /** Slot fixo do elenco que ficou livre. */
+  readonly slotIndex: number
+  readonly position: SquadPosition
+  /** Id da contratação que posteriormente ocupou a vaga. */
+  readonly filledByPlayerId?: string
 }
 
 const POOL_SIZE = 160
@@ -285,6 +334,7 @@ export const marketPoolFor = (
       altPositions: [],
       age: legend.age,
       potential: 'alto',
+      peakAge: PEAK_AGE,
       shirt: 0,
       attrs: currentAttrs,
       overall,
@@ -362,6 +412,7 @@ export const marketPoolFor = (
       altPositions: [],
       age,
       potential,
+      peakAge: PEAK_AGE,
       shirt: 0,
       attrs: currentAttrs,
       overall,
@@ -403,6 +454,16 @@ const slotsForSignings = (
   return signings.map((signing) => {
     const order = rank.get(signing.position) ?? 0
     rank.set(signing.position, order + 1)
+    if (
+      signing.slotIndex !== undefined &&
+      Number.isInteger(signing.slotIndex) &&
+      signing.slotIndex >= 0 &&
+      signing.slotIndex < base.length &&
+      signing.slotIndex !== userIndex
+    ) {
+      taken.add(signing.slotIndex)
+      return signing.slotIndex
+    }
     // vagas da posição, da mais funda do banco para a mais alta
     const samePosition = free.filter((index) => base[index].position === signing.position).reverse()
     const wanted = samePosition[order]
@@ -421,10 +482,13 @@ export const squadWithSignings = (
   signings: readonly Signing[],
   careerYear: number,
   userIndex = 9,
+  sales: readonly Pick<PlayerSale, 'playerId'>[] = [],
 ): readonly SquadPlayer[] => {
   const squad = [...base]
   const slots = slotsForSignings(base, signings, userIndex)
+  const soldIds = new Set(sales.map((sale) => sale.playerId))
   signings.forEach((signing, signingIndex) => {
+    if (soldIds.has(signing.id)) return
     const age = signing.baseAge + (careerYear - signing.boughtYear)
     if (age > RETIRE_AGE) return
     const factor = ageFactor(age, signing.potential)
@@ -436,6 +500,7 @@ export const squadWithSignings = (
       altPositions: signing.altPositions,
       age,
       potential: signing.potential,
+      peakAge: PEAK_AGE,
       shirt: 0,
       attrs,
       overall: overallFor(signing.position, attrs),

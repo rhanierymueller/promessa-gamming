@@ -103,6 +103,43 @@ describe('distribuição de desfechos', () => {
     expect(distribuicao(jogada, { ...NEUTRO, edgeDefesa: 1 }).contra).toBeLessThan(base.contra)
   })
 
+  it('nenhuma decisão fica sem risco, por melhor que seja o cenário', () => {
+    // todos os redutores no talo: craque, defesa dominando, recuado e embalado
+    const protegido = {
+      ...NEUTRO,
+      nivel: 10,
+      edgeDefesa: 1,
+      travamento: 1,
+      taticaContra: 0.5,
+      momentum: 1,
+    }
+    for (const jogada of CATALOGO) {
+      expect(distribuicao(jogada, protegido).contra).toBeGreaterThan(0.01)
+    }
+  })
+
+  it('o piso não apaga a diferença entre a jogada ousada e a segura', () => {
+    const protegido = { ...NEUTRO, nivel: 10, edgeDefesa: 1, travamento: 1, momentum: 1 }
+    const ousada = CATALOGO.find((j) => j.faixa === 'alta')!
+    const segura = CATALOGO.find((j) => j.faixa === 'baixa')!
+    expect(distribuicao(ousada, protegido).contra).toBeGreaterThan(
+      distribuicao(segura, protegido).contra,
+    )
+  })
+
+  it('a frieza morde mesmo no cenário mais protegido — é o que a torna útil', () => {
+    /*
+     * Sem o piso, os redutores empilhados derrubavam o risco a ~1% e o perk
+     * cortava um quarto de nada. O piso é aplicado ANTES do corte justamente
+     * para a habilidade sempre valer alguma coisa.
+     */
+    const protegido = { ...NEUTRO, nivel: 10, edgeDefesa: 1, travamento: 1, momentum: 1 }
+    const ousada = CATALOGO.find((j) => j.faixa === 'alta')!
+    const sem = distribuicao(ousada, protegido).contra
+    const com = distribuicao(ousada, { ...protegido, cortaContra: 0.75 }).contra
+    expect(sem - com).toBeGreaterThan(0.01)
+  })
+
   it('a jogada ousada tem saldo pior para o novato e melhor para o craque', () => {
     const ousada = CATALOGO.find((j) => j.faixa === 'alta')!
     const media = CATALOGO.find((j) => j.faixa === 'media' && j.atributo === ousada.atributo)!

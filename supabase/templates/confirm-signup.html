@@ -1,0 +1,92 @@
+<!--
+  Promessa · e-mail de confirmação de cadastro
+
+  Mesmas regras do reset (tabela, CSS inline, sem imagem externa) — veja
+  reset-password.html para o porquê de cada uma.
+-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0;padding:0;background-color:#0b0912;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background-color:#100c1a;border:1px solid #322850;border-radius:10px;overflow:hidden;">
+
+        <tr>
+          <td align="center" style="padding:28px 24px 6px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="padding-right:8px;">
+                  <div style="width:8px;height:8px;background-color:#ffd23f;border-radius:50%;"></div>
+                </td>
+                <td style="font-family:'Courier New',Courier,monospace;font-size:12px;letter-spacing:4px;color:#9c93b3;text-transform:uppercase;">
+                  Promessa
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td align="center" style="padding:14px 32px 0;">
+            <h1 style="margin:0;font-family:Impact,'Arial Narrow Bold','Arial Black',sans-serif;font-size:34px;line-height:1.05;font-weight:400;letter-spacing:1px;color:#f5f0e6;text-transform:uppercase;">
+              Sua carreira<br />
+              <span style="color:#ffd23f;">começa aqui</span>
+            </h1>
+          </td>
+        </tr>
+
+        <tr>
+          <td align="center" style="padding:16px 40px 0;">
+            <p style="margin:0;font-family:'Courier New',Courier,monospace;font-size:14px;line-height:1.7;color:#9c93b3;">
+              Falta um passo: confirme o e-mail e o clube está liberado. Da Série D ao
+              topo — e a carreira fica salva, para você jogar de onde parou.
+            </p>
+          </td>
+        </tr>
+
+        <tr>
+          <td align="center" style="padding:28px 24px 8px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" style="background-color:#ffd23f;border-radius:6px;">
+                  <a href="{{ .ConfirmationURL }}"
+                     style="display:inline-block;padding:15px 44px;font-family:Impact,'Arial Narrow Bold','Arial Black',sans-serif;font-size:17px;letter-spacing:2px;color:#100c1a;text-decoration:none;text-transform:uppercase;">
+                    Confirmar e jogar
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td align="center" style="padding:16px 40px 0;">
+            <p style="margin:0;font-family:'Courier New',Courier,monospace;font-size:11px;line-height:1.6;color:#6f6885;">
+              Se o botão não abrir, copie este endereço no navegador:<br />
+              <a href="{{ .ConfirmationURL }}" style="color:#8fa7c4;word-break:break-all;">{{ .ConfirmationURL }}</a>
+            </p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:26px 40px 30px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="border-top:1px solid #241d38;padding-top:18px;">
+                  <p style="margin:0;font-family:'Courier New',Courier,monospace;font-size:11px;line-height:1.7;color:#6f6885;">
+                    Não foi você que criou esta conta? Pode ignorar — sem a confirmação
+                    ela não vale nada.
+                  </p>
+                  <p style="margin:14px 0 0;font-family:'Courier New',Courier,monospace;font-size:10px;letter-spacing:2px;color:#4d4763;text-transform:uppercase;">
+                    Promessa · o jogo de carreira
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+      </table>
+
+    </td>
+  </tr>
+</table>

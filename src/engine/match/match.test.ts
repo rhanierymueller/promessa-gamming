@@ -9,8 +9,9 @@ import { DEFAULT_MATCH_CONFIG } from './config'
 const CFG = {
   ...DEFAULT_MATCH_CONFIG,
   diceDuelChance: 0,
-  // testes determinísticos de contagem mantêm a única vaga de falta presente
+  // testes determinísticos de contagem mantêm as vagas sorteáveis sempre cheias
   playerFreeKickChance: 1,
+  opponentFreeKickChance: 1,
 }
 import {
   advance,
@@ -66,6 +67,51 @@ describe('startMatch', () => {
     expect(match.plan.filter((m) => m.kind === 'playerFreeKick')).toHaveLength(CFG.playerFreeKicks)
     expect(match.plan.filter((m) => m.kind === 'playerDecision')).toHaveLength(CFG.playerDecisions)
     expect(match.plan.filter((m) => m.kind === 'opponentFreeKick')).toHaveLength(CFG.opponentFreeKicks)
+  })
+
+  test('os lances jogáveis se espalham pelos dois tempos', () => {
+    // Arrange & Act: com 2 decisões, uma cai em cada tempo
+    const match = startMatch(42, CFG)
+    const decisions = match.plan.filter((m) => m.kind === 'playerDecision')
+
+    // Assert
+    expect(decisions).toHaveLength(2)
+    expect(decisions.filter((m) => m.minute <= 45)).toHaveLength(1)
+    expect(decisions.filter((m) => m.minute > 45)).toHaveLength(1)
+  })
+
+  test('o chute abre no primeiro tempo e a falta é do segundo', () => {
+    // em qualquer semente: são lances de momentos diferentes do jogo
+    for (const seed of [1, 7, 42, 99, 2026]) {
+      const match = startMatch(seed, CFG)
+      const shot = match.plan.find((m) => m.kind === 'playerShot')!
+      const freeKick = match.plan.find((m) => m.kind === 'playerFreeKick')!
+      expect(shot.minute).toBeLessThanOrEqual(45)
+      expect(freeKick.minute).toBeGreaterThan(45)
+    }
+  })
+
+  test('nenhum lance jogável cai em cima de outro do mesmo tipo', () => {
+    // era o incômodo: três decisões seguidas em dez minutos de jogo
+    for (const seed of [3, 11, 55, 404]) {
+      const match = startMatch(seed, CFG)
+      const decisions = match.plan.filter((m) => m.kind === 'playerDecision')
+      const minutes = decisions.map((m) => m.minute).sort((a, b) => a - b)
+      for (let i = 1; i < minutes.length; i++) {
+        expect(minutes[i] - minutes[i - 1]).toBeGreaterThan(5)
+      }
+    }
+  })
+
+  test('a defesa nem sempre acontece: é sorteio, não compromisso', () => {
+    // com a chance real da config, partidas diferentes têm contagens diferentes
+    const counts = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(
+      (seed) =>
+        startMatch(seed, { ...CFG, opponentFreeKickChance: DEFAULT_MATCH_CONFIG.opponentFreeKickChance })
+          .plan.filter((m) => m.kind === 'opponentFreeKick').length,
+    )
+    expect(new Set(counts).size).toBeGreaterThan(1)
+    expect(Math.max(...counts)).toBeLessThanOrEqual(DEFAULT_MATCH_CONFIG.opponentFreeKicks)
   })
 
   test('é determinística para a mesma seed', () => {
@@ -448,6 +494,21 @@ describe('desempate no lance dos dados', () => {
     expect(needsDecider(empatado, false)).toBe(false)
     expect(needsDecider({ ...empatado, score: { team: 2, opponent: 1 } }, true)).toBe(false)
     expect(needsDecider(startMatch(11, CFG), true)).toBe(false)
+  })
+
+  test('na volta, decide pelo placar agregado dos dois jogos', () => {
+    const empateNaVolta = finishedTied()
+    const vitoriaPorUmNaVolta = {
+      ...empateNaVolta,
+      score: { team: 2, opponent: 1 },
+    }
+
+    // perdeu a ida por um e empatou a volta: perdeu no agregado, sem dados
+    expect(needsDecider(empateNaVolta, true, -1)).toBe(false)
+    // perdeu a ida por um e venceu a volta por um: agregado empatado, vai aos dados
+    expect(needsDecider(vitoriaPorUmNaVolta, true, -1)).toBe(true)
+    // venceu a ida por um e empatou a volta: já está classificado, sem dados
+    expect(needsDecider(empateNaVolta, true, 1)).toBe(false)
   })
 
   test('ganhar nos dados desempata a seu favor', () => {

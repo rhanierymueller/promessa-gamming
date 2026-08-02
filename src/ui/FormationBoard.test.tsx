@@ -10,6 +10,7 @@ const player = (id: string, name: string, position: SquadPlayer['position']): Sq
   position,
   altPositions: [],
   age: 24,
+  peakAge: 27,
   potential: 'medio',
   shirt: 1,
   attrs: { pac: 76, fin: 68, pas: 71, dri: 73, def: 74, fis: 72 },

@@ -142,6 +142,7 @@ export const LivePitch = ({
   const speedRef = useRef(speed)
   speedRef.current = speed
   const frozenRef = useRef(frozen)
+  const wasFrozenRef = useRef(frozen)
   frozenRef.current = frozen
   const tacticRef = useRef(tactic)
   tacticRef.current = tactic
@@ -452,6 +453,24 @@ export const LivePitch = ({
     }
 
     const update = (dt: number): void => {
+      /*
+       * O campo acabou de descongelar. Ao entregar a bola para o mini-game o
+       * `holdTimer` foi gravado em HOLD_UNTIL_MINIGAME (9s) — e ele não corre
+       * enquanto o campo está parado. Sem cortar aqui, uma decisão que NÃO
+       * termina em gol devolvia a bola com nove segundos de espera no relógio:
+       * o jogador escolhia e via o time paralisado, como se estivesse pensando.
+       *
+       * A correção antiga só pegava o caso do GOL, porque ali chega uma ordem
+       * nova. Sem ordem nenhuma, o tempo morto continuava de pé.
+       */
+      if (wasFrozenRef.current && !frozenRef.current) {
+        wasFrozenRef.current = false
+        if (sim.phase === 'holding') {
+          sim.holdTimer = Math.min(sim.holdTimer, DIRECTIVE_PICKUP_SECONDS)
+        }
+      }
+      if (frozenRef.current) wasFrozenRef.current = true
+
       // nova diretiva de gol?
       const directive = directiveRef.current
       if (directive && directive.id !== sim.lastDirectiveId) {

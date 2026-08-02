@@ -1,0 +1,213 @@
+/*
+ * Aba Calendário: a grade do mês e a cara de cada competição.
+ *
+ * A identidade vem toda de variáveis (`--comp-accent`, `--comp-tint`) definidas
+ * por `.cal-comp-*`. O dia da grade e a legenda leem as MESMAS variáveis, então
+ * um torneio novo só precisa de um bloco de três linhas aqui — sem tocar em
+ * nenhum componente.
+ */
+
+/* ---------- identidade por competição ---------- */
+
+.cal-comp-liga {
+  /* o dia a dia da temporada: neutro de propósito, senão tudo grita */
+  --comp-accent: var(--steel, #8c93ad);
+  --comp-tint: rgba(255, 255, 255, 0.03);
+}
+
+.cal-comp-libertados {
+  --comp-accent: #f2c230;
+  --comp-tint: rgba(30, 122, 60, 0.16);
+}
+
+.cal-comp-copa-brasil {
+  --comp-accent: #4fbf72;
+  --comp-tint: rgba(30, 110, 60, 0.18);
+}
+
+.cal-comp-copa-america {
+  --comp-accent: #4fa3e3;
+  --comp-tint: rgba(44, 79, 140, 0.2);
+}
+
+.cal-comp-copa-mundo {
+  --comp-accent: #c9a227;
+  --comp-tint: rgba(88, 52, 140, 0.22);
+}
+
+.cal-comp-liga-nacoes {
+  --comp-accent: #4ecfae;
+  --comp-tint: rgba(30, 96, 96, 0.2);
+}
+
+/* ---------- grade do mês ---------- */
+
+/*
+ * O dia de jogo herda a cor da competição. `.cal-day-next` continua mandando
+ * no destaque, então o próximo compromisso não se perde no meio do mês.
+ */
+.tab-panel .cal-day-match.cal-comp-libertados,
+.tab-panel .cal-day-match.cal-comp-copa-brasil,
+.tab-panel .cal-day-match.cal-comp-copa-america,
+.tab-panel .cal-day-match.cal-comp-copa-mundo,
+.tab-panel .cal-day-match.cal-comp-liga-nacoes {
+  border-color: color-mix(in srgb, var(--comp-accent) 45%, transparent);
+  background: var(--comp-tint);
+}
+
+.tab-panel .cal-day-match .cal-day-cup-icon {
+  color: var(--comp-accent);
+}
+
+.cal-day-opponent {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* ---------- legenda ---------- */
+
+.cal-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 14px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cal-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--comp-accent);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ---------- semana da carreira (Home) ---------- */
+
+.week-strip-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.week-strip-countdown {
+  color: var(--accent);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.week-days {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.week-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.015);
+  min-height: 66px;
+}
+
+.week-day-name {
+  color: var(--steel);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.week-day-num {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+/* dia com jogo acende na cor da competição — é o que o relógio está caçando */
+.week-day-match {
+  border-color: color-mix(in srgb, var(--comp-accent) 45%, transparent);
+  background: var(--comp-tint);
+}
+
+.week-day-tag {
+  color: var(--comp-accent);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* hoje é o único dia com contorno cheio: o olho tem de achar sem procurar */
+.week-day-today {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.week-day-today .week-day-num {
+  color: var(--accent);
+}
+
+.week-advance {
+  width: 100%;
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* enquanto corre, o botão deixa de convidar e passa a ser freio */
+.week-advance-running {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  animation: week-advance-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes week-advance-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.62; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .week-advance-running {
+    animation: none;
+  }
+}
+
+/*
+ * As linhas do mês não esticam para preencher o card: um mês sem jogo nenhum
+ * tem células do MESMO tamanho de um mês cheio. Sem isto a grade inchava na
+ * vertical conforme sobrava espaço, e junho parecia outro calendário.
+ */
+.cal-grid {
+  align-content: start;
+}
+
+.cal-grid .cal-day {
+  /* altura FIXA e igual para todo mundo: um mês sem jogo ocupa exatamente o
+     mesmo espaço de um mês cheio, e a grade não pula de tamanho ao navegar */
+  height: 78px;
+  min-height: 78px;
+  justify-content: flex-start;
+  overflow: hidden;
+}

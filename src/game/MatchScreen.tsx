@@ -16,9 +16,9 @@ import {
 } from '../data/narration'
 import { simulateToEnd, type AutoPlayProbs } from '../engine/match/autoplay'
 import { FORMATIONS, type FormationId, type PlayerFieldPosition } from '../engine/squad/formation'
-import { squadWithSignings, type Signing } from '../engine/market/market'
+import { squadWithSignings, type PlayerSale, type Signing } from '../engine/market/market'
 import { rivalSquadFor } from '../engine/market/aiTransfers'
-import { lineupRating, squadPlayersFor, userAsSquadPlayer, USER_SQUAD_INDEX } from '../engine/squad/players'
+import { squadPlayersFor, userAsSquadPlayer, USER_SQUAD_INDEX } from '../engine/squad/players'
 import { DiceDuelStage } from './DiceDuelStage'
 import { MatchIntro } from './MatchIntro'
 import { createRng, type RngState } from '../engine/rng'
@@ -29,7 +29,7 @@ import {
   ratingEdgeFor,
 } from '../engine/match/difficulty'
 import { bestLineup } from '../engine/squad/bestLineup'
-import { sectorRatings } from '../engine/squad/sectors'
+import { bestLineupStrength, lineupStrength } from '../engine/squad/teamStrength'
 import {
   advance,
   advanceAuto,
@@ -86,6 +86,10 @@ const FULLTIME_MINUTE = 90
  * Teto de espera pela coreografia do gol. Na velocidade 1x o pior caso (bola
  * troca de lado, sobe o campo e finaliza) fica em torno de 6s; acima disso
  * assumimos que a jogada travou e mostramos o gol assim mesmo.
+ *
+ * Divide pela velocidade porque a coreografia TAMBÉM acelera: em 4x ela fecha
+ * em um quarto do tempo, e um teto fixo de 9s deixaria de ser rede de
+ * segurança para virar espera garantida quando algo travasse.
  */
 const GOAL_REVEAL_FAILSAFE_MS = 9000
 
@@ -109,14 +113,18 @@ interface MatchScreenProps {
   readonly opponent: Club
   /** Divisão do adversário (-1 = seleção/sem mercado da IA). */
   readonly opponentDivision?: number
+  /** Divisão que o SEU clube disputa hoje — define a força do seu elenco. */
+  readonly division?: number
   /** Anos em que o ADVERSÁRIO levantou a taça continental — cofre cheio na janela seguinte. */
   readonly continentalTitleYears?: readonly number[]
   readonly competition?: Competition
   /**
-   * Jogo que não pode terminar empatado (mata-mata de seleção). Empatou no
-   * apito final, o lance dos dados decide quem avança.
+   * Jogo que encerra um confronto eliminatório. Se o agregado terminar
+   * empatado, o lance dos dados decide quem avança.
    */
   readonly decisive?: boolean
+  /** Saldo do jogador no agregado antes deste jogo (gols pró menos gols contra). */
+  readonly aggregateGoalDifference?: number
   readonly attributes?: PlayerAttributes
   /** Perks de RPG do craque — afetam lances, decisões e momentum. */
   readonly perks?: readonly PerkId[]
@@ -144,6 +152,8 @@ interface MatchScreenProps {
   readonly stadiumUrl?: string
   /** Reforços contratados (só nos jogos do SEU clube). */
   readonly signings?: readonly Signing[]
+  /** Jogadores vendidos (só nos jogos do SEU clube). */
+  readonly playerSales?: readonly PlayerSale[]
   readonly onExit: (record: MatchRecord) => void
 }
 
@@ -164,6 +174,7 @@ export const MatchScreen = ({
   opponent,
   competition = 'liga',
   decisive = false,
+  aggregateGoalDifference = 0,
   attributes = DEFAULT_ATTRIBUTES,
   perks = [],
   morale = DEFAULT_MORALE,
@@ -178,7 +189,9 @@ export const MatchScreen = ({
   playerNames = {},
   stadiumUrl,
   signings = [],
+  playerSales = [],
   opponentDivision = -1,
+  division = -1,
   continentalTitleYears = [],
   onExit,
 }: MatchScreenProps) => {
@@ -186,7 +199,13 @@ export const MatchScreen = ({
 
   // elenco com o SEU craque dentro — a força do time muda com a escalação
   const teamPlayers = useMemo(() => {
-    const squad = squadWithSignings(squadPlayersFor(club, careerYear, appearance.gender), signings, careerYear)
+    const squad = squadWithSignings(
+      squadPlayersFor(club, careerYear, appearance.gender, division),
+      signings,
+      careerYear,
+      USER_SQUAD_INDEX,
+      playerSales,
+    )
     return squad.map((player, index) =>
       index === USER_SQUAD_INDEX
         ? userAsSquadPlayer(player, playerName, attributes, playerPosition, playerAge)
@@ -194,44 +213,27 @@ export const MatchScreen = ({
           ? { ...player, name: playerNames[player.id] }
           : player,
     )
-  }, [club, careerYear, playerAge, playerName, attributes, playerPosition, playerNames, signings])
+  }, [club, careerYear, division, playerAge, playerName, attributes, playerPosition, playerNames, signings, playerSales])
 
   const effectiveLineup = useMemo(
     () => lineup ?? Array.from({ length: 11 }, (_, index) => index),
     [lineup],
   )
 
-  const teamRating = useMemo(
-    () =>
-      lineupRating(
-        effectiveLineup.map((squadIndex) => teamPlayers[squadIndex]),
-        FORMATIONS[formation].slots,
-      ),
+  const teamLineupStrength = useMemo(
+    () => lineupStrength(teamPlayers, effectiveLineup, FORMATIONS[formation]),
     [effectiveLineup, teamPlayers, formation],
   )
-  const opponentRating = useMemo(() => {
+  const opponentLineupStrength = useMemo(() => {
     const squad = rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender, continentalTitleYears)
-    const lineup = bestLineup(squad, FORMATIONS['4-3-3'])
-    return lineupRating(lineup.map((index) => squad[index]), FORMATIONS['4-3-3'].slots)
+    return bestLineupStrength(squad, FORMATIONS['4-3-3'])
   }, [opponent, opponentDivision, careerYear, appearance.gender, continentalTitleYears])
+  const teamRating = teamLineupStrength.overall
+  const opponentRating = opponentLineupStrength.overall
 
   /* setores do SEU time e do rival: é o confronto entre eles que decide o jogo */
-  const mySectors = useMemo(
-    () =>
-      sectorRatings(
-        effectiveLineup.map((squadIndex) => teamPlayers[squadIndex]),
-        FORMATIONS[formation],
-      ),
-    [effectiveLineup, teamPlayers, formation],
-  )
-  const theirSectors = useMemo(() => {
-    const squad = rivalSquadFor(opponent, opponentDivision, careerYear, appearance.gender, continentalTitleYears)
-    // o rival entra com o melhor time dele, não com os 11 primeiros da lista
-    return sectorRatings(
-      bestLineup(squad, FORMATIONS['4-3-3']).map((index) => squad[index]),
-      FORMATIONS['4-3-3'],
-    )
-  }, [opponent, opponentDivision, careerYear, appearance.gender, continentalTitleYears])
+  const mySectors = teamLineupStrength.sectors
+  const theirSectors = opponentLineupStrength.sectors
 
   const config = useMemo(() => {
     const byRatings = matchConfigForSectors(DEFAULT_MATCH_CONFIG, mySectors, theirSectors)
@@ -433,7 +435,7 @@ export const MatchScreen = ({
   // gol pendente NUNCA some: se a coreografia travar, o placar sobe assim mesmo
   useEffect(() => {
     if (reveal.pending.length === 0) return
-    const failSafe = setTimeout(() => applyReveal(revealAll(reveal)), GOAL_REVEAL_FAILSAFE_MS)
+    const failSafe = setTimeout(() => applyReveal(revealAll(reveal)), GOAL_REVEAL_FAILSAFE_MS / speed)
     return () => clearTimeout(failSafe)
     // applyReveal só depende do estado já capturado em `reveal`
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -451,8 +453,8 @@ export const MatchScreen = ({
     if (mode !== 'live') return
 
     if (isFinished(match)) {
-      // empatou num mata-mata: o dado decide antes de fechar a partida
-      setMode(needsDecider(match, decisive) ? 'dice' : 'summary')
+      // agregado empatado num mata-mata: o dado decide antes de fechar a partida
+      setMode(needsDecider(match, decisive, aggregateGoalDifference) ? 'dice' : 'summary')
       return
     }
 
@@ -522,7 +524,7 @@ export const MatchScreen = ({
         setMatch(applyExtraGoal(match, side))
       }
     }
-  }, [clock, mode, match, tactic])
+  }, [clock, mode, match, tactic, decisive, aggregateGoalDifference])
 
   const changeTactic = (next: Tactic): void => {
     if (next === tactic) return

@@ -1,19 +1,17 @@
-import { Camera } from 'lucide-react'
 import { useMemo, useState, type CSSProperties } from 'react'
-import { CLUBS, clubById, type Club } from '../../data/clubs'
+import { clubById, type Club } from '../../data/clubs'
 import '../styles/team.css'
 import { rivalSquadFor } from '../../engine/market/aiTransfers'
 import { DIVISION_NAMES, divisionOf } from '../../engine/pyramid/pyramid'
 import { tablePosition } from '../../engine/season/season'
 import {
-  lineupRating,
   squadPlayersFor,
   userAsSquadPlayer,
   USER_PLAYER_ID,
   USER_SQUAD_INDEX,
   type SquadPlayer,
 } from '../../engine/squad/players'
-import { squadWithSignings } from '../../engine/market/market'
+import { formatMoney, squadWithSignings } from '../../engine/market/market'
 import { myTeamRating } from '../../engine/squad/myTeam'
 import { FORMATIONS, formationIdFor } from '../../engine/squad/formation'
 import {
@@ -21,22 +19,21 @@ import {
   continentalTitleYears,
   currentPlayerAge,
   displayClub,
-  MAX_CLUB_NAME,
-  renameClub,
-  setClubColors,
-  setClubCrest,
   setFormation,
   setPlayerName,
+  playerSaleValue,
+  sellPlayer,
   swapLineup,
   type PlayerSave,
 } from '../../state/save'
-import { ClubCrest, fileToCrestDataUrl } from '../ClubCrest'
+import { ClubCrest } from '../ClubCrest'
 import { bestLineup } from '../../engine/squad/bestLineup'
 import { SquadBoard } from '../SquadBoard'
 import { TrophyRoom } from '../TrophyRoom'
 import { OverallStars } from '../OverallStars'
 import { PlayerCardModal } from '../PlayerCard'
 import { usePlayerPortrait } from '../usePlayerPortrait'
+import { lineupStrength } from '../../engine/squad/teamStrength'
 
 interface TeamTabProps {
   readonly save: PlayerSave
@@ -49,30 +46,30 @@ const averageRating = (save: PlayerSave): string => {
   return (save.career.ratingSum / save.career.games).toFixed(1)
 }
 
-type TeamSection = 'clube' | 'elenco' | 'editor'
+type TeamSection = 'clube' | 'elenco'
 
 export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
   const userPortrait = usePlayerPortrait(save.appearance)
   const wins = save.career.wins
   const goals = save.career.goals
   const [section, setSection] = useState<TeamSection>('clube')
-  const [crestError, setCrestError] = useState<string | null>(null)
   const [squadClubId, setSquadClubId] = useState(save.clubId)
   const [squadDivision, setSquadDivision] = useState<'all' | number>('all')
-  // o editor lista as 4 divisões inteiras: sem recorte viram 56 clubes soltos
-  const [editorDivision, setEditorDivision] = useState<number>(() => divisionOf(save.divisions, save.clubId))
   const [selectedPlayer, setSelectedPlayer] = useState<SquadPlayer | null>(null)
+  const [confirmingSale, setConfirmingSale] = useState<SquadPlayer | null>(null)
+  const [saleNote, setSaleNote] = useState<string | null>(null)
   // modo troca: slot do titular saindo (só no MEU time)
 
   const squadClubBase = clubById(squadClubId) ?? club
-  const editorClubs = useMemo(
-    () => CLUBS.filter((entry) => divisionOf(save.divisions, entry.id) === editorDivision),
-    [save.divisions, editorDivision],
-  )
   const squadClub = displayClub(save, squadClubBase)
   const isMyClub = squadClub.id === save.clubId
   const squad = useMemo(() => {
-    const generated = squadPlayersFor(squadClub, save.careerYear, save.appearance.gender)
+    const generated = squadPlayersFor(
+      squadClub,
+      save.careerYear,
+      save.appearance.gender,
+      divisionOf(save.divisions, squadClub.id),
+    )
     if (squadClub.id !== save.clubId) {
       return rivalSquadFor(
         squadClub,
@@ -82,7 +79,13 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
         continentalTitleYears(save, squadClub.id),
       )
     }
-    const base = squadWithSignings(generated, save.signings, save.careerYear)
+    const base = squadWithSignings(
+      generated,
+      save.signings,
+      save.careerYear,
+      USER_SQUAD_INDEX,
+      save.playerSales,
+    )
     // o SEU craque entra com atributos reais; os demais ganham o batismo local
     return base.map((player, index) =>
       index === USER_SQUAD_INDEX
@@ -94,7 +97,7 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
           ? { ...player, name: save.customPlayerNames[player.id] }
           : player,
     )
-  }, [squadClub, save.careerYear, save.clubId, save.divisions, save.playerName, save.attributes, save.shirtNumber, save.playerPosition, save.customPlayerNames, save.signings, save.continentalChampions])
+  }, [squadClub, save.careerYear, save.clubId, save.divisions, save.appearance.gender, save.playerName, save.attributes, save.shirtNumber, save.playerPosition, save.customPlayerNames, save.signings, save.playerSales, save.continentalChampions])
 
   // a etiqueta REFORÇO só vale na temporada da chegada
   const newSigningIds = useMemo(
@@ -114,11 +117,33 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
   const starters: readonly number[] = isMyClub
     ? save.lineup
     : bestLineup(squad, FORMATIONS[formationIdFor(squadClub.id)])
+  const displayedStrength = lineupStrength(squad, starters, formation)
+
+  const openSaleSlots = useMemo(
+    () => new Set(
+      save.playerSales
+        .filter((sale) => sale.filledByPlayerId === undefined)
+        .map((sale) => sale.slotIndex),
+    ),
+    [save.playerSales],
+  )
+
+  const confirmSale = (player: SquadPlayer): void => {
+    const slotIndex = squad.findIndex((entry) => entry.id === player.id)
+    if (slotIndex < 0) return
+    const value = playerSaleValue(save, player)
+    const updated = sellPlayer(save, player, slotIndex, squad)
+    if (updated === save) return
+    onSaveChange(updated)
+    setConfirmingSale(null)
+    setSelectedPlayer(null)
+    setSaleNote(`${player.name} foi vendido por ${formatMoney(value)}. O valor já entrou na verba.`)
+  }
 
   return (
     <div className="tab-panel">
       <div className="subtabs" role="tablist" aria-label="Seções do time">
-        {([['clube', 'Meu clube'], ['elenco', 'Elenco'], ['editor', 'Editor de clubes']] as const).map(([id, label]) => (
+        {([['clube', 'Meu clube'], ['elenco', 'Elenco']] as const).map(([id, label]) => (
           <button
             key={id}
             type="button"
@@ -174,7 +199,7 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
           <span className="card-label">
             Elenco · força{' '}
             <strong className="squad-strength">
-              {lineupRating(starters.map((index) => squad[index]), formation.slots)}
+              {displayedStrength.overall}
             </strong>
           </span>
           <span className="squad-club-pick">
@@ -230,7 +255,10 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
           onSwap={(slot, squadIndex) => onSaveChange(swapLineup(save, slot, squadIndex))}
           onSelect={setSelectedPlayer}
           signingIds={newSigningIds}
+          hiddenSquadIndices={isMyClub ? openSaleSlots : undefined}
         />
+
+        {saleNote && <p className="market-hired-note" role="status">{saleNote}</p>}
 
         <p className="muted table-note">
           {isMyClub
@@ -240,98 +268,6 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
       </div>
       )}
 
-
-      {section === 'editor' && (
-      <div className="card card-wide">
-        <span className="card-label">Editor de clubes</span>
-        <p className="muted table-note">
-          Deixe a liga com a sua cara: troque nome, escudo e cores de qualquer
-          clube. Vale só no SEU jogo. Apague o nome para voltar ao original.
-        </p>
-        {crestError && <p className="crest-error" role="alert">{crestError}</p>}
-        <div className="editor-divisions" role="tablist" aria-label="Divisão a editar">
-          {[0, 1, 2, 3].map((division) => (
-            <button
-              key={division}
-              type="button"
-              role="tab"
-              aria-selected={editorDivision === division}
-              className={`editor-division${editorDivision === division ? ' editor-division-active' : ''}`}
-              onClick={() => setEditorDivision(division)}
-            >
-              {DIVISION_NAMES[division]}
-            </button>
-          ))}
-        </div>
-        <div className="club-edit-list">
-        {editorClubs.map((entry) => (
-          <div key={entry.id} className="club-edit-row">
-            <label className="crest-upload" title={`Clique para enviar o escudo de ${entry.name}`}>
-              <ClubCrest club={displayClub(save, entry)} customUrl={save.customClubCrests[entry.id]} size={26} />
-              <span className="crest-upload-badge" aria-hidden="true"><Camera size={10} /></span>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                aria-label={`Enviar escudo para ${entry.name}`}
-                onChange={(event) => {
-                  const file = event.target.files?.[0]
-                  if (!file) return
-                  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-                    setCrestError('Formato não aceito — envie PNG, JPG ou WebP.')
-                    return
-                  }
-                  if (file.size > 4 * 1024 * 1024) {
-                    setCrestError('Imagem grande demais — máximo 4MB.')
-                    return
-                  }
-                  void fileToCrestDataUrl(file)
-                    .then((dataUrl) => {
-                      setCrestError(null)
-                      onSaveChange(setClubCrest(save, entry.id, dataUrl))
-                    })
-                    .catch(() => setCrestError(`Não deu para usar essa imagem em ${entry.name}. Tente um PNG ou JPG.`))
-                }}
-              />
-            </label>
-            <div className="club-edit-fields">
-              <input
-                className="create-input club-edit-input"
-                type="text"
-                maxLength={MAX_CLUB_NAME}
-                placeholder={entry.name}
-                defaultValue={save.customClubNames[entry.id] ?? ''}
-                aria-label={`Renomear ${entry.name}`}
-                onBlur={(event) => onSaveChange(renameClub(save, entry.id, event.target.value))}
-              />
-              <span className="club-edit-original">
-                {save.customClubNames[entry.id] ? entry.name : `${entry.city} · ${entry.abbr}`}
-              </span>
-            </div>
-            <span className="club-color-pick" title="Cores do clube">
-              <input
-                type="color"
-                className="club-color-input"
-                aria-label={`Cor principal de ${entry.name}`}
-                value={displayClub(save, entry).colors.primary}
-                onChange={(event) =>
-                  onSaveChange(setClubColors(save, entry.id, event.target.value, displayClub(save, entry).colors.secondary))
-                }
-              />
-              <input
-                type="color"
-                className="club-color-input"
-                aria-label={`Cor secundária de ${entry.name}`}
-                value={displayClub(save, entry).colors.secondary}
-                onChange={(event) =>
-                  onSaveChange(setClubColors(save, entry.id, displayClub(save, entry).colors.primary, event.target.value))
-                }
-              />
-            </span>
-          </div>
-        ))}
-        </div>
-      </div>
-      )}
 
       {selectedPlayer && (
         <PlayerCardModal
@@ -352,7 +288,48 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
             setSelectedPlayer(null)
           }}
           onClose={() => setSelectedPlayer(null)}
+          footer={
+            isMyClub && selectedPlayer.id !== USER_PLAYER_ID ? (
+              <div className="player-sale-footer">
+                <span className="player-sale-value">
+                  Oferta: <strong>{formatMoney(playerSaleValue(save, selectedPlayer))}</strong>
+                </span>
+                <button
+                  className="btn player-sale-btn"
+                  onClick={() => {
+                    setConfirmingSale(selectedPlayer)
+                    setSelectedPlayer(null)
+                  }}
+                >
+                  Vender jogador
+                </button>
+              </div>
+            ) : undefined
+          }
         />
+      )}
+
+      {confirmingSale && (
+        <div className="sim-confirm player-sale-confirm" role="dialog" aria-modal="true" aria-labelledby="sale-confirm-title">
+          <div className="sim-confirm-box">
+            <h3 id="sale-confirm-title">Confirmar venda?</h3>
+            <p>
+              <strong>{confirmingSale.name}</strong> ({confirmingSale.position} · overall {confirmingSale.overall})
+              {' '}será vendido por <strong>{formatMoney(playerSaleValue(save, confirmingSale))}</strong>.
+              <br />
+              Nova verba: <strong>{formatMoney(save.budget + playerSaleValue(save, confirmingSale))}</strong>.
+              O jogador sairá do elenco e a vaga ficará livre para uma contratação.
+            </p>
+            <div className="sim-confirm-actions">
+              <button className="btn btn-secondary" onClick={() => setConfirmingSale(null)}>
+                Cancelar
+              </button>
+              <button className="btn" onClick={() => confirmSale(confirmingSale)}>
+                Confirmar venda
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -5,6 +5,7 @@ import ballSprite from '../assets/sprites/ball.png'
 import keeperSprite from '../assets/sprites/k_fly.png'
 import followSprite from '../assets/sprites/s_kick2.png'
 import kickSprite from '../assets/sprites/s_kick_noball.png'
+import { CupNights } from './landing/CupNights'
 import { LedBoard } from './landing/LedBoard'
 import { NationalCall } from './landing/NationalCall'
 import { StickerWall } from './landing/StickerWall'
@@ -171,6 +172,7 @@ export const Landing = ({ hasSave, onPlay }: LandingProps) => {
       </div>
 
       <StickerWall />
+      <CupNights />
       <NationalCall />
       <LedBoard />
       <TunnelOutro cta={cta} onPlay={onPlay} />

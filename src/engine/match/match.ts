@@ -18,6 +18,28 @@ const withMinute = (draft: PlanDraft, build: (minute: number, rng: RngState) => 
   return { moments: [...draft.moments, built.value], rng: built.next }
 }
 
+/** Fronteira dos tempos: até aqui é primeiro tempo. */
+const HALFTIME_MINUTE = 45
+
+/**
+ * Sorteia o minuto DENTRO de um tempo (0 = primeiro, 1 = segundo).
+ *
+ * Sem isso os lances jogáveis caíam em qualquer minuto e podiam se amontoar:
+ * três decisões em dez minutos e depois uma hora de nada. Um lance por tempo
+ * espalha a partida e evita a sensação de enxurrada de menus.
+ */
+const withMinuteInHalf = (
+  draft: PlanDraft,
+  half: number,
+  build: (minute: number, rng: RngState) => RngResult<MatchMoment>,
+): PlanDraft => {
+  const from = half === 0 ? 3 : HALFTIME_MINUTE + 1
+  const to = half === 0 ? HALFTIME_MINUTE : 88
+  const minuteRoll = nextInt(draft.rng, from, to)
+  const built = build(minuteRoll.value, minuteRoll.next)
+  return { moments: [...draft.moments, built.value], rng: built.next }
+}
+
 const rollCount = (rng: RngState, chance: number, max: number): RngResult<number> => {
   let count = 0
   let current = rng
@@ -44,8 +66,27 @@ const buildPlan = (rng: RngState, config: MatchConfig): RngResult<readonly Match
     }
   }
 
+  /**
+   * Lances jogáveis: um por tempo, alternando a partir de `firstHalf`. O chute
+   * abre no primeiro tempo, a falta no segundo — e uma segunda ocorrência do
+   * mesmo tipo cai no tempo oposto, nunca em cima da primeira.
+   */
+  const addPlayable = (
+    count: number,
+    firstHalf: number,
+    make: (minute: number, templateId: number) => MatchMoment,
+  ): void => {
+    for (let i = 0; i < count; i++) {
+      draft = withMinuteInHalf(draft, (firstHalf + i) % 2, (minute, r) => {
+        const template = nextInt(r, 0, config.commentaryTemplates - 1)
+        return { value: make(minute, template.value), next: template.next }
+      })
+    }
+  }
+
   addMoments(config.commentaryMoments, (minute, templateId) => ({ kind: 'commentary', minute, templateId }))
-  addMoments(config.playerShots, (minute, templateId) => ({ kind: 'playerShot', minute, templateId }))
+  // o chute a gol abre a partida: primeiro tempo
+  addPlayable(config.playerShots, 0, (minute, templateId) => ({ kind: 'playerShot', minute, templateId }))
 
   // Especiais variam, mas não podem sumir juntos e deixar a partida sem graça.
   const freeKickRoll = rollCount(draft.rng, config.playerFreeKickChance, config.playerFreeKicks)
@@ -76,9 +117,12 @@ const buildPlan = (rng: RngState, config: MatchConfig): RngResult<readonly Match
     }
   }
 
-  addMoments(freeKicks, (minute, templateId) => ({ kind: 'playerFreeKick', minute, templateId }))
-  addMoments(config.playerDecisions, (minute, templateId) => ({ kind: 'playerDecision', minute, templateId }))
-  addMoments(config.opponentFreeKicks, (minute, templateId) => ({ kind: 'opponentFreeKick', minute, templateId }))
+  // a falta é lance de segundo tempo; decisões e defesas dividem os dois
+  addPlayable(freeKicks, 1, (minute, templateId) => ({ kind: 'playerFreeKick', minute, templateId }))
+  addPlayable(config.playerDecisions, 0, (minute, templateId) => ({ kind: 'playerDecision', minute, templateId }))
+  const defenseRoll = rollCount(draft.rng, config.opponentFreeKickChance, config.opponentFreeKicks)
+  draft = { ...draft, rng: defenseRoll.next }
+  addPlayable(defenseRoll.value, 1, (minute, templateId) => ({ kind: 'opponentFreeKick', minute, templateId }))
   addMoments(dice, (minute, templateId) => ({ kind: 'diceDuel', minute, templateId }))
 
   const teamGoals = rollCount(draft.rng, config.teamGoalChance, config.maxTeamGoals)
@@ -230,9 +274,21 @@ export const applyDecider = (state: MatchState, playerWon: boolean): MatchState 
     : { ...state.score, opponent: state.score.opponent + 1 },
 })
 
-/** O jogo acabou empatado e a competição exige um vencedor? */
-export const needsDecider = (state: MatchState, decisive: boolean): boolean =>
-  decisive && isFinished(state) && state.score.team === state.score.opponent
+/**
+ * O confronto acabou empatado e a competição exige um vencedor?
+ *
+ * Em mata-matas de ida e volta, `aggregateGoalDifference` traz o saldo do
+ * jogador antes da partida atual. Assim, o dado olha para o agregado inteiro,
+ * não apenas para o placar da volta.
+ */
+export const needsDecider = (
+  state: MatchState,
+  decisive: boolean,
+  aggregateGoalDifference = 0,
+): boolean =>
+  decisive &&
+  isFinished(state) &&
+  aggregateGoalDifference + state.score.team - state.score.opponent === 0
 
 export const applyDefenseResult = (
   state: MatchState,

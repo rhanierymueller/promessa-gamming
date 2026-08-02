@@ -1,0 +1,473 @@
+/*
+ * O quarto do craque.
+ *
+ * A cena é montada só com CSS — nenhuma arte de cenário. Um quarto de quem
+ * ainda está construindo a carreira: janela à noite, pôster na parede, mural
+ * de recortes e a mesa com o computador embaixo. O que ocupa a parede são as
+ * conquistas dele, não decoração.
+ */
+
+/* ---------- a cena ---------- */
+
+/*
+ * O quarto é UMA arte de fundo, e os elementos vivos são posicionados em %
+ * sobre ela. Por isso a proporção é travada: mudar a razão descolaria os
+ * troféus das tábuas desenhadas na imagem.
+ */
+.room-scene {
+  position: relative;
+  aspect-ratio: 1672 / 941;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #0d0a16;
+}
+
+/*
+ * O palco guarda a proporção da ARTE e leva junto tudo que fica sobre ela.
+ * É o que garante que troféu e pôster acompanhem qualquer recorte: as
+ * posições em % são medidas na imagem, então precisam viver no mesmo sistema
+ * de coordenadas que ela.
+ */
+.room-stage {
+  position: absolute;
+  inset: 0;
+  aspect-ratio: 1672 / 941;
+}
+
+.room-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  image-rendering: pixelated;
+}
+
+/* ---------- o pôster do craque ---------- */
+
+/* fica na parede vazia acima da cama, à esquerda da estante */
+.room-poster {
+  position: absolute;
+  top: 6%;
+  left: 4%;
+  z-index: 2;
+  margin: 0;
+  width: 18%;
+  min-width: 96px;
+  padding: 5% 5% 4%;
+  background: #f5f0e6;
+  border-radius: 2px;
+  /* levemente torto, como pôster preso com fita */
+  transform: rotate(-1.8deg);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.6);
+}
+
+.room-poster img,
+.room-poster-empty {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  image-rendering: pixelated;
+  background: #d9d2c4;
+}
+
+.room-poster figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 6%;
+  text-align: center;
+  color: #100c1a;
+}
+
+.room-poster figcaption strong {
+  font-family: var(--display);
+  font-size: clamp(11px, 1.1vw, 16px);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.room-poster figcaption span {
+  font-size: clamp(7px, 0.7vw, 10px);
+  letter-spacing: 0.04em;
+  color: #4a4458;
+  white-space: nowrap;
+}
+
+/* a fita adesiva */
+.room-poster::before {
+  content: '';
+  position: absolute;
+  top: -6%;
+  left: 50%;
+  width: 40%;
+  aspect-ratio: 3 / 1;
+  transform: translateX(-50%) rotate(2deg);
+  background: rgba(255, 210, 63, 0.34);
+  border: 1px solid rgba(255, 210, 63, 0.2);
+}
+
+/* ---------- as prateleiras da arte ---------- */
+
+/*
+ * A linha se apoia na tábua desenhada: `bottom` vem da posição medida na
+ * imagem, e as peças crescem para cima a partir dela.
+ */
+.room-shelf-row {
+  position: absolute;
+  left: 30.5%;
+  width: 27.5%;
+  z-index: 2;
+  list-style: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4%;
+  margin: 0;
+  padding: 0;
+}
+
+.room-piece {
+  --comp-accent: var(--accent);
+  position: relative;
+  display: flex;
+}
+
+.room-piece-btn {
+  position: relative;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.room-piece-art {
+  height: clamp(26px, 4.6vw, 62px);
+  width: auto;
+  image-rendering: pixelated;
+  /* a sombra assenta a peça na madeira; o halo diz de qual competição é */
+  filter:
+    drop-shadow(0 3px 3px rgba(0, 0, 0, 0.75))
+    drop-shadow(0 0 8px color-mix(in srgb, var(--comp-accent) 40%, transparent));
+  transition: transform 0.15s ease;
+}
+
+.room-piece-btn:hover .room-piece-art {
+  transform: translateY(-3px);
+}
+
+/* o contador só existe quando há repetição — "1×" seria ruído */
+.room-piece-count {
+  position: absolute;
+  right: -18%;
+  bottom: 6%;
+  padding: 1px 4px;
+  border-radius: 8px;
+  background: #100c1a;
+  border: 1px solid var(--comp-accent);
+  color: var(--comp-accent);
+  font-family: var(--display);
+  font-size: clamp(8px, 0.9vw, 12px);
+  line-height: 1.2;
+}
+
+.room-empty-hint {
+  position: absolute;
+  top: 19%;
+  left: 30.5%;
+  width: 27.5%;
+  margin: 0;
+  text-align: center;
+  color: rgba(245, 240, 230, 0.55);
+  font-size: clamp(8px, 0.85vw, 11px);
+  line-height: 1.5;
+  text-shadow: 0 2px 6px #000;
+}
+
+/* ---------- detalhe de uma conquista ---------- */
+
+.room-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(6, 5, 12, 0.78);
+  backdrop-filter: blur(3px);
+}
+
+.room-detail {
+  --comp-accent: var(--accent);
+  width: min(340px, 100%);
+  padding: 24px 22px 18px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--comp-accent);
+  border-radius: 10px;
+  background: linear-gradient(#171227, #120e1e);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.room-detail-art {
+  height: 96px;
+  width: auto;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.6));
+}
+
+.room-detail-kind {
+  margin: 12px 0 2px;
+  color: var(--comp-accent);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.room-detail-name {
+  margin: 0 0 6px;
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.room-detail-count {
+  margin: 0 0 14px;
+  color: var(--steel);
+  font-size: 12px;
+}
+
+.room-detail-years {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 18px;
+  padding: 0;
+}
+
+.room-detail-years li {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.room-detail-close {
+  width: 100%;
+}
+
+/* ---------- clube e seleção ---------- */
+
+.room-badges {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.room-badge {
+  flex: 1 1 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.room-badge-label {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--steel);
+}
+
+.room-badge strong {
+  font-size: 14px;
+}
+
+.room-badge-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.room-badge-flag {
+  display: inline-flex;
+  margin: 2px 0;
+}
+
+/* ---------- painel de substituição ---------- */
+
+/*
+ * Os números da carreira num painel de placar: dígitos grandes em âmbar sobre
+ * preto, como o quarto auxiliar levanta na beira do campo.
+ */
+.subboard {
+  position: relative;
+  padding: 18px;
+  border-radius: 8px;
+  background: #07060c;
+  box-shadow: inset 0 0 40px rgba(255, 170, 40, 0.05);
+}
+
+.subboard-frame {
+  position: absolute;
+  inset: 6px;
+  border: 2px solid #2a2213;
+  border-radius: 5px;
+  pointer-events: none;
+}
+
+.subboard-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 14px 10px;
+}
+
+.subboard-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.subboard-value {
+  font-family: var(--display);
+  font-size: clamp(24px, 4.4vw, 34px);
+  font-weight: 400;
+  line-height: 1;
+  color: #ffb43f;
+  /* o brilho é o que faz o dígito parecer aceso, não impresso */
+  text-shadow: 0 0 12px rgba(255, 180, 63, 0.55);
+  font-variant-numeric: tabular-nums;
+}
+
+.subboard-label {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #7a6a4a;
+}
+
+/* ---------- atributos e habilidades ---------- */
+
+.room-attrs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.room-attr {
+  display: grid;
+  grid-template-columns: minmax(74px, auto) 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.room-attr-bar {
+  display: flex;
+  gap: 3px;
+}
+
+.room-attr-pip {
+  flex: 1;
+  height: 7px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.room-attr-pip-on {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(255, 210, 63, 0.3);
+}
+
+.room-attr-value {
+  font-family: var(--display);
+  font-size: 15px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.room-perks-label {
+  margin-top: 16px;
+}
+
+.room-perks {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.room-perk {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.room-perk strong {
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.room-perk span {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* no celular o mural desce para baixo do pôster em vez de brigar por espaço */
+/*
+ * No celular a cena inteira encolheria a ponto de a estante virar um borrão.
+ * O PALCO cresce além do container e é cortado pelo `overflow`, focando na
+ * parede da escrivaninha — onde estão as prateleiras e o computador.
+ *
+ * Cresce o palco, não a imagem: assim os troféus vêm junto. Ampliar só a arte
+ * (como estava) deixava as peças na escala antiga, flutuando fora das tábuas.
+ */
+@media (max-width: 620px) {
+  .room-scene {
+    aspect-ratio: 4 / 3;
+  }
+
+  .room-stage {
+    /* largura maior que a caixa: o recorte vira zoom, e a âncora à esquerda
+       mantém o pôster e as prateleiras dentro do quadro */
+    inset: auto auto auto -22%;
+    top: 50%;
+    width: 168%;
+    height: auto;
+    transform: translateY(-46%);
+  }
+
+  .room-piece-art {
+    height: clamp(22px, 5.6vw, 44px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-monitor-screen {
+    animation: none;
+  }
+}
