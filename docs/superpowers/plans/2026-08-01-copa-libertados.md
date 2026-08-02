@@ -3028,9 +3028,14 @@ Criar `src/ui/styles/libertados.css`:
   overflow-y: auto;
 }
 
+/*
+ * A taça é estreita e alta (47×160). Dimensionar pela LARGURA a esticava para
+ * mais de 600px de altura e empurrava o sorteio para fora da tela — a altura é
+ * que manda aqui.
+ */
 .libertados-trophy {
-  width: min(30vh, 190px);
-  height: auto;
+  height: min(34vh, 220px);
+  width: auto;
   filter: drop-shadow(0 0 26px rgba(242, 194, 48, 0.55));
   animation: libertados-rise 1.1s cubic-bezier(0.2, 0.8, 0.3, 1) both;
 }
