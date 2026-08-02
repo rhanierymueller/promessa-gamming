@@ -3526,6 +3526,43 @@ Ainda em `src/ui/App.tsx`, adicionar depois de `startTournamentMatch` (linha 372
 
 Nota: `markPendingMatch` grava `kind`; conferir se o tipo de `PendingMatch` em `src/state/pendingMatch.ts` aceita `'libertados'` e, se não, ampliá-lo junto com `forfeitRecord` (o W.O. da Libertados conta como derrota, igual aos outros).
 
+E cobrir esse mapeamento com teste, em `src/state/pendingMatch.test.ts`:
+
+```ts
+test('forfeitRecord de Libertados computa como jogo continental', () => {
+  // Arrange
+  const pending = { opponentId: 'sa-charrua', kind: 'libertados' as const, seed: 7 }
+
+  // Act
+  const record = forfeitRecord(pending, 1_700_000_000_000)
+
+  // Assert
+  expect(record.competition).toBe('libertados')
+  expect(record.teamGoals).toBe(0)
+  expect(record.opponentGoals).toBeGreaterThan(0)
+})
+
+test('readPendingMatch aceita uma partida de Libertados gravada', () => {
+  // Arrange
+  const storage = new Map<string, string>()
+  const fake = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => { storage.set(key, value) },
+    removeItem: (key: string) => { storage.delete(key) },
+  }
+  markPendingMatch(fake, { opponentId: 'sa-inti', kind: 'libertados', seed: 3 })
+
+  // Act
+  const lido = readPendingMatch(fake)
+
+  // Assert
+  expect(lido?.kind).toBe('libertados')
+})
+```
+
+Ajustar os nomes/assinaturas ao que o arquivo de teste já usa (o helper de storage
+falso pode já existir ali; reaproveite em vez de duplicar).
+
 Renderizar a cerimônia junto da convocação (linha 659):
 
 ```tsx
@@ -3601,7 +3638,18 @@ Ainda em `src/ui/App.tsx`, no bloco `screen === 'match'` (linhas 506-557), ajust
           signings={matchSetup.kind === 'torneio' ? undefined : save.signings}
 ```
 
-E em `onMatchFinished`, a aba de destino continua sendo `matches`; nenhuma mudança.
+E em `onMatchFinished`, a aba de destino passa a depender da competição — só a
+rodada da liga desemboca no histórico de partidas; as duas copas continuam pela
+Home, onde vivem o card do próximo jogo, o aviso de campeão ou eliminado e a
+cerimônia:
+
+```tsx
+    setMatchSetup(null)
+    setScreen('tabs')
+    // as copas continuam pela Home (próximo jogo, chave, encerramento);
+    // só a rodada da liga desemboca no histórico de partidas
+    setTab(matchSetup.kind === 'liga' ? 'matches' : 'home')
+```
 
 - [ ] **Step 4: Card do próximo compromisso na Home**
 
