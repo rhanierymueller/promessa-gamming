@@ -426,12 +426,15 @@ export const App = () => {
       updateSave(updated)
       // ranking entre amigos: envio silencioso, nunca trava o fluxo local
       void submitLeagueMatch(updated, record).catch(() => undefined)
+      setMatchSetup(null)
+      setScreen('tabs')
+      // as copas continuam pela Home (próximo jogo, chave, encerramento);
+      // só a rodada da liga desemboca no histórico de partidas
+      setTab(matchSetup.kind === 'liga' ? 'matches' : 'home')
+      return
     }
     setMatchSetup(null)
     setScreen('tabs')
-    // A Copa continua pela Home (próximo jogo, classificação ou encerramento).
-    // Só a rodada da liga desemboca diretamente no histórico de partidas.
-    setTab(matchSetup?.kind === 'torneio' ? 'home' : 'matches')
   }
 
   const onNewSeason = (): void => {

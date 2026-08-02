@@ -69,4 +69,23 @@ describe('pendingMatch', () => {
     // Assert
     expect(record.competition).toBe('selecao')
   })
+
+  test('forfeitRecord de Libertados computa como jogo continental', () => {
+    // Act
+    const record = forfeitRecord({ ...pending, kind: 'libertados' }, 1)
+
+    // Assert
+    expect(record.competition).toBe('libertados')
+  })
+
+  test('readPendingMatch aceita uma partida de Libertados gravada', () => {
+    // Arrange
+    const storage = fakeStorage()
+
+    // Act
+    markPendingMatch(storage, { opponentId: 'sa-inti', kind: 'libertados', seed: 3 })
+
+    // Assert
+    expect(readPendingMatch(storage)?.kind).toBe('libertados')
+  })
 })
