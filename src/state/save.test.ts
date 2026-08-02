@@ -5,16 +5,24 @@ import { createRng } from '../engine/rng'
 import { advanceSeason } from '../engine/season/season'
 import { createTournament } from '../engine/tournament/tournament'
 import { userSlotIndex } from '../engine/squad/formation'
-import { USER_SQUAD_INDEX } from '../engine/squad/players'
+import { squadPlayersFor, USER_PLAYER_ID, USER_SQUAD_INDEX, userAsSquadPlayer } from '../engine/squad/players'
 import { divisionOf } from '../engine/pyramid/pyramid'
-import { SEASON_TEAMS } from '../engine/season/types'
+import { SEASON_ROUNDS, SEASON_TEAMS } from '../engine/season/types'
+import { createLibertados } from '../engine/libertados/libertados'
 import {
+  applyLibertados,
   applyTournament,
+  continentalTitleYears,
   displayClub,
   HISTORY_LIMIT,
+  isInLibertados,
+  LIBERTADOS_PRIZE,
   setClubColors,
   setPlayerName,
   signPlayer,
+  playerSaleValue,
+  sellPlayer,
+  withLibertadosState,
   withTournamentState,
   CELEBRATION_COUNT,
   clubDisplayName,
@@ -26,6 +34,8 @@ import {
   persistSave,
   recordMatch,
   renameClub,
+  setClubAbbr,
+  setClubCity,
   SAVE_VERSION,
   setAppearance,
   setCelebration,
@@ -35,6 +45,8 @@ import {
   startNewSeason,
   swapLineup,
   type MatchRecord,
+  type PlayerSave,
+  type TrophyKind,
 } from './save'
 
 const fixedRoll = (value = 0.4): (() => number) => () => value
@@ -294,15 +306,37 @@ describe('formação e escalação — só do meu time', () => {
     expect([...changed.lineup].sort()).toEqual([...base.lineup].sort())
   })
 
-  test('não deixa tirar você de campo nem duplicar jogador', () => {
-    // Arrange
+  test('nenhum reserva toma a vaga do craque', () => {
+    // Arrange: um jogador que está fora dos onze
     const userSlot = base.lineup.indexOf(USER_SQUAD_INDEX)
+    const reserva = [...Array(18).keys()].find((index) => !base.lineup.includes(index))!
 
     // Act & Assert
-    expect(swapLineup(base, userSlot, 13)).toBe(base)
-    expect(swapLineup(base, 2, USER_SQUAD_INDEX)).toBe(base)
-    const swapped = swapLineup(base, 2, base.lineup[3])
-    expect(new Set(swapped.lineup).size).toBe(11)
+    expect(swapLineup(base, userSlot, reserva)).toBe(base)
+  })
+
+  test('o craque troca de posição com outro titular e os dois seguem em campo', () => {
+    // Arrange: um slot titular que não é o do craque
+    const userSlot = base.lineup.indexOf(USER_SQUAD_INDEX)
+    const outroSlot = userSlot === 0 ? 1 : 0
+    const outroJogador = base.lineup[outroSlot]
+
+    // Act
+    const trocado = swapLineup(base, outroSlot, USER_SQUAD_INDEX)
+
+    // Assert
+    expect(trocado.lineup[outroSlot]).toBe(USER_SQUAD_INDEX)
+    expect(trocado.lineup[userSlot]).toBe(outroJogador)
+    expect(new Set(trocado.lineup).size).toBe(11)
+    expect([...trocado.lineup].sort()).toEqual([...base.lineup].sort())
+  })
+
+  test('a troca entre dois titulares quaisquer não duplica ninguém', () => {
+    // Act
+    const trocado = swapLineup(base, 2, base.lineup[3])
+
+    // Assert
+    expect(new Set(trocado.lineup).size).toBe(11)
   })
 })
 
@@ -336,6 +370,48 @@ describe('verba e contratações (transfermarket)', () => {
     // Act & Assert
     expect(signPlayer(poor, listed)).toBe(poor)
     expect(signPlayer(rich, listed)).toBe(rich)
+  })
+
+  test('venda credita o valor, persiste a saída e não vende o protagonista', () => {
+    const club = clubById(base.clubId)!
+    const squad = squadPlayersFor(club, base.careerYear, base.appearance.gender, club.division)
+    const player = squad[0]
+    const value = playerSaleValue(base, player)
+
+    const after = sellPlayer(base, player, 0, squad)
+    const user = userAsSquadPlayer(squad[USER_SQUAD_INDEX], base.playerName, base.attributes)
+
+    expect(after.budget).toBe(base.budget + value)
+    expect(after.playerSales).toContainEqual({
+      playerId: player.id,
+      soldYear: base.careerYear,
+      price: value,
+      slotIndex: 0,
+      position: player.position,
+    })
+    expect(sellPlayer(after, user, USER_SQUAD_INDEX, squad)).toBe(after)
+    expect(user.id).toBe(USER_PLAYER_ID)
+  })
+
+  test('pode vender mais de um jogador na temporada e titular dá lugar ao banco', () => {
+    const club = clubById(base.clubId)!
+    const squad = squadPlayersFor(club, base.careerYear, base.appearance.gender, club.division)
+    const first = sellPlayer(base, squad[0], 0, squad)
+    const second = sellPlayer(first, squad[1], 1, squad)
+
+    expect(first.lineup).not.toContain(0)
+    expect(second.playerSales).toHaveLength(2)
+  })
+
+  test('contratação ocupa uma vaga livre e a fecha', () => {
+    const club = clubById(base.clubId)!
+    const squad = squadPlayersFor(club, base.careerYear, base.appearance.gender, club.division)
+    const sold = sellPlayer({ ...base, budget: 200_000_000 }, squad[0], 0, squad)
+
+    const after = signPlayer(sold, listed)
+
+    expect(after.signings.at(-1)?.slotIndex).toBe(0)
+    expect(after.playerSales[0].filledByPlayerId).toBe(listed.id)
   })
 
   test('virada de temporada ACUMULA: sobra + cota da nova divisão', () => {
@@ -417,15 +493,20 @@ describe('verba e contratações (transfermarket)', () => {
     expect(parseSave(broken)!.trophies).toHaveLength(0)
   })
 
-  test('contratações sobrevivem ao parse; verba inválida volta ao padrão', () => {
+  test('contratações e vendas sobrevivem ao parse; verba inválida volta ao padrão', () => {
     // Arrange
     const rich = signPlayer({ ...base, budget: 200_000_000 }, listed)
-    const raw = JSON.stringify(rich)
+    const club = clubById(rich.clubId)!
+    const player = squadPlayersFor(club, rich.careerYear, rich.appearance.gender, club.division)[0]
+    const squad = squadPlayersFor(club, rich.careerYear, rich.appearance.gender, club.division)
+    const traded = sellPlayer(rich, player, 0, squad)
+    const raw = JSON.stringify(traded)
     const broken = JSON.stringify({ ...rich, budget: 'muito', signings: [{ id: 1 }] })
 
     // Act & Assert
     expect(parseSave(raw)!.signings).toHaveLength(1)
-    expect(parseSave(raw)!.budget).toBe(rich.budget)
+    expect(parseSave(raw)!.playerSales).toHaveLength(1)
+    expect(parseSave(raw)!.budget).toBe(traded.budget)
     expect(parseSave(broken)!.signings).toHaveLength(0)
     expect(parseSave(broken)!.budget).toBe(500_000)
   })
@@ -871,5 +952,219 @@ describe('gols sofridos na carreira', () => {
     const carregado = parseSave(JSON.stringify({ ...save, career: semCampo }))!
 
     expect(carregado.career.goalsAgainst).toBe(2)
+  })
+})
+
+describe('Copa Libertados no save', () => {
+  const base = () => createSave({ playerName: 'Tuca', clubId: 'leoes-capital' })!
+
+  test('carreira nova nasce sem Libertados e sem vaga', () => {
+    const save = base()
+    expect(save.libertados).toBeNull()
+    expect(save.libertadosQualified).toBe(false)
+    expect(save.continentalChampions).toEqual([])
+    expect(isInLibertados(save)).toBe(false)
+  })
+
+  test('vencer a Libertados dá taça e prêmio uma vez só', () => {
+    const save = base()
+    const edicao = createLibertados(9, save.careerYear, save.clubId, [save.clubId, 'mare-rubra', 'imperial', 'atlantico'])
+    const campeao = { ...edicao, stage: 'champion' as const, championId: save.clubId }
+    const primeiro = withLibertadosState(save, campeao)
+    const segundo = withLibertadosState(primeiro, campeao)
+
+    expect(primeiro.trophies).toHaveLength(1)
+    expect(primeiro.trophies[0].kind).toBe('libertados')
+    expect(primeiro.budget).toBe(save.budget + LIBERTADOS_PRIZE)
+    expect(segundo.trophies).toHaveLength(1)
+    expect(segundo.budget).toBe(primeiro.budget)
+  })
+
+  test('prêmio da Libertados é de 50 milhões — dinheiro pesado o suficiente para mudar o mercado', () => {
+    expect(LIBERTADOS_PRIZE).toBe(50_000_000)
+  })
+
+  test('continentalTitleYears lista só os anos em que O CLUBE informado foi campeão', () => {
+    const save = base()
+    const edicao1 = createLibertados(9, save.careerYear, save.clubId, [save.clubId, 'mare-rubra', 'imperial', 'atlantico'])
+    // ano 1: o SEU clube é campeão
+    const comTituloProprio = withLibertadosState(save, { ...edicao1, stage: 'champion' as const, championId: save.clubId })
+
+    const anoSeguinte = { ...comTituloProprio, careerYear: comTituloProprio.careerYear + 1 }
+    const edicao2 = createLibertados(11, anoSeguinte.careerYear, save.clubId, [save.clubId, 'mare-rubra', 'imperial', 'atlantico'])
+    // ano 2: você caiu e outro clube levanta a taça
+    const comDoisCampeoes = withLibertadosState(anoSeguinte, { ...edicao2, stage: 'eliminated' as const, championId: 'mare-rubra' })
+
+    expect(continentalTitleYears(comDoisCampeoes, save.clubId)).toEqual([save.careerYear])
+    expect(continentalTitleYears(comDoisCampeoes, 'mare-rubra')).toEqual([anoSeguinte.careerYear])
+    expect(continentalTitleYears(comDoisCampeoes, 'clube-inexistente')).toEqual([])
+  })
+
+  test('campeão continental entra no histórico mesmo sem o título ser seu', () => {
+    const save = base()
+    const edicao = createLibertados(9, save.careerYear, save.clubId, [save.clubId, 'mare-rubra', 'imperial', 'atlantico'])
+    const eliminado = { ...edicao, stage: 'eliminated' as const, championId: 'sa-charrua' }
+    const updated = withLibertadosState(save, eliminado)
+
+    expect(updated.continentalChampions).toEqual([{ year: save.careerYear, clubId: 'sa-charrua' }])
+    expect(updated.trophies).toHaveLength(0)
+  })
+
+  test('dispensar o torneio limpa o estado sem perder o histórico', () => {
+    const save = base()
+    const edicao = createLibertados(9, save.careerYear, save.clubId, [save.clubId, 'mare-rubra', 'imperial', 'atlantico'])
+    const comHistorico = withLibertadosState(save, { ...edicao, stage: 'eliminated', championId: 'sa-inti' })
+    const limpo = applyLibertados(comHistorico, null)
+
+    expect(limpo.libertados).toBeNull()
+    expect(limpo.continentalChampions).toHaveLength(1)
+  })
+
+  test('terminar no topo da Série A classifica para o ano seguinte', () => {
+    // Arrange: clube da Série A com a temporada encerrada em 1º lugar
+    const save = base()
+    const encerrada = {
+      ...save.season,
+      currentRound: SEASON_ROUNDS,
+      results: save.season.participants
+        .filter((id) => id !== save.clubId)
+        .map((id, index) => ({ round: index, homeId: save.clubId, awayId: id, homeGoals: 5, awayGoals: 0 })),
+    }
+
+    // Act
+    const proxima = startNewSeason({ ...save, season: encerrada }, () => 0.5)
+
+    // Assert
+    expect(proxima.libertadosQualified).toBe(true)
+    expect(proxima.libertados).not.toBeNull()
+    expect(proxima.libertados!.playerClubId).toBe(save.clubId)
+    expect(proxima.libertados!.groups.flat()).toContain(save.clubId)
+  })
+
+  test('dispensar o torneio não faz a virada do ano gravar um segundo campeão', () => {
+    /*
+     * Arrange: torneio disputado e encerrado, campeão já no histórico, e o
+     * card dispensado — o que zera `save.libertados`. Sem guarda por ano, a
+     * virada leria isso como "ano sem jogador" e simularia outra edição.
+     */
+    const save = base()
+    const edicao = createLibertados(9, save.careerYear, save.clubId, [save.clubId, 'mare-rubra', 'imperial', 'atlantico'])
+    const encerrado = withLibertadosState(save, { ...edicao, stage: 'eliminated', championId: 'sa-inti' })
+    const dispensado = applyLibertados(encerrado, null)
+
+    // Act
+    const proxima = startNewSeason(dispensado, () => 0.5)
+
+    // Assert
+    const doAno = proxima.continentalChampions.filter((title) => title.year === save.careerYear)
+    expect(doAno).toHaveLength(1)
+    expect(doAno[0].clubId).toBe('sa-inti')
+  })
+
+  test('sem classificação, a edição do ano roda simulada e vira histórico', () => {
+    // Arrange: clube da Série D nunca entra no top 4 da Série A
+    const save = createSave({ playerName: 'Tuca', clubId: 'real-vila' })!
+
+    // Act
+    const proxima = startNewSeason(save, () => 0.5)
+
+    // Assert
+    expect(proxima.libertadosQualified).toBe(false)
+    expect(proxima.libertados).toBeNull()
+    expect(proxima.continentalChampions).toHaveLength(1)
+    expect(proxima.continentalChampions[0].year).toBe(save.careerYear)
+    expect(proxima.continentalChampions[0].clubId).not.toBe(save.clubId)
+  })
+
+  test('save da versão anterior carrega sem Libertados', () => {
+    const antigo = JSON.stringify({ ...base(), version: 19, libertados: undefined })
+    const carregado = parseSave(antigo)
+
+    expect(carregado).not.toBeNull()
+    expect(carregado!.version).toBe(SAVE_VERSION)
+    expect(carregado!.libertados).toBeNull()
+    expect(carregado!.continentalChampions).toEqual([])
+  })
+})
+
+describe('editor: região e sigla do clube', () => {
+  const base = () => createSave({ playerName: 'Tuca', clubId: 'leoes-capital' })!
+
+  test('trocar a região aparece no clube exibido', () => {
+    const save = setClubCity(base(), 'leoes-capital', 'Recife')
+    expect(displayClub(save, clubById('leoes-capital')!).city).toBe('Recife')
+  })
+
+  test('campo em branco devolve a região original', () => {
+    const original = clubById('leoes-capital')!.city
+    const trocado = setClubCity(base(), 'leoes-capital', 'Recife')
+    const limpo = setClubCity(trocado, 'leoes-capital', '   ')
+    expect(displayClub(limpo, clubById('leoes-capital')!).city).toBe(original)
+  })
+
+  test('a sigla vira três letras maiúsculas, sem acento nem símbolo', () => {
+    const save = setClubAbbr(base(), 'leoes-capital', 'ç?ãx')
+    expect(displayClub(save, clubById('leoes-capital')!).abbr).toBe('CAX')
+  })
+
+  test('sigla com menos de três letras é ignorada', () => {
+    // meia sigla quebraria o alinhamento do placar
+    const original = clubById('leoes-capital')!.abbr
+    const save = setClubAbbr(base(), 'leoes-capital', 'CO')
+    expect(displayClub(save, clubById('leoes-capital')!).abbr).toBe(original)
+  })
+
+  test('a sigla escolhida à mão ganha da que o nome novo geraria', () => {
+    // renomear gera sigla automática; quem digitou as três letras quer as dele
+    const renomeado = renameClub(base(), 'leoes-capital', 'Corinthians')
+    expect(displayClub(renomeado, clubById('leoes-capital')!).abbr).toBe('COR')
+    const comSigla = setClubAbbr(renomeado, 'leoes-capital', 'SCP')
+    expect(displayClub(comSigla, clubById('leoes-capital')!).abbr).toBe('SCP')
+  })
+})
+
+describe('troféus sobrevivem ao recarregamento', () => {
+  /*
+   * A lista de kinds válidos vive na normalização e é fácil de esquecer ao
+   * criar competição nova. Quando isso acontece a taça some sozinha no
+   * primeiro reload, sem erro nenhum — foi o que ocorreu com a Copa do Brasil.
+   */
+  const TODOS: readonly TrophyKind[] = [
+    'serie-a',
+    'serie-b',
+    'serie-c',
+    'serie-d',
+    'copa-america',
+    'liga-nacoes',
+    'copa-mundo',
+    'libertados',
+    'copa-brasil',
+  ]
+
+  test('toda taça do jogo sobrevive a salvar e carregar', () => {
+    // Arrange: uma de cada
+    const save = createSave({ playerName: 'Tuca', clubId: 'leoes-capital' })!
+    const comTudo: PlayerSave = {
+      ...save,
+      trophies: TODOS.map((kind, index) => ({ kind, year: index + 1 })),
+    }
+
+    // Act: passa pelo ciclo de persistência
+    const storage = fakeStorage()
+    persistSave(storage, comTudo)
+    const carregado = loadSave(storage)!
+
+    // Assert: nenhuma sumiu no caminho
+    expect(carregado.trophies).toHaveLength(TODOS.length)
+    for (const kind of TODOS) {
+      expect(carregado.trophies.some((trophy) => trophy.kind === kind)).toBe(true)
+    }
+  })
+
+  test('a taça da Copa do Brasil especificamente sobrevive', () => {
+    const save = createSave({ playerName: 'Tuca', clubId: 'leoes-capital' })!
+    const storage = fakeStorage()
+    persistSave(storage, { ...save, trophies: [{ kind: 'copa-brasil', year: 3 }] })
+    expect(loadSave(storage)!.trophies).toEqual([{ kind: 'copa-brasil', year: 3 }])
   })
 })

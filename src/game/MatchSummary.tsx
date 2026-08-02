@@ -56,6 +56,12 @@ export const MatchSummary = ({
   onContinue,
 }: MatchSummaryProps) => (
     <div className="match-summary">
+      {/* fora do bloco que rola: assim ele fica sempre à vista, sem depender
+          de `position: fixed` — que qualquer ancestral com transform quebra */}
+      <button className="btn summary-continue" onClick={onContinue}>Continuar ▸</button>
+      {/* a camada que rola ocupa a tela inteira, para a barra de rolagem ficar
+          na borda da janela e não no meio, colada no conteúdo */}
+      <div className="summary-scroll">
       <div className="summary-content">
       <div className="summary-header">
         <h2>Fim de jogo</h2>
@@ -144,12 +150,6 @@ export const MatchSummary = ({
           <div className="stat"><span className="stat-value">{match.stats.shots}</span><span className="stat-label">finalizações</span></div>
           <div className="stat"><span className="stat-value">{match.stats.assists}</span><span className="stat-label">assistências</span></div>
           <div className="stat"><span className="stat-value">{match.stats.decisionsGood}/{match.stats.decisions}</span><span className="stat-label">decisões certas</span></div>
-          <div className="stat">
-            <span className="stat-value">
-              {match.stats.golacos > 0 ? match.stats.golacos : displayRating(match.rating).toFixed(1)}
-            </span>
-            <span className="stat-label">{match.stats.golacos > 0 ? 'golaços' : 'nota'}</span>
-          </div>
         </div>
       </div>
 
@@ -159,7 +159,7 @@ export const MatchSummary = ({
         </p>
       )}
 
-      <button className="btn summary-continue" onClick={onContinue}>Continuar ▸</button>
+      </div>
       </div>
     </div>
 )

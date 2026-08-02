@@ -86,22 +86,23 @@ export const DecisionChallenge = ({ intro, rng, contexto, onResolved }: Decision
       <div className="decision-probability-legend" aria-label="Significado das probabilidades">
         <span className="decision-legend-item decision-gol">
           <span className="decision-legend-dot" aria-hidden="true" />
-          <span><strong>MARCA</strong> você faz o gol</span>
-        </span>
-        <span className="decision-legend-item decision-cria">
-          <span className="decision-legend-dot" aria-hidden="true" />
-          <span><strong>CRIA CHANCE</strong> companheiro finaliza</span>
+          <span><strong>GOL</strong> a jogada termina em gol — seu ou do companheiro</span>
         </span>
         <span className="decision-legend-item decision-risco">
           <span className="decision-legend-dot" aria-hidden="true" />
-          <span><strong>SOFRE GOL</strong> risco no contra-ataque</span>
+          <span><strong>CONTRA</strong> perde a bola e sofre no contra-ataque</span>
         </span>
       </div>
       <div className="decision-options">
         {opcoes.map(({ jogada, dist }) => {
           const label = jogadaLabel(jogada.id)
-          const gol = pct(dist.gol)
-          const cria = pct(dist.chance)
+          /*
+           * Um número só para o lado bom da jogada. Quem decide em campo pensa
+           * "isso vira gol?", não "isso vira gol MEU ou dele?" — separar as
+           * duas colunas enchia a tela de porcentagem e deixava a escolha
+           * pesada. Quem finaliza continua sendo sorteado no desfecho.
+           */
+          const gol = pct(dist.gol + dist.chance)
           const risco = pct(dist.contra)
           return (
             <button
@@ -110,9 +111,8 @@ export const DecisionChallenge = ({ intro, rng, contexto, onResolved }: Decision
               onClick={() => escolher(jogada)}
               aria-label={
                 `${label}. Atributo ${ATTRIBUTE_LABELS[jogada.atributo]}. ` +
-                `${gol}% de chance de você marcar, ` +
-                `${cria}% de criar uma finalização para um companheiro, ` +
-                `${risco}% de risco de sofrer gol no contra-ataque.`
+                `${gol}% de chance de terminar em gol, ` +
+                `${risco}% de risco de sofrer no contra-ataque.`
               }
             >
               <span className="decision-label">{label}</span>
@@ -121,13 +121,10 @@ export const DecisionChallenge = ({ intro, rng, contexto, onResolved }: Decision
                   {ATTRIBUTE_ABBR[jogada.atributo]}
                 </span>
                 <span className="decision-stat decision-gol">
-                  <span className="decision-stat-key">MARCA</span> {gol}%
-                </span>
-                <span className="decision-stat decision-cria">
-                  <span className="decision-stat-key">CRIA CHANCE</span> {cria}%
+                  <span className="decision-stat-key">GOL</span> {gol}%
                 </span>
                 <span className="decision-stat decision-risco">
-                  <span className="decision-stat-key">SOFRE GOL</span> {risco}%
+                  <span className="decision-stat-key">CONTRA</span> {risco}%
                 </span>
               </span>
             </button>

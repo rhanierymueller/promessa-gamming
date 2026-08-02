@@ -426,6 +426,75 @@ const Emblem = ({
           <path d="M9 16.7 L8.2 19 M12.3 16.7 L11.5 19 M15.6 16.7 L14.8 19" stroke={accent} strokeWidth="1.2" strokeLinecap="round" />
         </g>
       )
+    case 'condor':
+      return (
+        <g>
+          <path d="M5.4 12.6 C8.2 10.9 10.2 11.8 12 13.9 C13.8 11.8 15.8 10.9 18.6 12.6 C16.5 13.3 15 14.6 14 16.2 L12 18.9 L10 16.2 C9 14.6 7.5 13.3 5.4 12.6 Z" fill={color} />
+          <circle cx="12" cy="11.2" r="1.6" fill={color} />
+          <path d="M12 9.9 L13.4 10.8 L12 11.4 Z" fill={accent} />
+        </g>
+      )
+    case 'jaguar':
+      return (
+        <g>
+          <path d="M12 7.6 L14.3 9 L16.6 8.6 L16.1 11 C17.9 13.2 17.3 17.2 15 18.9 L12 19.9 L9 18.9 C6.7 17.2 6.1 13.2 7.9 11 L7.4 8.6 L9.7 9 Z" fill={color} />
+          <path d="M9.4 12.4 L10.9 13 M14.6 12.4 L13.1 13 M10.4 16.6 C11.3 17.3 12.7 17.3 13.6 16.6" fill="none" stroke={accent} strokeWidth="0.9" strokeLinecap="round" />
+          <circle cx="9.2" cy="15" r="0.65" fill={accent} />
+          <circle cx="14.8" cy="15" r="0.65" fill={accent} />
+          <circle cx="12" cy="17.9" r="0.6" fill={accent} />
+        </g>
+      )
+    case 'volcano':
+      return (
+        <g>
+          <path d="M4.8 19.4 L9.6 10.4 H14.4 L19.2 19.4 Z" fill={color} />
+          <path d="M9.6 10.4 L10.9 12.6 L12 11.2 L13.1 12.6 L14.4 10.4 Z" fill={accent} />
+          <path d="M10.4 8.6 C10.4 7.4 12 7.6 12 6.4 M13.6 8.6 C13.6 7.6 14.9 7.7 14.9 6.8" fill="none" stroke={color} strokeWidth="1.1" strokeLinecap="round" />
+        </g>
+      )
+    case 'harp':
+      return (
+        <g>
+          <path d="M8 19.4 C8 13.4 10.4 9.4 15.6 7.8" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" />
+          <path d="M8 19.4 H15.6 V7.8" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+          <path d="M10.4 18.2 V11.6 M12.1 18.2 V10.2 M13.8 18.2 V9.1" fill="none" stroke={accent} strokeWidth="0.85" strokeLinecap="round" />
+        </g>
+      )
+    case 'llama':
+      return (
+        <g>
+          <path d="M9 19.2 V14.4 C9 12.6 10.4 11.6 12.2 11.6 H14 V19.2 H12.4 V15.6 H10.6 V19.2 Z" fill={color} />
+          <path d="M14 11.6 C14 9.8 15.2 8.6 16.4 8.6 C17 8.6 17.4 9 17.4 9.8 V12 C17.4 12.9 16.7 13.4 15.8 13.4 H14 Z" fill={color} />
+          <path d="M16.1 8.6 L15.8 6.9 M17.2 8.8 L17.9 7.2" fill="none" stroke={color} strokeWidth="1.1" strokeLinecap="round" />
+          <circle cx="16.5" cy="10.6" r="0.6" fill={accent} />
+        </g>
+      )
+    case 'orchid':
+      return (
+        <g>
+          <path d="M12 7.4 C13.6 8.6 13.6 11 12 12.2 C10.4 11 10.4 8.6 12 7.4 Z" fill={color} />
+          <path d="M16.9 10.6 C16.6 12.6 14.5 13.7 12.8 13.1 C13.5 11.2 15.3 10.2 16.9 10.6 Z" fill={color} />
+          <path d="M7.1 10.6 C8.7 10.2 10.5 11.2 11.2 13.1 C9.5 13.7 7.4 12.6 7.1 10.6 Z" fill={color} />
+          <path d="M15.5 17.4 C13.9 18.4 11.9 17.6 11.6 15.6 C13.4 15 15 15.7 15.5 17.4 Z" fill={color} />
+          <path d="M8.5 17.4 C9 15.7 10.6 15 12.4 15.6 C12.1 17.6 10.1 18.4 8.5 17.4 Z" fill={color} />
+          <circle cx="12" cy="13.9" r="1.5" fill={accent} />
+        </g>
+      )
+    case 'maize':
+      return (
+        <g>
+          <path d="M12 8.2 C14 9.4 14.6 12.4 14 15.4 C13.6 17.4 12.8 18.8 12 19.4 C11.2 18.8 10.4 17.4 10 15.4 C9.4 12.4 10 9.4 12 8.2 Z" fill={color} />
+          <path d="M12 9.8 V18.4 M10.7 11.6 L13.3 11.6 M10.4 13.8 L13.6 13.8 M10.6 16 L13.4 16" fill="none" stroke={accent} strokeWidth="0.8" strokeLinecap="round" />
+          <path d="M10.2 12.4 C8.2 12 7.2 13.6 7.6 16 C9.2 16.2 10 15 10.2 13.4" fill={color} />
+        </g>
+      )
+    case 'cordillera':
+      return (
+        <g>
+          <path d="M4.6 19.2 L9 11.4 L11.6 15.6 L14.4 9.4 L19.4 19.2 Z" fill={color} />
+          <path d="M9 11.4 L10.3 13.7 L9 14.3 L7.8 13.6 Z M14.4 9.4 L16 12.5 L14.4 13.2 L12.9 12.4 Z" fill={accent} />
+        </g>
+      )
   }
 }
 

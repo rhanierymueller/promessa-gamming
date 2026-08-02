@@ -229,6 +229,16 @@ const FLAGS: Record<string, ReactElement> = {
       <circle cx="12" cy="8.5" r="2.2" fill="#8C6239" />
     </g>
   ),
+  peru: vStripes(['#D91023', '#FFFFFF', '#D91023']),
+  bolivia: hStripes(['#D52B1E', '#F9E300', '#007934']),
+  venezuela: (
+    <g>
+      {hStripes(['#FCD116', '#00247D', '#CF142B'])}
+      {star(9, 8.5, 1.3, '#FFFFFF')}
+      {star(12, 6.8, 1.3, '#FFFFFF')}
+      {star(15, 8.5, 1.3, '#FFFFFF')}
+    </g>
+  ),
   portugal: (
     <g>
       {vStripes(['#046A38', '#DA291C'], [2, 3])}

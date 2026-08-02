@@ -1,6 +1,8 @@
 import trophyCopaAmerica from '../assets/trophies/copa-america.png'
+import trophyCopaBrasil from '../assets/trophies/copa-brasil.png'
 import trophyCopaMundo from '../assets/trophies/copa-mundo.png'
 import trophyLigaNacoes from '../assets/trophies/liga-nacoes.png'
+import trophyLibertados from '../assets/trophies/libertados.png'
 import trophySerieA from '../assets/trophies/serie-a.png'
 import trophySerieB from '../assets/trophies/serie-b.png'
 import trophySerieC from '../assets/trophies/serie-c.png'
@@ -17,6 +19,8 @@ const TROPHY_IMAGES: Record<TrophyKind, string> = {
   'copa-america': trophyCopaAmerica,
   'liga-nacoes': trophyLigaNacoes,
   'copa-mundo': trophyCopaMundo,
+  libertados: trophyLibertados,
+  'copa-brasil': trophyCopaBrasil,
 }
 
 const TROPHY_LABELS: Record<TrophyKind, string> = {
@@ -27,6 +31,8 @@ const TROPHY_LABELS: Record<TrophyKind, string> = {
   'copa-america': 'Copa América',
   'liga-nacoes': 'Liga das Nações',
   'copa-mundo': 'Copa do Mundo',
+  libertados: 'Copa Libertados',
+  'copa-brasil': 'Copa do Brasil',
 }
 
 interface TrophyRoomProps {

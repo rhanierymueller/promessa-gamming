@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'vitest'
-import { CLUBS } from '../../data/clubs'
+import { CLUBS, clubById } from '../../data/clubs'
+import { continentalClubById } from '../../data/continentalClubs'
 import { nationAsClub, NATIONS } from '../../data/nations'
+import { NATIONAL_NAMES } from '../../data/nationalNames'
 import { RETIRE_AGE } from './aging'
 import { FORMATIONS, formationIdFor } from './formation'
 import {
+  clubBaseQuality,
   lineupRating,
   overallAt,
   positionFit,
@@ -34,6 +37,42 @@ test('qualidade escala com a divisão: A > B > C > D, e seleção acima de tudo'
   expect(byDivision[2]).toBeGreaterThan(byDivision[3] + 5)
   // seleção do Brasil acima da média da Série A
   expect(nationAvg).toBeGreaterThan(byDivision[0] + 5)
+})
+
+describe('a divisão que vale é a de HOJE, não a do catálogo', () => {
+  const pequeno = clubById('real-vila')! // nasce na Série D
+
+  test('o mesmo clube vale mais na Série A do que na Série D', () => {
+    // Act
+    const naSerieA = clubBaseQuality(pequeno, 0)
+    const naSerieD = clubBaseQuality(pequeno, 3)
+
+    // Assert
+    expect(naSerieA).toBeGreaterThan(naSerieD)
+  })
+
+  test('sem divisão informada, continua valendo a do catálogo', () => {
+    expect(clubBaseQuality(pequeno)).toBe(clubBaseQuality(pequeno, pequeno.division))
+  })
+
+  test('divisão desconhecida (-1) não rebaixa ninguém: vale a do catálogo', () => {
+    // divisionOf devolve -1 para clube fora da pirâmide (Libertados, seleção)
+    const grande = clubById('leoes-capital')! // Série A
+    expect(clubBaseQuality(grande, -1)).toBe(clubBaseQuality(grande))
+    expect(clubBaseQuality(grande, 99)).toBe(clubBaseQuality(grande))
+  })
+
+  test('subir de divisão levanta o elenco inteiro', () => {
+    // Arrange
+    const mediaDe = (division: number) => {
+      const squad = squadPlayersFor(pequeno, 1, 'masculino', division)
+      return squad.reduce((sum, player) => sum + player.overall, 0) / squad.length
+    }
+
+    // Assert: um acesso vale pelo menos 4 pontos de overall médio
+    expect(mediaDe(2)).toBeGreaterThan(mediaDe(3) + 4)
+    expect(mediaDe(0)).toBeGreaterThan(mediaDe(1) + 4)
+  })
 })
 
 const weakClub = CLUBS.find((club) => club.strength === 1)!
@@ -107,6 +146,7 @@ describe('squadPlayersFor', () => {
     // Assert
     expect(new Set(squad.map((player) => player.name)).size).toBe(SQUAD_SIZE)
   })
+
 })
 
 describe('userAsSquadPlayer', () => {
@@ -184,13 +224,16 @@ describe('posições secundárias e overall por posição', () => {
     expect(overallAt(zagueiro, 'GOL')).toBeLessThan(overallAt(zagueiro, 'ATA'))
   })
 
-  test('lineupRating: escalação certa vale mais que zagueiro no ataque', () => {
-    // Arrange
+  test('lineupRating: escalação certa vale mais que jogador fora da posição', () => {
+    // Arrange: os MESMOS onze — só o encaixe muda, então quem decide é o fit
     const squad = squadPlayersFor(CLUBS[0])
     const slots = FORMATIONS[formationIdFor(CLUBS[0].id)].slots
     const right = slots.map((_, index) => squad[index])
-    // troca o atacante (9) por um defensor do banco (13)
-    const wrong = right.map((player, index) => (index === 9 ? squad[13] : player))
+    const zagIndex = slots.indexOf('ZAG')
+    const ataIndex = slots.indexOf('ATA')
+    const wrong = right.map((player, index) =>
+      index === zagIndex ? right[ataIndex] : index === ataIndex ? right[zagIndex] : player,
+    )
 
     // Act & Assert
     expect(lineupRating(right, slots)).toBeGreaterThan(lineupRating(wrong, slots))
@@ -248,9 +291,10 @@ describe('idade por temporada: evolução, declínio e aposentadoria', () => {
     expect(at35.overall).toBeLessThan(player.overall)
   })
 
-  test('aos 38 aposenta e um garoto (regen) assume o lugar', () => {
-    // Arrange
-    const { club, index, player } = findWithClub((candidate) => candidate.age >= 35)
+  test('cumprido o tempo dele, um garoto (regen) assume o lugar', () => {
+    // Arrange: o mais veterano que existir — cada um sai na própria idade,
+    // entre o fim do declínio e o teto dos 38
+    const { club, index, player } = findWithClub((candidate) => candidate.age >= 32)
     const yearsPast = RETIRE_AGE - player.age + 2
 
     // Act
@@ -273,5 +317,108 @@ describe('idade por temporada: evolução, declínio e aposentadoria', () => {
       expect(pool.some((player) => player.potential === level)).toBe(true)
     }
     expect(squadPlayersFor(clubs[0], 9)).toEqual(squadPlayersFor(clubs[0], 9))
+  })
+})
+
+describe('talento individual: nem todo garoto vira a mesma coisa', () => {
+  const club = clubById('leoes-capital')!
+
+  /** Overall de cada jogador do elenco na temporada do PRÓPRIO auge. */
+  const tetosDoElenco = (entry = club) =>
+    squadPlayersFor(entry, 1)
+      .map((player, index) => ({ player, index }))
+      .filter(({ player }) => player.age < player.peakAge)
+      .map(({ player, index }) => squadPlayersFor(entry, 1 + (player.peakAge - player.age))[index].overall)
+
+  test('o elenco tem idades de auge diferentes — ninguém anda em fila', () => {
+    // Act
+    const auges = new Set(squadPlayersFor(club, 1).map((player) => player.peakAge))
+
+    // Assert
+    expect(auges.size).toBeGreaterThan(2)
+  })
+
+  test('num mesmo elenco, uns projetos chegam bem mais longe que outros', () => {
+    // Act
+    const tetos = tetosDoElenco()
+
+    // Assert: do melhor ao pior projeto, um abismo de verdade
+    expect(tetos.length).toBeGreaterThan(4)
+    expect(Math.max(...tetos) - Math.min(...tetos)).toBeGreaterThanOrEqual(12)
+  })
+
+  test('isso vale em qualquer divisão, não só na elite', () => {
+    for (const id of ['aurora-paulista', 'sol-carioca', 'real-vila']) {
+      const tetos = tetosDoElenco(clubById(id)!)
+      expect(Math.max(...tetos) - Math.min(...tetos)).toBeGreaterThanOrEqual(10)
+    }
+  })
+
+  test('potencial alto entrega mais que potencial baixo, na média', () => {
+    // Arrange
+    const pool = CLUBS.slice(0, 12).flatMap((entry) =>
+      squadPlayersFor(entry, 1).map((player) => ({ player, clube: entry })),
+    )
+    const mediaDe = (level: 'alto' | 'baixo') => {
+      const grupo = pool.filter(({ player }) => player.potential === level)
+      return grupo.reduce((sum, { player }) => sum + player.overall, 0) / grupo.length
+    }
+
+    // Assert
+    expect(mediaDe('alto')).toBeGreaterThan(mediaDe('baixo') + 5)
+  })
+
+  test('continua determinístico: mesmo clube, mesmo ano, mesmo elenco', () => {
+    expect(squadPlayersFor(club, 7)).toEqual(squadPlayersFor(club, 7))
+  })
+
+  test('o clube atravessa a carreira sem apodrecer', () => {
+    // Arrange: sem renovação escalonada, o elenco envelhece em bloco e a
+    // força despenca — o mundo inteiro fica pior a cada temporada
+    const forcaEm = (ano: number) => {
+      const squad = squadPlayersFor(club, ano, 'masculino', 0)
+      return squad.reduce((sum, player) => sum + player.overall, 0) / squad.length
+    }
+    const inicial = forcaEm(1)
+
+    // Assert
+    for (const ano of [3, 6, 9, 12, 16, 20]) {
+      expect(forcaEm(ano)).toBeGreaterThan(inicial - 5)
+    }
+  })
+
+  test('a idade média do elenco não sobe sem parar', () => {
+    const idadeEm = (ano: number) => {
+      const squad = squadPlayersFor(club, ano, 'masculino', 0)
+      return squad.reduce((sum, player) => sum + player.age, 0) / squad.length
+    }
+    for (const ano of [1, 5, 9, 14, 20]) {
+      expect(idadeEm(ano)).toBeLessThan(30)
+    }
+  })
+})
+
+describe('elenco de clube sul-americano', () => {
+  test('os nomes vêm do banco do país do clube, não do brasileiro', () => {
+    // Arrange
+    const club = continentalClubById('sa-charrua')!
+    const uruguaios = NATIONAL_NAMES.uruguai
+
+    // Act
+    const squad = squadPlayersFor(club)
+
+    // Assert
+    for (const player of squad) {
+      const [first, ...rest] = player.name.split(' ')
+      expect(uruguaios.firsts).toContain(first)
+      expect(uruguaios.lasts).toContain(rest.join(' '))
+    }
+  })
+
+  test('clube brasileiro continua com o gerador da liga', () => {
+    const squad = squadPlayersFor(clubById('leoes-capital')!)
+    expect(squad).toHaveLength(18)
+    // apelidos de várzea são exclusivos do gerador brasileiro
+    expect(squad.every((player) => player.name.length > 0)).toBe(true)
   })
 })

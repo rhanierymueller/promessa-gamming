@@ -342,9 +342,14 @@ h1 {
   margin: 0 auto;
 }
 
+/*
+ * Duas colunas desde que a legenda passou a ter GOL e CONTRA (eram três: o
+ * gol do jogador e o do companheiro viraram um só). Com `repeat(3, …)` a
+ * legenda parava no meio e desalinhava com a coluna de jogadas embaixo.
+ */
 .decision-probability-legend {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
   width: min(100%, 620px);
   margin: 0 auto;
@@ -554,10 +559,10 @@ h1 {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding: 24px 16px;
+  padding: 0;
   text-align: center;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  /* o scroll é do CONTEÚDO, não do overlay: é isso que mantém o botão parado */
+  overflow: hidden;
 }
 
 .match-summary h2 {
@@ -718,6 +723,11 @@ h1 {
   padding-bottom: 90px;
 }
 
+/*
+ * A barra não cresce: no celular só as abas de uso diário ficam nela, e o
+ * resto vive na gaveta do botão "Mais". Rolagem horizontal foi a primeira
+ * tentativa e falhava no básico — ninguém descobre que dá para arrastar.
+ */
 .tabbar {
   position: fixed;
   bottom: 0;
@@ -732,10 +742,13 @@ h1 {
 
 .tabbar-item {
   font-family: var(--mono);
+  text-decoration: none;
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
   gap: 3px;
   background: none;
   border: none;
@@ -743,7 +756,9 @@ h1 {
   font-size: 10.5px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 10px 4px 12px;
+  /* rótulo em UMA linha: quebrando, o ícone de cada aba parava numa altura */
+  white-space: nowrap;
+  padding: 10px 8px 12px;
   cursor: pointer;
 }
 
@@ -753,6 +768,107 @@ h1 {
 
 .tabbar-active {
   color: var(--accent);
+}
+
+/* no computador cabe tudo: a gaveta não faz falta e o botão some */
+.tabbar-more {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  /* celular: as secundárias descem para a gaveta e o botão aparece */
+  .tabbar-secondary {
+    display: none;
+  }
+
+  .tabbar-more {
+    display: flex;
+  }
+
+  .tabbar-item {
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    padding: 10px 4px 12px;
+  }
+}
+
+/* ---------- gaveta do "Mais" ---------- */
+
+.tabdrawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(6, 5, 12, 0.72);
+  backdrop-filter: blur(2px);
+  animation: tabdrawer-fade 0.18s ease both;
+}
+
+@keyframes tabdrawer-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/*
+ * Sobe de baixo, encostada na barra: o dedo que abriu está ali embaixo, e é
+ * de lá que a gaveta tem de aparecer.
+ */
+.tabdrawer {
+  width: min(100%, 560px);
+  margin-bottom: 66px;
+  padding: 10px 12px 14px;
+  border-top: 1px solid var(--line);
+  border-radius: 14px 14px 0 0;
+  background: var(--card);
+  box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.5);
+  animation: tabdrawer-rise 0.22s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes tabdrawer-rise {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* a alcinha diz "isto desliza" sem precisar de instrução */
+.tabdrawer-handle {
+  display: block;
+  width: 38px;
+  height: 4px;
+  margin: 0 auto 12px;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.tabdrawer-item {
+  font-family: var(--mono);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tabdrawer-item:active {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tabdrawer-active {
+  color: var(--accent);
+  background: rgba(255, 210, 63, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabdrawer-overlay,
+  .tabdrawer {
+    animation: none;
+  }
 }
 
 .tab-panel {
@@ -1862,6 +1978,33 @@ h1 {
   font-size: 0.82rem;
 }
 
+/*
+ * Região e sigla na mesma linha: são os dois campos curtos do clube, e
+ * empilhados fariam a lista de 14 times crescer sem necessidade. A sigla tem
+ * largura fixa de três casas — é o que ela aceita.
+ */
+.club-edit-sub {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.club-edit-city {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 9px;
+  font-size: 0.74rem;
+}
+
+.club-edit-abbr {
+  flex: 0 0 62px;
+  padding: 5px 8px;
+  font-size: 0.74rem;
+  letter-spacing: 0.16em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
 /* filtro de divisão como abas, no lugar de um select escondido */
 .editor-divisions {
   display: flex;
@@ -2277,6 +2420,8 @@ h1 {
   .tab-panel > .next-match,
   .tab-panel > .callup-card,
   .tab-panel > .news-center,
+  .tab-panel > .national-groups,
+  .tab-panel > .libertados-groups,
   .tab-panel > .card-wide {
     grid-column: 1 / -1;
   }
@@ -2945,6 +3090,46 @@ h1 {
 
 .player-rename-note {
   font-size: 11px;
+}
+
+.player-sale-footer {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.player-sale-value {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.player-sale-value strong {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.player-sale-btn {
+  white-space: nowrap;
+}
+
+.player-sale-confirm {
+  position: fixed;
+  z-index: 31;
+  border-radius: 0;
+}
+
+@media (max-width: 460px) {
+  .player-sale-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .player-sale-btn {
+    width: 100%;
+  }
 }
 
 
@@ -3759,15 +3944,48 @@ h1 {
 
 /* ---------- resumo v2: placar em destaque ---------- */
 
+/*
+ * Camada de rolagem: largura total, para a barra nascer na borda da JANELA.
+ * Quando o scroll era do bloco de 560px, a barra aparecia no meio da tela,
+ * encostada no conteúdo.
+ */
+.summary-scroll {
+  flex: 1;
+  /* `min-height: 0` é o que deixa o filho flex encolher e de fato rolar */
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  justify-content: center;
+  /* barra discreta, como no resto do app: a do sistema entra branca e
+     gritante em cima do fundo escuro */
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.summary-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.summary-scroll::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 3px;
+}
+
+.summary-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .summary-content {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
   width: min(100%, 560px);
-  /* o scroll agora é do overlay; margin auto centra quando o conteúdo cabe */
+  /* `auto` no bloco: centra na vertical quando o resumo é curto e cabe */
   margin: auto 0;
-  padding: 4px;
+  padding: 8px 16px 28px;
 }
 
 .summary-scoreline {
@@ -5079,13 +5297,29 @@ h1 {
  * na base para nunca sair do alcance. Antes vinha ANTES do placar, roubando
  * a atenção do resultado.
  */
+/*
+ * O botão flutua no rodapé da JANELA: num jogo cheio de gols e decisões o
+ * resumo passa da tela, e rolar até o fim só para sair dela era um pedágio.
+ *
+ * `fixed` e não `sticky`: o resumo é um flex column centralizado e com scroll
+ * próprio, e nesse arranjo o sticky não gruda. Esta regra é a ÚLTIMA definição
+ * de `.summary-continue` no arquivo de propósito — havia uma tentativa de
+ * sticky aqui embaixo que vencia a cascata e desfazia o posicionamento.
+ */
+/*
+ * O botão é irmão do bloco que rola, não filho: fica encostado no topo do
+ * overlay e não se mexe, sem `position: fixed`.
+ *
+ * Foram três tentativas com posicionamento antes desta — sticky não gruda em
+ * flex centralizado, e `fixed` é anulado por qualquer ancestral com
+ * `transform`. Tirar o botão da área rolável resolve sem depender de nenhum
+ * dos dois.
+ */
 .summary-continue {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  width: min(100%, 320px);
-  margin-top: 6px;
-  box-shadow: 0 -14px 22px 10px #100c1a;
+  flex-shrink: 0;
+  width: min(calc(100% - 32px), 320px);
+  margin: max(16px, env(safe-area-inset-top, 0px)) auto 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
 
 /* ---------- aba da seleção ---------- */
@@ -5739,6 +5973,68 @@ h1 {
   .callup-who,
   .callup-comp,
   .callup-line {
+    animation: none;
+  }
+}
+
+
+/*
+ * Entrada nas telas de jogo. Curta de propósito (0.28s): o suficiente para o
+ * salto da Home para o gramado não ser um corte seco, curta o bastante para
+ * quem já apertou "jogar" não sentir que está esperando.
+ */
+.screen-enter {
+  animation: screen-enter 0.28s ease-out both;
+}
+
+/*
+ * Só opacidade. Havia um `scale(0.992)` aqui: bonito, mas um ancestral com
+ * `transform` vira containing block e prende qualquer `position: fixed` de
+ * dentro — era o que impedia o botão do resumo de flutuar na janela.
+ */
+@keyframes screen-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-enter {
+    animation: none;
+  }
+}
+
+
+/*
+ * Troca entre a semana e o dia de jogo.
+ *
+ * O relógio para no dia da partida e a faixa de dias dá lugar ao card do
+ * confronto — React desmonta um e monta o outro, o que aparecia como um
+ * pulo seco. O fade de entrada faz o card CHEGAR em vez de simplesmente
+ * estar lá, e é o que dá o sentido de "chegou o dia".
+ *
+ * `transform` aqui é seguro: nada dentro do card é `position: fixed`. Não
+ * repita isso em contêiner que tenha — o transform vira containing block e
+ * prende o fixed dos filhos.
+ */
+.tab-panel > .next-match,
+.tab-panel > .week-strip {
+  animation: home-swap 0.34s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+@keyframes home-swap {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-panel > .next-match,
+  .tab-panel > .week-strip {
     animation: none;
   }
 }

@@ -26,6 +26,9 @@ const chromaKey = (data, count) => {
     const [r, g, b] = [data[p], data[p + 1], data[p + 2]]
     const distance = distanceToMagenta(r, g, b)
     if (distance < KEY_TOLERANCE) {
+      data[p] = 0
+      data[p + 1] = 0
+      data[p + 2] = 0
       data[p + 3] = 0
       continue
     }
@@ -38,6 +41,29 @@ const chromaKey = (data, count) => {
     if (r > ceiling && b > ceiling) {
       data[p] = Math.min(r, ceiling)
       data[p + 2] = Math.min(b, ceiling)
+    }
+  }
+}
+
+/**
+ * Algumas folhas deixam os últimos pixels da camisa da linha anterior dentro
+ * da célula seguinte. É uma faixa quase contínua no topo; cabelo nunca ocupa
+ * mais de 75% da largura inteira, então dá para removê-la sem apagar o rosto.
+ */
+const clearTopRowBleed = (data, width, height) => {
+  const maxRows = Math.min(12, height)
+  for (let y = 0; y < maxRows; y++) {
+    let visible = 0
+    for (let x = 0; x < width; x++) {
+      if (data[(y * width + x) * 4 + 3] > 20) visible++
+    }
+    if (visible < width * 0.75) continue
+    for (let x = 0; x < width; x++) {
+      const p = (y * width + x) * 4
+      data[p] = 0
+      data[p + 1] = 0
+      data[p + 2] = 0
+      data[p + 3] = 0
     }
   }
 }
@@ -65,6 +91,7 @@ const run = async () => {
         .toBuffer({ resolveWithObject: true })
 
       chromaKey(data, info.width * info.height)
+      clearTopRowBleed(data, info.width, info.height)
 
       const file = path.join(outDir, `${prefix}-${String(index).padStart(2, '0')}.png`)
       await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } })

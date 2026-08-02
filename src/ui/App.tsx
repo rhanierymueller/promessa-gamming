@@ -1,4 +1,4 @@
-import { BadgeDollarSign, CalendarDays, House, Shield, Trophy, User, Volume1, Volume2, VolumeX, type LucideIcon } from 'lucide-react'
+import { BadgeDollarSign, CalendarDays, House, ListOrdered, Menu, Paintbrush, Shield, Star, Trophy, User, Volume1, Volume2, VolumeX, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { clubById, type Club } from '../data/clubs'
 import { nationAsClub, nationById } from '../data/nations'
@@ -15,6 +15,18 @@ import {
   playerTournamentOpponentId,
   type TournamentKind,
 } from '../engine/tournament/tournament'
+import {
+  advanceLibertados,
+  libertadosAggregateLeadBeforeMatch,
+} from '../engine/libertados/libertados'
+import {
+  advanceCopaBrasil,
+  copaBrasilAggregateLeadBeforeMatch,
+  copaBrasilOpponentId,
+} from '../engine/copaBrasil/copaBrasil'
+import { isCopaBrasilRunning } from '../engine/copaBrasil/types'
+import { isLibertadosRunning, LIBERTADOS_NAME } from '../engine/libertados/types'
+import { playerOpponentId as libertadosOpponentId } from '../engine/libertados/fixtures'
 import { initAudio, setVolume, startAmbience, stopMatchAudio } from '../game/audio'
 import { setMusicVolume } from '../game/music'
 import {
@@ -31,17 +43,22 @@ import { MatchScreen } from '../game/MatchScreen'
 import { ShotStage } from '../game/ShotStage'
 import { DiceDuelStage } from '../game/DiceDuelStage'
 import {
+  applyLibertados,
   applySeason,
   applyTournament,
+  continentalTitleYears,
   currentPlayerAge,
   choosePerk,
-  dismissEventNote,
+  declinePendingEvent,
   displayClub,
   loadSave,
   persistSave,
   recordMatch,
   resolvePendingEvent,
   startNewSeason,
+  dismissCopaBrasil,
+  withCopaBrasilState,
+  withLibertadosState,
   withTournamentState,
   type MatchRecord,
   type PlayerSave,
@@ -60,39 +77,52 @@ import { CharacterCreate } from './CharacterCreate'
 import { Landing } from './Landing'
 import { PasswordReset } from './PasswordReset'
 import { HomeTab } from './tabs/HomeTab'
+import { LibertadosIntro } from './LibertadosIntro'
+import { LibertadosTab } from './tabs/LibertadosTab'
 import { MarketTab } from './tabs/MarketTab'
 import { deleteCloudSave, pushSave, syncSave } from '../online/cloudSave'
 import { clearAllLocalData, clearCareerData } from '../state/localData'
+import { advancePastMatch } from '../engine/career/clock'
+import { CalendarTab } from './tabs/CalendarTab'
+import { EditorTab } from './tabs/EditorTab'
+import { PlayerTab } from './tabs/PlayerTab'
 import { MatchesTab } from './tabs/MatchesTab'
 import { CallUpIntro } from './CallUpIntro'
 import { NationalTab } from './tabs/NationalTab'
 import { isTournamentRunning } from '../engine/career/seasonEnd'
 import { ProfileTab } from './tabs/ProfileTab'
 import { TeamTab } from './tabs/TeamTab'
+import {
+  navigationForPath,
+  pathForNavigation,
+  pathForTab,
+  titleForNavigation,
+  type Gate,
+  type Screen,
+  type Tab,
+} from './routes'
 import './styles/home.css'
 import './styles/match.css'
-
-type Tab = 'home' | 'matches' | 'selecao' | 'team' | 'market' | 'profile'
-type Screen = 'tabs' | 'match' | 'training' | 'gk-training' | 'freekick-training' | 'dice-training'
 
 /** Telas com gramado na tela — são as que ligam a torcida. */
 const PITCH_SCREENS: readonly Screen[] = ['match', 'training', 'gk-training', 'freekick-training']
 
 interface MatchSetup {
   readonly seed: number
-  readonly kind: 'liga' | 'torneio'
+  readonly kind: 'liga' | 'torneio' | 'libertados' | 'copa-brasil'
   readonly club: Club
   readonly opponent: Club
 }
 
-/** Aplica um resultado no save: histórico + liga (ou torneio) avançam juntos. */
+/** Aplica um resultado no save: histórico + liga (ou torneio/Libertados) avançam juntos. */
 const applyMatchOutcome = (
   save: PlayerSave,
   record: MatchRecord,
-  kind: 'liga' | 'torneio',
+  kind: 'liga' | 'torneio' | 'libertados' | 'copa-brasil',
   seed: number,
 ): PlayerSave => {
-  let updated = recordMatch(save, record)
+  // o dia do jogo se encerra com o apito: sem isto o relógio ficaria preso nele
+  let updated = advancePastMatch(recordMatch(save, record))
   if (kind === 'liga') {
     const simulated = advanceSeason(
       updated.season,
@@ -101,7 +131,7 @@ const applyMatchOutcome = (
       createRng((seed ^ 0x9e3779b9) >>> 0),
     )
     updated = applySeason(updated, simulated.value)
-  } else if (updated.tournament) {
+  } else if (kind === 'torneio' && updated.tournament) {
     const advanced = advanceTournament(
       updated.tournament,
       record.teamGoals,
@@ -111,6 +141,24 @@ const applyMatchOutcome = (
       shootoutFor(seed).playerWon,
     )
     updated = withTournamentState(updated, advanced.value.state)
+  } else if (kind === 'copa-brasil' && updated.copaBrasil) {
+    const advanced = advanceCopaBrasil(
+      updated.copaBrasil,
+      record.teamGoals,
+      record.opponentGoals,
+      createRng((seed ^ 0x6c8e9cf5) >>> 0),
+      shootoutFor(seed).playerWon,
+    )
+    updated = withCopaBrasilState(updated, advanced.value.state)
+  } else if (kind === 'libertados' && updated.libertados) {
+    const advanced = advanceLibertados(
+      updated.libertados,
+      record.teamGoals,
+      record.opponentGoals,
+      createRng((seed ^ 0x3c6ef372) >>> 0),
+      shootoutFor(seed).playerWon,
+    )
+    updated = withLibertadosState(updated, advanced.value.state)
   }
   return updated
 }
@@ -139,9 +187,9 @@ const loadVolume = (): number =>
  * access_token/refresh_token no fragmento da URL — some do histórico,
  * de prints e de link copiado sem perder a sessão (já está no storage).
  */
-const clearAuthFragment = (): void => {
+const clearAuthFragment = (pathname = window.location.pathname): void => {
   if (window.location.hash.length === 0) return
-  history.replaceState(null, '', window.location.pathname + window.location.search)
+  history.replaceState(null, '', pathname + window.location.search)
 }
 
 /** Metade do controle já é volume alto para este jogo. */
@@ -190,31 +238,61 @@ const VolumeControl = ({ volume, onChange, onToggleMute }: VolumeControlProps) =
   )
 }
 
+/**
+ * As abas que ficam SEMPRE à vista no celular. O resto vai para a gaveta do
+ * botão "Mais" — assim a barra não cresce sem limite conforme o jogo ganha
+ * telas, e ninguém precisa descobrir sozinho que dá para arrastar de lado.
+ *
+ * Critério: o que se usa a cada partida. Time, Editor e Perfil são visitas
+ * ocasionais; Seleção e Libertados só existem enquanto a competição dura.
+ */
+const PRIMARY_TABS: readonly Tab[] = ['home', 'calendar', 'matches', 'player']
+
 const TAB_ITEMS: readonly { id: Tab; icon: LucideIcon; label: string }[] = [
   { id: 'home', icon: House, label: 'Início' },
-  { id: 'matches', icon: CalendarDays, label: 'Liga' },
+  // o calendário reúne TODAS as competições; a liga fica com tabela e retrospecto
+  { id: 'calendar', icon: CalendarDays, label: 'Calendário' },
+  { id: 'matches', icon: ListOrdered, label: 'Liga' },
   // a aba da seleção só entra na barra quando há convocação em andamento
   { id: 'selecao', icon: Trophy, label: 'Seleção' },
+  // idem para a Libertados: só existe barra enquanto a edição está em jogo
+  { id: 'libertados', icon: Trophy, label: 'Libertados' },
+  // o quarto do craque: números, prêmios e taças da carreira num lugar só
+  { id: 'player', icon: Star, label: 'Jogador' },
   { id: 'team', icon: Shield, label: 'Time' },
+  // o editor sai de dentro da aba Time: é onde o jogador transforma a liga
+  // fictícia nos clubes de verdade dele, e estava atrás de dois cliques
+  { id: 'editor', icon: Paintbrush, label: 'Editor' },
   { id: 'market', icon: BadgeDollarSign, label: 'Mercado' },
   { id: 'profile', icon: User, label: 'Perfil' },
 ]
 
 export const App = () => {
   const [save, setSave] = useState<PlayerSave | null>(loadSaveChargingForfeit)
+  const initialNavigation = useRef(
+    isRecoveryHash(window.location.hash)
+      ? navigationForPath('/recuperar-senha')
+      : navigationForPath(window.location.pathname),
+  ).current
+  const initialGate: Gate =
+    initialNavigation.gate === 'game' && (!save || !clubById(save.clubId))
+      ? 'landing'
+      : initialNavigation.gate
   // a landing é a home; Jogar passa pelo portão de login/cadastro; 'recovery'
   // é a tela de nova senha aberta pelo link do e-mail
-  const [gate, setGate] = useState<'landing' | 'auth' | 'signup' | 'game' | 'recovery'>(() =>
-    isRecoveryHash(window.location.hash) ? 'recovery' : 'landing',
-  )
+  const [gate, setGate] = useState<Gate>(initialGate)
   // aviso mostrado no login (ex.: link de recuperação expirado)
   const [authNotice, setAuthNotice] = useState<string | null>(null)
   // sessão lembrada pelo SDK do Supabase (token em localStorage, renovado
   // automaticamente — a SENHA nunca é guardada); com ela, Jogar pula o login
   const [hasSession, setHasSession] = useState(false)
-  const [screen, setScreen] = useState<Screen>('tabs')
-  const [tab, setTab] = useState<Tab>('home')
+  const [screen, setScreen] = useState<Screen>(initialNavigation.screen)
+  const [tab, setTab] = useState<Tab>(initialNavigation.tab)
   const [matchSetup, setMatchSetup] = useState<MatchSetup | null>(null)
+  const [isDrawerOpen, setDrawerOpen] = useState(false)
+  const historyNavigationRef = useRef(false)
+  const navigationInitializedRef = useRef(false)
+  const [navigationRevision, setNavigationRevision] = useState(0)
   // semente do duelo de dados no treino: muda a cada lance resolvido
   const [diceSeed, setDiceSeed] = useState(() => Date.now() & 0xffffffff)
   const [volume, setVolumeState] = useState<number>(() => {
@@ -223,6 +301,68 @@ export const App = () => {
     setMusicVolume(stored)
     return stored
   })
+
+  // Estado React → URL: cada tela real ganha um caminho navegável e título.
+  useEffect(() => {
+    const navigation = { gate, screen, tab }
+    document.title = titleForNavigation(navigation)
+    // O fragmento de recuperação contém credenciais temporárias. O Supabase
+    // precisa consumi-lo antes de qualquer replaceState limpar a URL.
+    if (isRecoveryHash(window.location.hash)) return
+
+    const target = pathForNavigation(navigation)
+    const cameFromBrowser = historyNavigationRef.current
+    historyNavigationRef.current = false
+    const firstSync = !navigationInitializedRef.current
+    navigationInitializedRef.current = true
+    if (window.location.pathname === target) return
+
+    window.history[cameFromBrowser || firstSync ? 'replaceState' : 'pushState'](
+      null,
+      '',
+      target,
+    )
+    window.scrollTo({ top: 0 })
+  }, [gate, screen, tab, navigationRevision])
+
+  // URL → estado React: suporta voltar/avançar e abertura por link direto.
+  useEffect(() => {
+    const onPopState = (): void => {
+      let navigation = navigationForPath(window.location.pathname)
+      if (navigation.gate === 'game' && (!save || !clubById(save.clubId))) {
+        navigation = navigationForPath('/')
+      } else if (navigation.screen === 'match' && !matchSetup) {
+        navigation = navigationForPath('/inicio')
+      } else if (
+        (navigation.tab === 'selecao' && !save?.tournament) ||
+        (navigation.tab === 'libertados' && !save?.libertados)
+      ) {
+        navigation = navigationForPath('/inicio')
+      }
+
+      historyNavigationRef.current = true
+      setGate(navigation.gate)
+      setScreen(navigation.screen)
+      setTab(navigation.tab)
+      setNavigationRevision((current) => current + 1)
+      window.scrollTo({ top: 0 })
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [save, matchSetup])
+
+  // Rotas condicionais só existem enquanto o respectivo estado está ativo.
+  useEffect(() => {
+    const missingMatch = screen === 'match' && !matchSetup
+    const unavailableTab =
+      screen === 'tabs' &&
+      ((tab === 'selecao' && !save?.tournament) ||
+        (tab === 'libertados' && !save?.libertados))
+    if (!missingMatch && !unavailableTab) return
+    historyNavigationRef.current = true
+    setScreen('tabs')
+    setTab('home')
+  }, [screen, tab, matchSetup, save?.tournament, save?.libertados])
 
   useEffect(() => {
     void currentSessionEmail().then((email) => setHasSession(email !== null))
@@ -247,22 +387,25 @@ export const App = () => {
   useEffect(() => {
     // link de recuperação inválido/expirado: volta ao login com aviso e limpa a URL
     const urlError = recoveryErrorMessage(window.location.hash)
+    const openedRecoveryLink = isRecoveryHash(window.location.hash)
     if (urlError) {
       setAuthNotice(urlError)
       setGate('auth')
-      clearAuthFragment()
+      clearAuthFragment('/entrar')
     }
     const client = getClient()
     if (!client) return
     // o client nasce no import e pode consumir o link antes do React montar:
     // getSession() só resolve depois disso, então é a hora certa de limpar
     // o token da URL (o gate já veio de isRecoveryUrl na primeira renderização)
-    void client.auth.getSession().then(clearAuthFragment)
+    void client.auth.getSession().then(() =>
+      clearAuthFragment(urlError ? '/entrar' : openedRecoveryLink ? '/recuperar-senha' : window.location.pathname),
+    )
     // link aberto com o app já rodando: o SDK avisa por aqui
     const { data } = client.auth.onAuthStateChange((event) => {
       if (event !== 'PASSWORD_RECOVERY') return
       setGate('recovery')
-      clearAuthFragment()
+      clearAuthFragment('/recuperar-senha')
     })
     return () => data.subscription.unsubscribe()
   }, [])
@@ -295,10 +438,21 @@ export const App = () => {
     applyVolume(0)
   }
 
-  // a Seleção só ocupa lugar na barra durante a convocação
+  // a Seleção e a Libertados só ocupam lugar na barra enquanto duram
   const visibleTabs = useMemo(
-    () => TAB_ITEMS.filter((item) => item.id !== 'selecao' || save?.tournament),
-    [save?.tournament],
+    () =>
+      TAB_ITEMS.filter(
+        (item) =>
+          (item.id !== 'selecao' || save?.tournament) &&
+          (item.id !== 'libertados' || save?.libertados),
+      ),
+    [save?.tournament, save?.libertados],
+  )
+
+  /* no celular estas descem para a gaveta; no computador continuam na barra */
+  const secondaryTabs = useMemo(
+    () => visibleTabs.filter((item) => !PRIMARY_TABS.includes(item.id)),
+    [visibleTabs],
   )
 
   const club = useMemo(() => {
@@ -371,6 +525,59 @@ export const App = () => {
     setScreen('match')
   }
 
+  /* a abertura da Libertados roda uma vez, antes do primeiro jogo da edição */
+  const [libertadosCeremony, setLibertadosCeremony] = useState(false)
+
+  /** Abre a tela de partida da Copa do Brasil. */
+  const startCopaBrasilMatch = (): void => {
+    if (!save?.copaBrasil || !club) return
+    const opponentId = copaBrasilOpponentId(save.copaBrasil)
+    const base = opponentId ? clubById(opponentId) : null
+    if (!base) return
+    initAudio()
+    const seed = Date.now() & 0xffffffff
+    const opponent = displayClub(save, base)
+    markPendingMatch(localStorage, { opponentId: opponent.id, kind: 'copa-brasil', seed })
+    setMatchSetup({ seed, kind: 'copa-brasil', club, opponent })
+    setScreen('match')
+  }
+
+  /** Abre a tela de partida da Libertados, sem passar pela cerimônia. */
+  const openLibertadosMatch = (): void => {
+    if (!save?.libertados || !club) return
+    const opponentId = libertadosOpponentId(save.libertados)
+    const base = opponentId ? clubById(opponentId) : null
+    if (!base) return
+    initAudio()
+    const seed = Date.now() & 0xffffffff
+    const opponent = displayClub(save, base)
+    markPendingMatch(localStorage, { opponentId: opponent.id, kind: 'libertados', seed })
+    setMatchSetup({ seed, kind: 'libertados', club, opponent })
+    setScreen('match')
+  }
+
+  const startLibertadosMatch = (): void => {
+    if (!save?.libertados) return
+    // a edição estreia pela cerimônia; dela se vai direto para o jogo
+    if (save.libertados.results.length === 0) {
+      setLibertadosCeremony(true)
+      return
+    }
+    openLibertadosMatch()
+  }
+
+  /*
+   * Sair da cerimônia abre a partida DIRETO. Voltar por `startLibertadosMatch`
+   * caía de novo no teste de "edição sem jogos" — que continua verdadeiro
+   * antes do primeiro jogo — e reabria a cerimônia no mesmo ciclo de
+   * renderização: a tela ficava transparente, mas o overlay seguia montado por
+   * cima de tudo, engolindo os cliques.
+   */
+  const finishLibertadosCeremony = (): void => {
+    setLibertadosCeremony(false)
+    openLibertadosMatch()
+  }
+
   const onMatchFinished = (record: MatchRecord): void => {
     clearPendingMatch(localStorage)
     if (save && matchSetup) {
@@ -378,10 +585,15 @@ export const App = () => {
       updateSave(updated)
       // ranking entre amigos: envio silencioso, nunca trava o fluxo local
       void submitLeagueMatch(updated, record).catch(() => undefined)
+      setMatchSetup(null)
+      setScreen('tabs')
+      // todo jogo desemboca na Home: é lá que estão o próximo compromisso, a
+      // reação ao que acabou de acontecer e o fecho de temporada
+      setTab('home')
+      return
     }
     setMatchSetup(null)
     setScreen('tabs')
-    setTab('matches')
   }
 
   const onNewSeason = (): void => {
@@ -427,6 +639,7 @@ export const App = () => {
     setSave(null)
     setScreen('tabs')
     setTab('home')
+    setGate('signup')
   }
 
   // convocação: forma na LIGA + vitrine — olheiro da seleção só olha Séries B e A
@@ -460,7 +673,7 @@ export const App = () => {
         hasSave={Boolean(save && club)}
         onEnter={() => {
           setAuthNotice(null)
-          setGate('game')
+          setGate(save && club ? 'game' : 'signup')
         }}
         onSignup={() => {
           setAuthNotice(null)
@@ -478,7 +691,7 @@ export const App = () => {
   if (gate === 'recovery') {
     return (
       <PasswordReset
-        onDone={() => setGate('game')}
+        onDone={() => setGate(save && club ? 'game' : 'signup')}
         onCancel={() => {
           setAuthNotice(null)
           setGate('auth')
@@ -505,13 +718,17 @@ export const App = () => {
 
   if (screen === 'match' && matchSetup) {
     return (
-      <main className="shell">
+      // o corte para o gramado era seco demais: um fade curto dá o respiro de
+      // "entrando em campo" sem atrasar quem quer jogar
+      <main className="shell screen-enter">
         <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
         <header className="tabs-head match-head">
           <span className="tabs-brand">
             {matchSetup.kind === 'torneio'
               ? 'Jogo da seleção'
-              : `Rodada ${save.season.currentRound + 1}`}
+              : matchSetup.kind === 'libertados'
+                ? LIBERTADOS_NAME
+                : `Rodada ${save.season.currentRound + 1}`}
           </span>
           <h1 className="tabs-title">Dia de jogo</h1>
         </header>
@@ -521,13 +738,38 @@ export const App = () => {
           playerName={save.playerName}
           club={matchSetup.club}
           opponent={matchSetup.opponent}
-          competition={matchSetup.kind === 'torneio' ? 'selecao' : 'liga'}
-          /* mata-mata não aceita empate: o lance dos dados decide a vaga */
+          competition={
+            matchSetup.kind === 'torneio'
+              ? 'selecao'
+              : matchSetup.kind === 'libertados'
+                ? 'libertados'
+                : matchSetup.kind === 'copa-brasil'
+                  ? 'copa-brasil'
+                  : 'liga'
+          }
+          /* mata-mata não aceita empate: o lance dos dados decide a vaga. Na
+             Libertados só a VOLTA é decisiva — a ida pode terminar empatada. */
           decisive={
-            matchSetup.kind === 'torneio' &&
-            save.tournament !== null &&
-            save.tournament.stage !== 'groups' &&
-            isTournamentRunning(save.tournament.stage)
+            (matchSetup.kind === 'torneio' &&
+              save.tournament !== null &&
+              save.tournament.stage !== 'groups' &&
+              isTournamentRunning(save.tournament.stage)) ||
+            (matchSetup.kind === 'copa-brasil' &&
+              save.copaBrasil !== null &&
+              save.copaBrasil.round === 1 &&
+              isCopaBrasilRunning(save.copaBrasil.stage)) ||
+            (matchSetup.kind === 'libertados' &&
+              save.libertados !== null &&
+              save.libertados.stage !== 'groups' &&
+              save.libertados.round === 1 &&
+              isLibertadosRunning(save.libertados.stage))
+          }
+          aggregateGoalDifference={
+            matchSetup.kind === 'copa-brasil' && save.copaBrasil
+              ? copaBrasilAggregateLeadBeforeMatch(save.copaBrasil)
+              : matchSetup.kind === 'libertados' && save.libertados
+                ? libertadosAggregateLeadBeforeMatch(save.libertados)
+                : 0
           }
           attributes={save.attributes}
           perks={save.perks}
@@ -546,9 +788,21 @@ export const App = () => {
               matchSetup.kind === 'torneio' ? 'selecao' : 'liga',
             ),
           )}
-          opponentDivision={matchSetup.kind === 'liga' ? divisionOf(save.divisions, matchSetup.opponent.id) : -1}
-          lineup={matchSetup.kind === 'liga' ? save.lineup : undefined}
-          signings={matchSetup.kind === 'liga' ? save.signings : undefined}
+          /* seu elenco segue a divisão que o clube disputa nesta temporada */
+          division={divisionOf(save.divisions, save.clubId)}
+          /* Libertados trata o adversário como clube de Série A — os
+             continentais não entram na pirâmide de divisões nacional. */
+          opponentDivision={
+            matchSetup.kind === 'torneio'
+              ? -1
+              : matchSetup.kind === 'libertados'
+                ? 0
+                : divisionOf(save.divisions, matchSetup.opponent.id)
+          }
+          continentalTitleYears={continentalTitleYears(save, matchSetup.opponent.id)}
+          lineup={matchSetup.kind === 'torneio' ? undefined : save.lineup}
+          signings={matchSetup.kind === 'torneio' ? undefined : save.signings}
+          playerSales={matchSetup.kind === 'torneio' ? undefined : save.playerSales}
           onExit={onMatchFinished}
         />
         <footer className="footer">PROMESSA · em desenvolvimento</footer>
@@ -650,10 +904,12 @@ export const App = () => {
 
   return (
     <main className="shell shell-tabs">
-        <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
       <header className="tabs-head">
         <span className="tabs-brand">Promessa</span>
-        <h1 className="tabs-title">{TAB_ITEMS.find((item) => item.id === tab)!.label}</h1>
+        <div className="tabs-head-actions">
+          <h1 className="tabs-title">{TAB_ITEMS.find((item) => item.id === tab)!.label}</h1>
+          <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
+        </div>
       </header>
 
       {callUpCeremony && nationById(save.nationalityId) && (
@@ -666,16 +922,30 @@ export const App = () => {
         />
       )}
 
+      {libertadosCeremony && save.libertados && (
+        <LibertadosIntro
+          state={save.libertados}
+          clubName={club.name}
+          playerName={save.playerName}
+          onDone={finishLibertadosCeremony}
+        />
+      )}
+
       {tab === 'home' && (
         <HomeTab
           save={save}
           club={club}
+          onSaveChange={updateSave}
           nextOpponent={nextOpponent}
           callUpAvailable={callUpAvailable}
           onPlayMatch={startLeagueMatch}
           onStartTournament={startTournament}
           onPlayTournamentMatch={startTournamentMatch}
           onDismissTournament={() => save && updateSave(applyTournament(save, null))}
+          onPlayLibertadosMatch={startLibertadosMatch}
+          onPlayCopaBrasilMatch={startCopaBrasilMatch}
+          onDismissCopaBrasil={() => save && updateSave(dismissCopaBrasil(save))}
+          onDismissLibertados={() => save && updateSave(applyLibertados(save, null))}
           onDismissMovement={() => save && updateSave({ ...save, divisionMovement: null })}
           onNewSeason={onNewSeason}
           onTraining={() => setScreen('training')}
@@ -684,14 +954,18 @@ export const App = () => {
           onDiceTraining={() => setScreen('dice-training')}
           onChoosePerk={(perkId) => save && updateSave(choosePerk(save, perkId))}
           onResolveEvent={(optionIndex) => save && updateSave(resolvePendingEvent(save, optionIndex))}
-          onDismissEventNote={() => save && updateSave(dismissEventNote(save))}
+          onDeclineEvent={() => save && updateSave(declinePendingEvent(save))}
         />
       )}
+      {tab === 'calendar' && <CalendarTab save={save} />}
       {tab === 'matches' && <MatchesTab save={save} />}
       {tab === 'selecao' && save.tournament && (
         <NationalTab save={save} onSaveChange={updateSave} />
       )}
+      {tab === 'libertados' && <LibertadosTab save={save} />}
+      {tab === 'player' && <PlayerTab save={save} onSaveChange={updateSave} />}
       {tab === 'team' && <TeamTab save={save} club={club} onSaveChange={updateSave} />}
+      {tab === 'editor' && <EditorTab save={save} onSaveChange={updateSave} />}
       {tab === 'market' && <MarketTab save={save} onSaveChange={updateSave} />}
       {tab === 'profile' && (
         <ProfileTab
@@ -704,17 +978,74 @@ export const App = () => {
         />
       )}
 
+      {/* gaveta do "Mais": só existe no celular, e fecha ao escolher */}
+      {isDrawerOpen && (
+        <div
+          className="tabdrawer-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mais telas"
+          onClick={() => setDrawerOpen(false)}
+        >
+          <div className="tabdrawer" onClick={(event) => event.stopPropagation()}>
+            <span className="tabdrawer-handle" aria-hidden="true" />
+            {secondaryTabs.map((item) => (
+              <a
+                key={item.id}
+                href={pathForTab(item.id)}
+                className={`tabdrawer-item${tab === item.id ? ' tabdrawer-active' : ''}`}
+                aria-current={tab === item.id ? 'page' : undefined}
+                onClick={(event) => {
+                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+                  event.preventDefault()
+                  setScreen('tabs')
+                  setTab(item.id)
+                  setDrawerOpen(false)
+                }}
+              >
+                <item.icon size={19} strokeWidth={tab === item.id ? 2.4 : 1.8} aria-hidden="true" />
+                {item.label}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
       <nav className="tabbar" aria-label="Navegação principal">
         {visibleTabs.map((item) => (
-          <button
+          <a
             key={item.id}
-            className={`tabbar-item${tab === item.id ? ' tabbar-active' : ''}`}
-            onClick={() => setTab(item.id)}
+            href={pathForTab(item.id)}
+            className={`tabbar-item${tab === item.id ? ' tabbar-active' : ''}${
+              PRIMARY_TABS.includes(item.id) ? '' : ' tabbar-secondary'
+            }`}
+            aria-current={tab === item.id ? 'page' : undefined}
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+              event.preventDefault()
+              setScreen('tabs')
+              setTab(item.id)
+            }}
           >
             <item.icon size={20} strokeWidth={tab === item.id ? 2.4 : 1.8} aria-hidden="true" />
             {item.label}
-          </button>
+          </a>
         ))}
+
+        {/* o botão acende quando a tela aberta está lá dentro */}
+        {secondaryTabs.length > 0 && (
+          <button
+            type="button"
+            className={`tabbar-item tabbar-more${
+              secondaryTabs.some((item) => item.id === tab) ? ' tabbar-active' : ''
+            }`}
+            aria-expanded={isDrawerOpen}
+            onClick={() => setDrawerOpen((open) => !open)}
+          >
+            <Menu size={20} strokeWidth={1.8} aria-hidden="true" />
+            Mais
+          </button>
+        )}
       </nav>
     </main>
   )

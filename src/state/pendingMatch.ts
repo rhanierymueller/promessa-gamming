@@ -15,7 +15,7 @@ export const WO_RATING = 3
 
 export interface PendingMatch {
   readonly opponentId: string
-  readonly kind: 'liga' | 'torneio'
+  readonly kind: 'liga' | 'torneio' | 'libertados' | 'copa-brasil'
   readonly seed: number
 }
 
@@ -37,9 +37,14 @@ export const readPendingMatch = (storage: PendingStorage): PendingMatch | null =
     if (typeof parsed !== 'object' || parsed === null) return null
     const candidate = parsed as Record<string, unknown>
     if (typeof candidate.opponentId !== 'string' || candidate.opponentId.length === 0) return null
-    if (candidate.kind !== 'liga' && candidate.kind !== 'torneio') return null
+    const KINDS: readonly PendingMatch['kind'][] = ['liga', 'torneio', 'libertados', 'copa-brasil']
+    if (!KINDS.includes(candidate.kind as PendingMatch['kind'])) return null
     if (typeof candidate.seed !== 'number' || !Number.isFinite(candidate.seed)) return null
-    return { opponentId: candidate.opponentId, kind: candidate.kind, seed: candidate.seed }
+    return {
+      opponentId: candidate.opponentId,
+      kind: candidate.kind as PendingMatch['kind'],
+      seed: candidate.seed,
+    }
   } catch {
     return null
   }
@@ -53,5 +58,12 @@ export const forfeitRecord = (pending: PendingMatch, playedAt: number): MatchRec
   rating: WO_RATING,
   playerGoals: 0,
   playedAt,
-  competition: pending.kind === 'torneio' ? 'selecao' : 'liga',
+  competition:
+    pending.kind === 'torneio'
+      ? 'selecao'
+      : pending.kind === 'libertados'
+        ? 'libertados'
+        : pending.kind === 'copa-brasil'
+          ? 'copa-brasil'
+          : 'liga',
 })

@@ -1,9 +1,9 @@
-import { Flame, PartyPopper, Play, Sparkles, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
-import type { Club } from '../../data/clubs'
-import { nationById } from '../../data/nations'
+import { Flame, PartyPopper, Play, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { clubById, type Club } from '../../data/clubs'
+import { nationAsClub, nationById } from '../../data/nations'
+import { nationOf } from '../../engine/libertados/draw'
 import { isTournamentRunning, seasonEndAction } from '../../engine/career/seasonEnd'
-import { eventById } from '../../engine/career/events'
-import { PERK_OFFER_REASON, perkById, type PerkId } from '../../engine/career/perks'
+import { type PerkId } from '../../engine/career/perks'
 import { DIVISION_NAMES, divisionOf } from '../../engine/pyramid/pyramid'
 import { isSeasonOver, playerFixture, tablePosition } from '../../engine/season/season'
 import {
@@ -13,6 +13,24 @@ import {
   tournamentKindForYear,
   type TournamentKind,
 } from '../../engine/tournament/tournament'
+import { nextScheduled } from '../../engine/career/schedule'
+import { isMatchDay, upcomingMatch } from '../../engine/career/clock'
+import { copaBrasilOpponentId } from '../../engine/copaBrasil/copaBrasil'
+import {
+  COPA_BRASIL_NAME,
+  isCopaBrasilRunning,
+  STAGE_NAMES as COPA_BRASIL_STAGE_NAMES,
+} from '../../engine/copaBrasil/types'
+import { WeekStrip } from '../calendar/WeekStrip'
+import {
+  isLibertadosRunning,
+  LIBERTADOS_NAME,
+  STAGE_NAMES as LIBERTADOS_STAGE_NAMES,
+} from '../../engine/libertados/types'
+import {
+  playerFixture as libertadosPlayerFixture,
+  playerOpponentId as libertadosOpponentId,
+} from '../../engine/libertados/fixtures'
 import { useState } from 'react'
 import treinoChute from '../../assets/backgrounds/gramado.jpg'
 import treinoGoleiro from '../../assets/backgrounds/estadio-medio.jpg'
@@ -25,10 +43,14 @@ import trophySerieD from '../../assets/trophies/serie-d.png'
 import { titlePrizeFor, formatMoney } from '../../engine/market/market'
 import { myTeamSectors, opponentSectors } from '../../engine/squad/myTeam'
 import { SectorBars } from '../SectorBars'
-import type { PlayerSave } from '../../state/save'
+import { continentalTitleYears, displayClub, type PlayerSave } from '../../state/save'
 import { ClubCrest } from '../ClubCrest'
 import { usePlayerPortrait } from '../usePlayerPortrait'
 import { NewsCarousel } from '../NewsCarousel'
+import { StandingsPeek } from '../StandingsPeek'
+import { MixedZoneModal } from '../MixedZoneModal'
+import { PerkOfferModal } from '../PerkOfferModal'
+import '../styles/libertados.css'
 
 interface HomeTabProps {
   readonly save: PlayerSave
@@ -36,9 +58,15 @@ interface HomeTabProps {
   readonly nextOpponent: Club | null
   readonly callUpAvailable: boolean
   readonly onPlayMatch: () => void
+  /** O relógio da carreira avança por aqui. */
+  readonly onSaveChange: (save: PlayerSave) => void
   readonly onStartTournament: (kind: TournamentKind) => void
   readonly onPlayTournamentMatch: () => void
   readonly onDismissTournament: () => void
+  readonly onPlayLibertadosMatch: () => void
+  readonly onPlayCopaBrasilMatch: () => void
+  readonly onDismissCopaBrasil: () => void
+  readonly onDismissLibertados: () => void
   readonly onNewSeason: () => void
   readonly onDismissMovement: () => void
   readonly onTraining: () => void
@@ -47,10 +75,15 @@ interface HomeTabProps {
   readonly onDiceTraining: () => void
   readonly onChoosePerk: (perkId: PerkId) => void
   readonly onResolveEvent: (optionIndex: number) => void
-  readonly onDismissEventNote: () => void
+  /** Sair da zona mista sem falar. */
+  readonly onDeclineEvent: () => void
 }
 
 const ordinal = (position: number): string => `${position}º`
+
+/** País do clube, para o card de Copa dizer de onde vem o adversário. */
+const countryNameOf = (clubId: string): string =>
+  nationById(nationOf(clubId))?.name ?? ''
 
 // STAGE_NAMES cobre todas as fases, inclusive oitavas e quartas — a lista
 // local ficava desatualizada a cada mudança de formato
@@ -62,9 +95,14 @@ export const HomeTab = ({
   nextOpponent,
   callUpAvailable,
   onPlayMatch,
+  onSaveChange,
   onStartTournament,
   onPlayTournamentMatch,
   onDismissTournament,
+  onPlayLibertadosMatch,
+  onPlayCopaBrasilMatch,
+  onDismissCopaBrasil,
+  onDismissLibertados,
   onNewSeason,
   onDismissMovement,
   onTraining,
@@ -73,7 +111,7 @@ export const HomeTab = ({
   onDiceTraining,
   onChoosePerk,
   onResolveEvent,
-  onDismissEventNote,
+  onDeclineEvent,
 }: HomeTabProps) => {
   const [isCelebrating, setCelebrating] = useState(false)
   const avatarUrl = usePlayerPortrait(save.appearance)
@@ -96,6 +134,38 @@ export const HomeTab = ({
   const tournamentOpponent = tournamentActive
     ? nationById(playerTournamentOpponentId(tournament) ?? '')
     : null
+
+  const libertados = save.libertados
+  const libertadosActive = libertados !== null && isLibertadosRunning(libertados.stage)
+  const libertadosDone = libertados !== null && !isLibertadosRunning(libertados.stage)
+  const libertadosRivalBase = libertadosActive ? clubById(libertadosOpponentId(libertados) ?? '') : null
+  const libertadosRival = libertadosRivalBase ? displayClub(save, libertadosRivalBase) : null
+  // com duas competições, quem joga primeiro é quem tem a data mais próxima
+  const upNext = nextScheduled(save)?.competition ?? 'liga'
+  // o card da partida é do DIA do jogo; nos outros dias quem manda é o relógio
+  const matchDay = isMatchDay(save)
+  /*
+   * A faixa da semana vale enquanto houver o que jogar — inclusive com a liga
+   * encerrada e a copa de seleções ainda por vir, em dezembro. Amarrá-la a
+   * `seasonOver` prendia o jogador: sem faixa não há como avançar os dias, e
+   * sem avançar os dias a Copa nunca chega.
+   */
+  const hasUpcoming = upcomingMatch(save) !== null
+  // a Copa toma o card do próximo jogo quando é ela que vem primeiro na data
+  const isCupNext = upNext === 'libertados' && libertadosActive && libertadosRival !== null
+  // a Copa do Brasil ocupa as semanas que a Libertados deixa livres
+  const copaBrasil = save.copaBrasil
+  const copaBrasilRivalBase =
+    copaBrasil && isCopaBrasilRunning(copaBrasil.stage)
+      ? clubById(copaBrasilOpponentId(copaBrasil) ?? '')
+      : null
+  const copaBrasilRival = copaBrasilRivalBase ? displayClub(save, copaBrasilRivalBase) : null
+  const isCopaBrasilNext = upNext === 'copa-brasil' && copaBrasilRival !== null
+  // a edição acabou para você: campeão ou eliminado, o card fecha o assunto
+  const copaBrasilDone = copaBrasil !== null && !isCopaBrasilRunning(copaBrasil.stage)
+  // a seleção vem depois de tudo, em dezembro: enquanto ela roda, é ela o jogo
+  const nationRival = tournamentOpponent ? nationAsClub(tournamentOpponent) : null
+  const isNationalNext = tournamentActive && nationRival !== null && nation !== null
 
   return (
     <div className="tab-panel">
@@ -157,65 +227,6 @@ export const HomeTab = ({
         </dl>
       </div>
 
-      {save.eventNote && (
-        <div className="division-banner event-note">
-          <Sparkles size={16} aria-hidden="true" />
-          <span className="division-banner-text">{save.eventNote}</span>
-          <button className="banner-close" onClick={onDismissEventNote} aria-label="Fechar aviso">
-            <X size={14} />
-          </button>
-        </div>
-      )}
-
-      {save.pendingEvent && (() => {
-        const event = eventById(save.pendingEvent.templateId)
-        if (!event) return null
-        return (
-          <div className="card perk-offer event-card">
-            <div className="perk-offer-header">
-              <Flame size={18} aria-hidden="true" />
-              <div>
-                <strong>VIDA DE CRAQUE</strong>
-                <p className="muted perk-offer-reason">{event.prompt}</p>
-              </div>
-            </div>
-            <div className="perk-options">
-              {event.options.map((option, index) => (
-                <button key={option.label} className="perk-option" onClick={() => onResolveEvent(index)}>
-                  <span className="perk-name">{option.label}</span>
-                  <span className={`perk-desc event-tone event-${option.tone}`}>
-                    {option.tone}{option.chance < 1 ? ` · ${Math.round(option.chance * 100)}%` : ' · garantido'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )
-      })()}
-
-      {save.perkOffer && (
-        <div className="card perk-offer">
-          <div className="perk-offer-header">
-            <Sparkles size={18} aria-hidden="true" />
-            <div>
-              <strong>NOVA HABILIDADE!</strong>
-              <p className="muted perk-offer-reason">{PERK_OFFER_REASON} Escolha UMA — sem volta.</p>
-            </div>
-          </div>
-          <div className="perk-options">
-            {save.perkOffer.options.map((perkId) => {
-              const perk = perkById(perkId)
-              return (
-                <button key={perkId} className="perk-option" onClick={() => onChoosePerk(perkId)}>
-                  <span className="perk-name">{perk.name}</span>
-                  <span className="perk-desc">{perk.description}</span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
       {endAction === 'callup' && nation && callUpKind && seasonOver && (
         <div className="card callup-card">
           <Trophy size={20} aria-hidden="true" />
@@ -235,17 +246,40 @@ export const HomeTab = ({
         </div>
       )}
 
-      {tournamentActive && tournamentOpponent && (
+      {copaBrasilDone && copaBrasil && (
         <div className="card callup-card">
           <Trophy size={20} aria-hidden="true" />
           <div>
-            <strong>{TOURNAMENT_NAMES[tournament.kind]} · {STAGE_LABEL[tournament.stage]}</strong>
-            <p className="muted callup-text">
-              {tournament.stage === 'groups' && `Jogo ${tournament.round + 1}/3 do grupo: `}
-              {nation?.name} × {tournamentOpponent.name}
+            <strong>
+              {copaBrasil.stage === 'champion' && copaBrasil.championId === save.clubId
+                ? `CAMPEÃO DA ${COPA_BRASIL_NAME.toUpperCase()}!`
+                : `Fim de linha na ${COPA_BRASIL_NAME}.`}
+            </strong>
+            <p className="muted">
+              {copaBrasil.stage === 'champion' && copaBrasil.championId === save.clubId
+                ? 'A taça mais democrática do país é sua. Já está na estante.'
+                : `Quem levou foi ${clubById(copaBrasil.championId ?? '')?.name ?? 'outro clube'}. Ano que vem tem sorteio novo.`}
             </p>
           </div>
-          <button className="btn callup-btn" onClick={onPlayTournamentMatch}>Jogar</button>
+          <button className="btn btn-secondary callup-btn" onClick={onDismissCopaBrasil}>OK</button>
+        </div>
+      )}
+
+      {libertadosDone && (
+        <div className="card callup-card">
+          <div>
+            <strong>
+              {libertados.stage === 'champion'
+                ? `CAMPEÃO DA ${LIBERTADOS_NAME.toUpperCase()}!`
+                : `Fim de linha na ${LIBERTADOS_NAME}.`}
+            </strong>
+            <p className="muted">
+              {libertados.stage === 'champion'
+                ? 'O continente é seu. A taça já está na estante.'
+                : `Quem levou a taça foi ${clubById(libertados.championId ?? '')?.name ?? 'outro clube'}. Ano que vem tem mais.`}
+            </p>
+          </div>
+          <button className="btn btn-secondary callup-btn" onClick={onDismissLibertados}>OK</button>
         </div>
       )}
 
@@ -268,7 +302,18 @@ export const HomeTab = ({
         </div>
       )}
 
-      {seasonOver ? (
+      {/*
+        * O balanço da temporada só entra quando não há mais nada a jogar: com
+        * Copa ou seleção em andamento, o card do jogo tem a vez. Mostrar as
+        * conquistas antes disso anunciava o fim do ano no meio de uma decisão.
+        */}
+      {/*
+        * Fora do dia de jogo, quem ocupa o lugar do card é o calendário: a
+        * semana corrente e o botão de atravessar os dias até a partida.
+        */}
+      {!matchDay && hasUpcoming && <WeekStrip save={save} onSaveChange={onSaveChange} />}
+
+      {seasonOver && !isCupNext && !isCopaBrasilNext && !isNationalNext ? (
         <div className="card next-match">
           <span className="card-label">Ano {save.careerYear} · temporada encerrada</span>
           <p className="season-final">
@@ -289,37 +334,116 @@ export const HomeTab = ({
           )}
         </div>
       ) : (
-        nextOpponent && (() => {
-          const isHomeGame = playerFixture(save.season, save.season.currentRound).homeId === save.clubId
-          const homeClub = isHomeGame ? club : nextOpponent
-          const awayClub = isHomeGame ? nextOpponent : club
+        matchDay &&
+        (isNationalNext
+          ? nationRival
+          : isCupNext
+            ? libertadosRival
+            : isCopaBrasilNext
+              ? copaBrasilRival
+              : nextOpponent) && (() => {
+          /*
+           * Um card só para o próximo compromisso — liga, Libertados ou
+           * seleção. Cada competição num card próprio deixava a tela com duas
+           * partidas disponíveis ao mesmo tempo, sem dizer qual vinha primeiro.
+           */
+          const myTeam = isNationalNext && nation ? nationAsClub(nation) : club
+          const rival = (isNationalNext
+            ? nationRival
+            : isCupNext
+              ? libertadosRival
+              : isCopaBrasilNext
+                ? copaBrasilRival
+                : nextOpponent)!
+          const cupFixture = isCupNext && libertados ? libertadosPlayerFixture(libertados) : null
+          // jogo de seleção é em campo neutro: não há mando a anunciar
+          const isHomeGame = isNationalNext
+            ? true
+            : cupFixture
+              ? cupFixture.homeId === save.clubId
+              : playerFixture(save.season, save.season.currentRound).homeId === save.clubId
+          const homeClub = isHomeGame ? myTeam : rival
+          const awayClub = isHomeGame ? rival : myTeam
+          const libertadosLabel = libertados
+            ? libertados.stage === 'groups'
+              ? `jogo ${libertados.round + 1}/6 do grupo`
+              : libertados.round === 0
+                ? `${LIBERTADOS_STAGE_NAMES[libertados.stage]} · ida`
+                : `${LIBERTADOS_STAGE_NAMES[libertados.stage]} · volta`
+            : ''
+          /* mata-mata diz a FASE e a mão: "Quartas de final · volta" pesa
+             diferente de "próximo jogo", e é essa informação que faz o
+             jogador entender o que está em jogo antes de entrar em campo */
+          const copaBrasilLabel =
+            copaBrasil && isCopaBrasilRunning(copaBrasil.stage)
+              ? `${COPA_BRASIL_STAGE_NAMES[copaBrasil.stage]} · ${copaBrasil.round === 0 ? 'ida' : 'volta'}`
+              : ''
+          const label = isNationalNext && tournament
+            ? `${TOURNAMENT_NAMES[tournament.kind]} · ${STAGE_LABEL[tournament.stage]}${
+                tournament.stage === 'groups' ? ` · jogo ${tournament.round + 1}/3` : ''
+              }`
+            : isCupNext
+              ? `${LIBERTADOS_NAME} · ${libertadosLabel}`
+              : isCopaBrasilNext
+                ? `${COPA_BRASIL_NAME} · ${copaBrasilLabel}`
+                : `Rodada ${save.season.currentRound + 1} · próximo jogo`
+          const showCountry = isCupNext
           return (
-          <div className="card next-match">
-            <span className="card-label">Rodada {save.season.currentRound + 1} · próximo jogo</span>
+          <div className={`card next-match${isCupNext || isNationalNext ? ' next-match-cup' : ''}`}>
+            <span className="card-label">{label}</span>
             <div className="next-match-clubs">
               <span className="next-club">
                 <ClubCrest club={homeClub} customUrl={save.customClubCrests[homeClub.id]} size={30} />
-                {homeClub.name}
+                <span className="next-club-id">
+                  {homeClub.name}
+                  {showCountry && (
+                    <small className="next-club-nation">{countryNameOf(homeClub.id)}</small>
+                  )}
+                </span>
               </span>
               <span className="next-vs">×</span>
-              <span className="next-club">
-                {awayClub.name}
+              <span className="next-club next-club-away">
+                <span className="next-club-id">
+                  {awayClub.name}
+                  {showCountry && (
+                    <small className="next-club-nation">{countryNameOf(awayClub.id)}</small>
+                  )}
+                </span>
                 <ClubCrest club={awayClub} customUrl={save.customClubCrests[awayClub.id]} size={30} />
               </span>
             </div>
-            <p className="next-meta">{homeClub.city} · {isHomeGame ? 'em casa' : 'fora de casa'}</p>
+            <p className="next-meta">
+              {isNationalNext
+                ? 'Campo neutro · decide quem chega mais inteiro'
+                : `${homeClub.city} · ${isHomeGame ? 'em casa' : 'fora de casa'}`}
+            </p>
             <SectorBars
               mine={myTeamSectors(save, club)}
               theirs={opponentSectors(
-                nextOpponent,
+                rival,
                 save.careerYear,
-                divisionOf(save.divisions, nextOpponent.id),
+                // seleção e clube continental jogam no topo do país deles
+                isCupNext || isNationalNext ? 0 : divisionOf(save.divisions, rival.id),
                 save.appearance.gender,
+                continentalTitleYears(save, rival.id),
               )}
-              myAbbr={club.abbr}
-              theirAbbr={nextOpponent.abbr}
+              myAbbr={myTeam.abbr}
+              theirAbbr={rival.abbr}
             />
-            <button className="btn btn-icon" onClick={onPlayMatch}><Play size={15} aria-hidden="true" /> Jogar partida</button>
+            <button
+              className="btn btn-icon"
+              onClick={
+                isNationalNext
+                  ? onPlayTournamentMatch
+                  : isCupNext
+                    ? onPlayLibertadosMatch
+                    : isCopaBrasilNext
+                      ? onPlayCopaBrasilMatch
+                      : onPlayMatch
+              }
+            >
+              <Play size={15} aria-hidden="true" /> Jogar partida
+            </button>
           </div>
           )
         })()
@@ -347,7 +471,17 @@ export const HomeTab = ({
         </div>
       </div>
 
+      <StandingsPeek save={save} />
+
+      {/* a notícia fecha a Home ocupando a largura toda: manchete grande em
+          vez de card estreito espremido numa coluna */}
       <NewsCarousel save={save} club={club} />
+
+      {save.pendingEvent && (
+        <MixedZoneModal save={save} onAnswer={onResolveEvent} onDecline={onDeclineEvent} />
+      )}
+
+      {save.perkOffer && <PerkOfferModal save={save} onChoose={onChoosePerk} />}
 
       {isCelebrating && (
         <div className="champion-overlay" role="dialog" aria-modal="true" aria-label="Campeão da temporada">

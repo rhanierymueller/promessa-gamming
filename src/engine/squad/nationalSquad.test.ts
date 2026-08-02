@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest'
+import { NATIONS } from '../../data/nations'
 import { marketPoolFor } from '../market/market'
 import { initialDivisions } from '../pyramid/pyramid'
 import { SQUAD_SIZE } from './players'
@@ -78,6 +79,40 @@ describe('convocação da seleção', () => {
   })
 })
 
+describe('equilíbrio entre seleções', () => {
+  const starterAverage = (nationId: string): number => {
+    const starters = nationalSquadFor(nationId, divisions, 1, market).slice(0, 11)
+    return starters.reduce((sum, player) => sum + player.overall, 0) / starters.length
+  }
+
+  test('as potências estrangeiras têm titulares de nível internacional', () => {
+    for (const nationId of ['argentina', 'espanha', 'franca', 'alemanha']) {
+      const starters = nationalSquadFor(nationId, divisions, 1, market).slice(0, 11)
+      expect(starterAverage(nationId)).toBeGreaterThan(80)
+      expect(Math.min(...starters.map((player) => player.overall))).toBeGreaterThanOrEqual(75)
+    }
+  })
+
+  test('a média das faixas respeita as estrelas da seleção', () => {
+    const tierAverage = (strength: number): number => {
+      const nations = NATIONS.filter((nation) => nation.strength === strength && nation.id !== 'brasil')
+      return nations.reduce((sum, nation) => sum + starterAverage(nation.id), 0) / nations.length
+    }
+
+    expect(tierAverage(5)).toBeGreaterThan(tierAverage(4))
+    expect(tierAverage(4)).toBeGreaterThan(tierAverage(3))
+    expect(tierAverage(3)).toBeGreaterThan(tierAverage(2))
+  })
+
+  test('nenhum convocado fica abaixo do piso da sua faixa', () => {
+    for (const nation of NATIONS) {
+      const squad = nationalSquadFor(nation.id, divisions, 1, market)
+      const floor = 60 + nation.strength * 3
+      expect(Math.min(...squad.map((player) => player.overall))).toBeGreaterThanOrEqual(floor)
+    }
+  })
+})
+
 describe('o craque convocado', () => {
   const craque = {
     id: 'voce',
@@ -87,6 +122,7 @@ describe('o craque convocado', () => {
     age: 21,
     potential: 'alto' as const,
     shirt: 10,
+    peakAge: 27,
     attrs: { pac: 60, fin: 62, pas: 58, dri: 60, def: 40, fis: 55 },
     overall: 58,
   }
@@ -142,6 +178,7 @@ describe('o overall do craque na seleção é o MESMO do clube', () => {
       altPositions: [],
       age: 22,
       potential: 'alto' as const,
+      peakAge: 27,
       shirt: 10,
       attrs: { pac: 35, fin: 60, pas: 60, dri: 35, def: 60, fis: 35 },
       overall: 48,

@@ -1,3 +1,5 @@
+import { continentalClubById } from './continentalClubs'
+
 /**
  * Liga fictícia com identidade regional — cores e cidades evocam o futebol
  * brasileiro sem usar nomes, apelidos ou símbolos registrados de clubes reais
@@ -87,7 +89,7 @@ export const CLUBS: readonly Club[] = [
 ]
 
 export const clubById = (id: string): Club | null =>
-  CLUBS.find((club) => club.id === id) ?? null
+  CLUBS.find((club) => club.id === id) ?? continentalClubById(id)
 
 export const randomOpponent = (excludeId: string, roll: number): Club => {
   const candidates = CLUBS.filter((club) => club.id !== excludeId)

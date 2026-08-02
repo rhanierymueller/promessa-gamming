@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { clubById } from '../../data/clubs'
 import { nationById } from '../../data/nations'
 import { marketPoolFor } from '../../engine/market/market'
+import { bestLineup } from '../../engine/squad/bestLineup'
+import { FORMATIONS, formationIdFor } from '../../engine/squad/formation'
 import { myTeamPlayers } from '../../engine/squad/myTeam'
 import { nationalSquadFor } from '../../engine/squad/nationalSquad'
 import { userAsSquadPlayer, USER_PLAYER_ID, USER_SQUAD_INDEX } from '../../engine/squad/players'
@@ -44,6 +46,7 @@ export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
   const userPortrait = usePlayerPortrait(save.appearance)
   const [view, setView] = useState<View>('chave')
   const [selected, setSelected] = useState<SquadPlayer | null>(null)
+  const [selectedNationId, setSelectedNationId] = useState<string | null>(null)
 
   const tournament = save.tournament
   const nation = nationById(save.nationalityId)
@@ -67,6 +70,27 @@ export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
       save.appearance.gender,
     )
   }, [save, nation])
+
+  const selectedNation = selectedNationId ? nationById(selectedNationId) : null
+  const selectedNationSquad = useMemo(() => {
+    if (!selectedNation) return []
+    if (selectedNation.id === nation?.id) return squad
+    return nationalSquadFor(
+      selectedNation.id,
+      save.divisions,
+      save.careerYear,
+      marketPoolFor(save.season.seed, save.careerYear, save.appearance.gender),
+      null,
+      save.appearance.gender,
+    )
+  }, [selectedNation, nation, squad, save.divisions, save.careerYear, save.season.seed, save.appearance.gender])
+
+  const selectedNationFormation = selectedNation?.id === nation?.id
+    ? save.nationalFormation
+    : formationIdFor(`nation-${selectedNation?.id ?? ''}`)
+  const selectedNationLineup = selectedNation?.id === nation?.id
+    ? save.nationalLineup
+    : bestLineup(selectedNationSquad, FORMATIONS[selectedNationFormation])
 
   if (!tournament || !nation) {
     return (
@@ -102,7 +126,7 @@ export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
   )
 
   return (
-    <div className="tab-panel">
+    <div className="tab-panel national-tab">
       <div className="card national-head">
         <NationFlag nationId={nation.id} size={30} title={`Bandeira de ${nation.name}`} />
         <div>
@@ -156,8 +180,15 @@ export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
                       >
                         <span className="table-pos">{position + 1}</span>
                         <span className="table-club">
-                          <NationFlag nationId={team.id} size={16} title={team.name} />
-                          <span className="table-club-name">{team.name}</span>
+                          <button
+                            type="button"
+                            className="national-team-button"
+                            aria-label={`Ver esquema tático de ${team.name}`}
+                            onClick={() => setSelectedNationId(team.id)}
+                          >
+                            <NationFlag nationId={team.id} size={16} title={team.name} />
+                            <span className="table-club-name">{team.name}</span>
+                          </button>
                         </span>
                         <span className="table-form" aria-hidden="true" />
                         <span className="table-num table-points">{row.points}</span>
@@ -211,17 +242,27 @@ export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
                 if (!home || !away) return null
                 return (
                   <div className="national-tie" key={`${stage}-${homeId}`}>
-                    <span className="national-tie-side">
+                    <button
+                      type="button"
+                      className="national-tie-side"
+                      aria-label={`Ver esquema tático de ${home.name}`}
+                      onClick={() => setSelectedNationId(home.id)}
+                    >
                       <NationFlag nationId={home.id} size={14} title={home.name} />
                       {home.abbr}
-                    </span>
+                    </button>
                     <span className="national-tie-score">
                       {played ? `${played.homeGoals} × ${played.awayGoals}` : 'a jogar'}
                     </span>
-                    <span className="national-tie-side">
+                    <button
+                      type="button"
+                      className="national-tie-side"
+                      aria-label={`Ver esquema tático de ${away.name}`}
+                      onClick={() => setSelectedNationId(away.id)}
+                    >
                       {away.abbr}
                       <NationFlag nationId={away.id} size={14} title={away.name} />
-                    </span>
+                    </button>
                   </div>
                 )
               })}
@@ -244,22 +285,72 @@ export const NationalTab = ({ save, onSaveChange }: NationalTabProps) => {
             editable
             onFormationChange={(formation) => onSaveChange(setNationalFormation(save, formation))}
             onSwap={(slot, squadIndex) => onSaveChange(swapNationalLineup(save, slot, squadIndex))}
-            onSelect={setSelected}
+            onSelect={(player) => {
+              setSelectedNationId(null)
+              setSelected(player)
+            }}
           />
-          {selected && (
-            <PlayerCardModal
-          gender={save.appearance.gender}
-              player={selected}
-              clubName={nation.name}
-              isUser={selected.id === USER_PLAYER_ID}
-              /* o seu craque tem retrato: é o mesmo do Perfil */
-              userFaceUrl={selected.id === USER_PLAYER_ID ? userPortrait : null}
-              renameState={null}
-              onRename={() => {}}
-              onClose={() => setSelected(null)}
-            />
-          )}
         </div>
+      )}
+
+      {selectedNation && (
+        <div
+          className="national-squad-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="national-squad-title"
+          onClick={() => setSelectedNationId(null)}
+        >
+          <div className="national-squad-dialog" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="banner-close national-squad-close"
+              aria-label="Fechar esquema tático"
+              onClick={() => setSelectedNationId(null)}
+            >
+              ×
+            </button>
+            <div className="national-squad-heading">
+              <NationFlag
+                nationId={selectedNation.id}
+                size={36}
+                title={`Bandeira de ${selectedNation.name}`}
+              />
+              <div>
+                <span className="card-label">Esquema tático</span>
+                <h2 id="national-squad-title">{selectedNation.name}</h2>
+              </div>
+            </div>
+            <SquadBoard
+              squad={selectedNationSquad}
+              formation={selectedNationFormation}
+              lineup={selectedNationLineup}
+              userIndex={selectedNation.id === nation.id
+                ? selectedNationSquad.findIndex((player) => player.id === USER_PLAYER_ID)
+                : -1}
+              gender={save.appearance.gender}
+              userFaceUrl={selectedNation.id === nation.id ? userPortrait : null}
+              primaryColor={selectedNation.colors.primary}
+              editable={false}
+              onSelect={setSelected}
+            />
+            <p className="muted table-note">Clique em um jogador para ver a ficha completa.</p>
+          </div>
+        </div>
+      )}
+
+      {selected && (
+        <PlayerCardModal
+          gender={save.appearance.gender}
+          player={selected}
+          clubName={selectedNation?.name ?? nation.name}
+          isUser={selected.id === USER_PLAYER_ID}
+          /* o seu craque tem retrato: é o mesmo do Perfil */
+          userFaceUrl={selected.id === USER_PLAYER_ID ? userPortrait : null}
+          renameState={null}
+          onRename={() => {}}
+          onClose={() => setSelected(null)}
+        />
       )}
     </div>
   )
