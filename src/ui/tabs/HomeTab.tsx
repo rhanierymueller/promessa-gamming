@@ -1,6 +1,6 @@
 import { Flame, PartyPopper, Play, Sparkles, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { clubById, type Club } from '../../data/clubs'
-import { nationById } from '../../data/nations'
+import { nationAsClub, nationById } from '../../data/nations'
 import { nationOf } from '../../engine/libertados/draw'
 import { isTournamentRunning, seasonEndAction } from '../../engine/career/seasonEnd'
 import { eventById } from '../../engine/career/events'
@@ -126,6 +126,9 @@ export const HomeTab = ({
   const upNext = nextFixture(save)?.kind ?? 'liga'
   // a Copa toma o card do próximo jogo quando é ela que vem primeiro na data
   const isCupNext = upNext === 'libertados' && libertadosActive && libertadosRival !== null
+  // a seleção vem depois de tudo, em dezembro: enquanto ela roda, é ela o jogo
+  const nationRival = tournamentOpponent ? nationAsClub(tournamentOpponent) : null
+  const isNationalNext = tournamentActive && nationRival !== null && nation !== null
 
   return (
     <div className="tab-panel">
@@ -283,20 +286,6 @@ export const HomeTab = ({
         </div>
       )}
 
-      {tournamentActive && tournamentOpponent && (
-        <div className="card callup-card">
-          <Trophy size={20} aria-hidden="true" />
-          <div>
-            <strong>{TOURNAMENT_NAMES[tournament.kind]} · {STAGE_LABEL[tournament.stage]}</strong>
-            <p className="muted callup-text">
-              {tournament.stage === 'groups' && `Jogo ${tournament.round + 1}/3 do grupo: `}
-              {nation?.name} × {tournamentOpponent.name}
-            </p>
-          </div>
-          <button className="btn callup-btn" onClick={onPlayTournamentMatch}>Jogar</button>
-        </div>
-      )}
-
       {tournamentDone && (
         <div className="card callup-card">
           <Trophy size={20} aria-hidden="true" />
@@ -316,7 +305,12 @@ export const HomeTab = ({
         </div>
       )}
 
-      {seasonOver && !isCupNext ? (
+      {/*
+        * O balanço da temporada só entra quando não há mais nada a jogar: com
+        * Copa ou seleção em andamento, o card do jogo tem a vez. Mostrar as
+        * conquistas antes disso anunciava o fim do ano no meio de uma decisão.
+        */}
+      {seasonOver && !isCupNext && !isNationalNext ? (
         <div className="card next-match">
           <span className="card-label">Ano {save.careerYear} · temporada encerrada</span>
           <p className="season-final">
@@ -337,39 +331,47 @@ export const HomeTab = ({
           )}
         </div>
       ) : (
-        (isCupNext ? libertadosRival : nextOpponent) && (() => {
+        (isNationalNext ? nationRival : isCupNext ? libertadosRival : nextOpponent) && (() => {
           /*
-           * Um card só para o próximo compromisso, seja da liga ou da Copa.
-           * Dois cards com botão de jogar deixavam a tela com duas partidas
-           * disponíveis ao mesmo tempo, sem dizer qual vinha primeiro.
+           * Um card só para o próximo compromisso — liga, Libertados ou
+           * seleção. Cada competição num card próprio deixava a tela com duas
+           * partidas disponíveis ao mesmo tempo, sem dizer qual vinha primeiro.
            */
-          const rival = (isCupNext ? libertadosRival : nextOpponent)!
+          const myTeam = isNationalNext && nation ? nationAsClub(nation) : club
+          const rival = (isNationalNext ? nationRival : isCupNext ? libertadosRival : nextOpponent)!
           const cupFixture = isCupNext && libertados ? libertadosPlayerFixture(libertados) : null
-          const isHomeGame = cupFixture
-            ? cupFixture.homeId === save.clubId
-            : playerFixture(save.season, save.season.currentRound).homeId === save.clubId
-          const homeClub = isHomeGame ? club : rival
-          const awayClub = isHomeGame ? rival : club
-          const stageLabel = libertados
+          // jogo de seleção é em campo neutro: não há mando a anunciar
+          const isHomeGame = isNationalNext
+            ? true
+            : cupFixture
+              ? cupFixture.homeId === save.clubId
+              : playerFixture(save.season, save.season.currentRound).homeId === save.clubId
+          const homeClub = isHomeGame ? myTeam : rival
+          const awayClub = isHomeGame ? rival : myTeam
+          const libertadosLabel = libertados
             ? libertados.stage === 'groups'
               ? `jogo ${libertados.round + 1}/6 do grupo`
               : libertados.round === 0
                 ? `${LIBERTADOS_STAGE_NAMES[libertados.stage]} · ida`
                 : `${LIBERTADOS_STAGE_NAMES[libertados.stage]} · volta`
             : ''
+          const label = isNationalNext && tournament
+            ? `${TOURNAMENT_NAMES[tournament.kind]} · ${STAGE_LABEL[tournament.stage]}${
+                tournament.stage === 'groups' ? ` · jogo ${tournament.round + 1}/3` : ''
+              }`
+            : isCupNext
+              ? `${LIBERTADOS_NAME} · ${libertadosLabel}`
+              : `Rodada ${save.season.currentRound + 1} · próximo jogo`
+          const showCountry = isCupNext
           return (
-          <div className={`card next-match${isCupNext ? ' next-match-cup' : ''}`}>
-            <span className="card-label">
-              {isCupNext
-                ? `${LIBERTADOS_NAME} · ${stageLabel}`
-                : `Rodada ${save.season.currentRound + 1} · próximo jogo`}
-            </span>
+          <div className={`card next-match${isCupNext || isNationalNext ? ' next-match-cup' : ''}`}>
+            <span className="card-label">{label}</span>
             <div className="next-match-clubs">
               <span className="next-club">
                 <ClubCrest club={homeClub} customUrl={save.customClubCrests[homeClub.id]} size={30} />
                 <span className="next-club-id">
                   {homeClub.name}
-                  {isCupNext && (
+                  {showCountry && (
                     <small className="next-club-nation">{countryNameOf(homeClub.id)}</small>
                   )}
                 </span>
@@ -378,30 +380,40 @@ export const HomeTab = ({
               <span className="next-club next-club-away">
                 <span className="next-club-id">
                   {awayClub.name}
-                  {isCupNext && (
+                  {showCountry && (
                     <small className="next-club-nation">{countryNameOf(awayClub.id)}</small>
                   )}
                 </span>
                 <ClubCrest club={awayClub} customUrl={save.customClubCrests[awayClub.id]} size={30} />
               </span>
             </div>
-            <p className="next-meta">{homeClub.city} · {isHomeGame ? 'em casa' : 'fora de casa'}</p>
+            <p className="next-meta">
+              {isNationalNext
+                ? 'Campo neutro · decide quem chega mais inteiro'
+                : `${homeClub.city} · ${isHomeGame ? 'em casa' : 'fora de casa'}`}
+            </p>
             <SectorBars
               mine={myTeamSectors(save, club)}
               theirs={opponentSectors(
                 rival,
                 save.careerYear,
-                // adversário continental joga a primeira divisão do país dele
-                isCupNext ? 0 : divisionOf(save.divisions, rival.id),
+                // seleção e clube continental jogam no topo do país deles
+                isCupNext || isNationalNext ? 0 : divisionOf(save.divisions, rival.id),
                 save.appearance.gender,
                 continentalTitleYears(save, rival.id),
               )}
-              myAbbr={club.abbr}
+              myAbbr={myTeam.abbr}
               theirAbbr={rival.abbr}
             />
             <button
               className="btn btn-icon"
-              onClick={isCupNext ? onPlayLibertadosMatch : onPlayMatch}
+              onClick={
+                isNationalNext
+                  ? onPlayTournamentMatch
+                  : isCupNext
+                    ? onPlayLibertadosMatch
+                    : onPlayMatch
+              }
             >
               <Play size={15} aria-hidden="true" /> Jogar partida
             </button>
