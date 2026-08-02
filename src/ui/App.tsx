@@ -442,9 +442,9 @@ export const App = () => {
       void submitLeagueMatch(updated, record).catch(() => undefined)
       setMatchSetup(null)
       setScreen('tabs')
-      // as copas continuam pela Home (próximo jogo, chave, encerramento);
-      // só a rodada da liga desemboca no histórico de partidas
-      setTab(matchSetup.kind === 'liga' ? 'matches' : 'home')
+      // todo jogo desemboca na Home: é lá que estão o próximo compromisso, a
+      // reação ao que acabou de acontecer e o fecho de temporada
+      setTab('home')
       return
     }
     setMatchSetup(null)

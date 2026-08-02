@@ -3657,17 +3657,15 @@ Ainda em `src/ui/App.tsx`, no bloco `screen === 'match'` (linhas 506-557), ajust
           signings={matchSetup.kind === 'torneio' ? undefined : save.signings}
 ```
 
-E em `onMatchFinished`, a aba de destino passa a depender da competição — só a
-rodada da liga desemboca no histórico de partidas; as duas copas continuam pela
-Home, onde vivem o card do próximo jogo, o aviso de campeão ou eliminado e a
-cerimônia:
+E em `onMatchFinished`, todo jogo desemboca na Home — é lá que estão o próximo
+compromisso, a reação ao que acabou de acontecer e o fecho de temporada:
 
 ```tsx
     setMatchSetup(null)
     setScreen('tabs')
-    // as copas continuam pela Home (próximo jogo, chave, encerramento);
-    // só a rodada da liga desemboca no histórico de partidas
-    setTab(matchSetup.kind === 'liga' ? 'matches' : 'home')
+    // todo jogo desemboca na Home: é lá que estão o próximo compromisso, a
+    // reação ao que acabou de acontecer e o fecho de temporada
+    setTab('home')
 ```
 
 - [ ] **Step 4: Card do próximo compromisso na Home**
