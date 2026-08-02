@@ -430,16 +430,18 @@ export const setFormation = (save: PlayerSave, formation: FormationId): PlayerSa
 
 /**
  * Troca de escalação: coloca `squadIndex` (0-17) no slot `slotIndex`.
- * O seu craque não sai de campo; jogador já titular troca de slot.
+ *
+ * O craque troca de posição à vontade com quem já está em campo — o que ele
+ * não pode é SAIR do time: nenhum reserva toma a vaga dele.
  */
 export const swapLineup = (save: PlayerSave, slotIndex: number, squadIndex: number): PlayerSave => {
   if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= save.lineup.length) return save
   if (!Number.isInteger(squadIndex) || squadIndex < 0 || squadIndex > 17) return save
-  if (save.lineup[slotIndex] === USER_SQUAD_INDEX) return save
-  if (squadIndex === USER_SQUAD_INDEX) return save
   const lineup = [...save.lineup]
   const alreadyAt = lineup.indexOf(squadIndex)
   if (alreadyAt === slotIndex) return save
+  // a vaga do craque só troca com quem já é titular
+  if (lineup[slotIndex] === USER_SQUAD_INDEX && alreadyAt < 0) return save
   if (alreadyAt >= 0) {
     lineup[alreadyAt] = lineup[slotIndex]
   }

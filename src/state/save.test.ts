@@ -300,15 +300,37 @@ describe('formação e escalação — só do meu time', () => {
     expect([...changed.lineup].sort()).toEqual([...base.lineup].sort())
   })
 
-  test('não deixa tirar você de campo nem duplicar jogador', () => {
-    // Arrange
+  test('nenhum reserva toma a vaga do craque', () => {
+    // Arrange: um jogador que está fora dos onze
     const userSlot = base.lineup.indexOf(USER_SQUAD_INDEX)
+    const reserva = [...Array(18).keys()].find((index) => !base.lineup.includes(index))!
 
     // Act & Assert
-    expect(swapLineup(base, userSlot, 13)).toBe(base)
-    expect(swapLineup(base, 2, USER_SQUAD_INDEX)).toBe(base)
-    const swapped = swapLineup(base, 2, base.lineup[3])
-    expect(new Set(swapped.lineup).size).toBe(11)
+    expect(swapLineup(base, userSlot, reserva)).toBe(base)
+  })
+
+  test('o craque troca de posição com outro titular e os dois seguem em campo', () => {
+    // Arrange: um slot titular que não é o do craque
+    const userSlot = base.lineup.indexOf(USER_SQUAD_INDEX)
+    const outroSlot = userSlot === 0 ? 1 : 0
+    const outroJogador = base.lineup[outroSlot]
+
+    // Act
+    const trocado = swapLineup(base, outroSlot, USER_SQUAD_INDEX)
+
+    // Assert
+    expect(trocado.lineup[outroSlot]).toBe(USER_SQUAD_INDEX)
+    expect(trocado.lineup[userSlot]).toBe(outroJogador)
+    expect(new Set(trocado.lineup).size).toBe(11)
+    expect([...trocado.lineup].sort()).toEqual([...base.lineup].sort())
+  })
+
+  test('a troca entre dois titulares quaisquer não duplica ninguém', () => {
+    // Act
+    const trocado = swapLineup(base, 2, base.lineup[3])
+
+    // Assert
+    expect(new Set(trocado.lineup).size).toBe(11)
   })
 })
 

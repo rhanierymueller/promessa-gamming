@@ -165,9 +165,16 @@ export const SquadBoard = ({
             const fit = positionFit(player, slotPosition)
             const effective = overallAt(player, slotPosition)
             const isSwapping = pending?.kind === 'starter' && pending.slot === slot
-            // o craque nunca sai de campo; fora isso todo titular é alvo — de
-            // outro titular (invertem posições) ou de um reserva (substituição)
-            const isSwapTarget = editable && pending !== null && !isSwapping && !isUser
+            /*
+             * Todo titular é alvo — de outro titular (invertem posições) ou de
+             * um reserva (substituição). O craque é exceção só na segunda: ele
+             * muda de posição à vontade, mas não sai do time.
+             */
+            const isSwapTarget =
+              editable &&
+              pending !== null &&
+              !isSwapping &&
+              (!isUser || pending.kind === 'starter')
             const pick = (): void => {
               if (isSwapTarget && pending) {
                 if (pending.kind === 'starter') applySwap(pending.slot, squadIndex)
@@ -202,10 +209,16 @@ export const SquadBoard = ({
                 <span className={`squad-ovr ${fit === 'improvisado' ? 'ovr-wrong' : ovrClass(effective)}`}>
                   {effective}
                 </span>
-                {editable && !isUser && (
+                {editable && (
                   <button
                     className={`squad-swap-btn${isSwapping ? ' squad-swap-btn-active' : ''}`}
-                    title={isSwapping ? 'Cancelar a troca' : 'Trocar este titular'}
+                    title={
+                      isSwapping
+                        ? 'Cancelar a troca'
+                        : isUser
+                          ? 'Trocar de posição com outro titular'
+                          : 'Trocar este titular'
+                    }
                     aria-label={isSwapping ? `Cancelar troca de ${player.name}` : `Trocar ${player.name}`}
                     aria-pressed={isSwapping}
                     onClick={(event) => {
@@ -226,9 +239,15 @@ export const SquadBoard = ({
             const player = squad[squadIndex]
             if (!player) return null
             const isSwapping = pending?.kind === 'bench' && pending.squadIndex === squadIndex
-            // dois reservas trocando de lugar não mudam nada: só o titular
-            // aberto transforma um reserva em alvo
-            const isTarget = editable && pending?.kind === 'starter'
+            /*
+             * Dois reservas trocando de lugar não mudam nada: só o titular
+             * aberto transforma um reserva em alvo. E se o titular aberto for o
+             * craque, ninguém do banco entra — a vaga dele não está em jogo.
+             */
+            const isTarget =
+              editable &&
+              pending?.kind === 'starter' &&
+              starters[pending.slot] !== userIndex
             const isSigning = signingIds?.has(player.id) ?? false
             const pick = (): void => {
               if (isTarget && pending?.kind === 'starter') {
