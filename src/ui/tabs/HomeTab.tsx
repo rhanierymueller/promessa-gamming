@@ -19,7 +19,10 @@ import {
   LIBERTADOS_NAME,
   STAGE_NAMES as LIBERTADOS_STAGE_NAMES,
 } from '../../engine/libertados/types'
-import { playerOpponentId as libertadosOpponentId } from '../../engine/libertados/fixtures'
+import {
+  playerFixture as libertadosPlayerFixture,
+  playerOpponentId as libertadosOpponentId,
+} from '../../engine/libertados/fixtures'
 import { useState } from 'react'
 import treinoChute from '../../assets/backgrounds/gramado.jpg'
 import treinoGoleiro from '../../assets/backgrounds/estadio-medio.jpg'
@@ -36,6 +39,7 @@ import { displayClub, type PlayerSave } from '../../state/save'
 import { ClubCrest } from '../ClubCrest'
 import { usePlayerPortrait } from '../usePlayerPortrait'
 import { NewsCarousel } from '../NewsCarousel'
+import '../styles/libertados.css'
 
 interface HomeTabProps {
   readonly save: PlayerSave
@@ -115,6 +119,8 @@ export const HomeTab = ({
   const libertadosRival = libertadosRivalBase ? displayClub(save, libertadosRivalBase) : null
   // com duas competições, quem joga primeiro é quem tem a data mais próxima
   const upNext = nextFixture(save)?.kind ?? 'liga'
+  // a Copa toma o card do próximo jogo quando é ela que vem primeiro na data
+  const isCupNext = upNext === 'libertados' && libertadosActive && libertadosRival !== null
 
   return (
     <div className="tab-panel">
@@ -254,23 +260,6 @@ export const HomeTab = ({
         </div>
       )}
 
-      {libertadosActive && libertadosRival && upNext === 'libertados' && (
-        <div className="card callup-card">
-          <div>
-            <strong>{LIBERTADOS_NAME} · {LIBERTADOS_STAGE_NAMES[libertados.stage]}</strong>
-            <p className="muted">
-              {libertados.stage === 'groups'
-                ? `Jogo ${libertados.round + 1}/6 do grupo: `
-                : libertados.round === 0
-                  ? 'Jogo de ida: '
-                  : 'Jogo de volta: '}
-              {club.name} × {libertadosRival.name}
-            </p>
-          </div>
-          <button className="btn callup-btn" onClick={onPlayLibertadosMatch}>Jogar</button>
-        </div>
-      )}
-
       {libertadosDone && (
         <div className="card callup-card">
           <div>
@@ -322,7 +311,7 @@ export const HomeTab = ({
         </div>
       )}
 
-      {seasonOver ? (
+      {seasonOver && !isCupNext ? (
         <div className="card next-match">
           <span className="card-label">Ano {save.careerYear} · temporada encerrada</span>
           <p className="season-final">
@@ -343,13 +332,33 @@ export const HomeTab = ({
           )}
         </div>
       ) : (
-        nextOpponent && (() => {
-          const isHomeGame = playerFixture(save.season, save.season.currentRound).homeId === save.clubId
-          const homeClub = isHomeGame ? club : nextOpponent
-          const awayClub = isHomeGame ? nextOpponent : club
+        (isCupNext ? libertadosRival : nextOpponent) && (() => {
+          /*
+           * Um card só para o próximo compromisso, seja da liga ou da Copa.
+           * Dois cards com botão de jogar deixavam a tela com duas partidas
+           * disponíveis ao mesmo tempo, sem dizer qual vinha primeiro.
+           */
+          const rival = (isCupNext ? libertadosRival : nextOpponent)!
+          const cupFixture = isCupNext && libertados ? libertadosPlayerFixture(libertados) : null
+          const isHomeGame = cupFixture
+            ? cupFixture.homeId === save.clubId
+            : playerFixture(save.season, save.season.currentRound).homeId === save.clubId
+          const homeClub = isHomeGame ? club : rival
+          const awayClub = isHomeGame ? rival : club
+          const stageLabel = libertados
+            ? libertados.stage === 'groups'
+              ? `jogo ${libertados.round + 1}/6 do grupo`
+              : libertados.round === 0
+                ? `${LIBERTADOS_STAGE_NAMES[libertados.stage]} · ida`
+                : `${LIBERTADOS_STAGE_NAMES[libertados.stage]} · volta`
+            : ''
           return (
-          <div className="card next-match">
-            <span className="card-label">Rodada {save.season.currentRound + 1} · próximo jogo</span>
+          <div className={`card next-match${isCupNext ? ' next-match-cup' : ''}`}>
+            <span className="card-label">
+              {isCupNext
+                ? `${LIBERTADOS_NAME} · ${stageLabel}`
+                : `Rodada ${save.season.currentRound + 1} · próximo jogo`}
+            </span>
             <div className="next-match-clubs">
               <span className="next-club">
                 <ClubCrest club={homeClub} customUrl={save.customClubCrests[homeClub.id]} size={30} />
@@ -365,15 +374,21 @@ export const HomeTab = ({
             <SectorBars
               mine={myTeamSectors(save, club)}
               theirs={opponentSectors(
-                nextOpponent,
+                rival,
                 save.careerYear,
-                divisionOf(save.divisions, nextOpponent.id),
+                // adversário continental joga a primeira divisão do país dele
+                isCupNext ? 0 : divisionOf(save.divisions, rival.id),
                 save.appearance.gender,
               )}
               myAbbr={club.abbr}
-              theirAbbr={nextOpponent.abbr}
+              theirAbbr={rival.abbr}
             />
-            <button className="btn btn-icon" onClick={onPlayMatch}><Play size={15} aria-hidden="true" /> Jogar partida</button>
+            <button
+              className="btn btn-icon"
+              onClick={isCupNext ? onPlayLibertadosMatch : onPlayMatch}
+            >
+              <Play size={15} aria-hidden="true" /> Jogar partida
+            </button>
           </div>
           )
         })()

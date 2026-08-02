@@ -90,3 +90,147 @@
   display: block;
   margin-top: 1px;
 }
+
+/* ---------- consulta de outras seleções ---------- */
+
+.national-team-button,
+.national-tie-side {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.national-team-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+}
+
+.national-team-button:hover .table-club-name,
+.national-tie-side:hover {
+  color: var(--accent);
+}
+
+.national-team-button:focus-visible,
+.national-tie-side:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.national-squad-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 20px;
+  overflow-y: auto;
+  background: rgba(16, 12, 26, 0.9);
+}
+
+.national-squad-dialog {
+  position: relative;
+  width: min(100%, 1040px);
+  margin: auto;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.national-squad-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
+
+.national-squad-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 44px;
+}
+
+.national-squad-heading h2 {
+  margin: 4px 0 0;
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/* ---------- convocados no desktop ---------- */
+
+@media (min-width: 1024px) {
+  /*
+   * A prancheta compartilhava o desktop com a lista, mas ficava presa a
+   * 340px. Na seleção há largura suficiente para dividir o cartão ao meio e
+   * deixar campo e elenco com o mesmo peso visual.
+   */
+  .shell-tabs .national-tab .squad-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(24px, 3vw, 40px);
+  }
+
+  /*
+   * A carta padrão continua compacta nas outras abas. Na seleção ela abre
+   * quase na largura do shell, para retrato, identificação e atributos não
+   * parecerem uma interface de celular ampliada no centro do monitor.
+   */
+  .national-tab .player-card {
+    width: min(100%, 880px);
+    padding: 30px;
+    gap: 22px;
+  }
+
+  .national-tab .player-card-top {
+    gap: 24px;
+  }
+
+  .national-tab .player-face {
+    width: 132px;
+    height: 132px;
+  }
+
+  .national-tab .player-card-portrait .player-ovr {
+    font-size: 26px;
+  }
+
+  .national-tab .player-card-name {
+    font-size: 24px;
+  }
+
+  .national-tab .player-card-meta {
+    font-size: 14px;
+  }
+
+  .national-tab .player-card-rank {
+    margin-top: 14px;
+  }
+
+  .national-tab .player-attr-list {
+    gap: 12px;
+  }
+
+  .national-tab .player-attr-row {
+    grid-template-columns: 130px minmax(0, 1fr) 40px;
+    gap: 14px;
+    font-size: 14px;
+  }
+
+  .national-tab .player-attr-bar {
+    height: 10px;
+  }
+}

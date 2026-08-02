@@ -14,11 +14,36 @@
 
 .shell-tabs .tabs-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 14px;
   width: 100%;
-  padding-right: 44px; /* o botão de volume mora nesse canto */
+}
+
+.shell-tabs .tabs-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+
+/*
+ * Nas abas o som pertence ao cabeçalho: deixa de flutuar sobre cartões,
+ * esquema tático e ficha de jogador. Nas telas de partida e treino o controle
+ * continua fixo, porque elas têm cabeçalhos próprios.
+ */
+.shell-tabs .tabs-head .volume-control {
+  position: relative;
+  top: auto;
+  right: auto;
+  z-index: 1;
+  flex-shrink: 0;
+  padding-bottom: 0;
+}
+
+.shell-tabs .tabs-head .volume-slider {
+  top: calc(100% + 8px);
 }
 
 .shell-tabs .tabs-brand {
