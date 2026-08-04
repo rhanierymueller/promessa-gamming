@@ -25,8 +25,9 @@
 }
 
 .bracket {
+  --bracket-gap: 22px;
   display: flex;
-  gap: 14px;
+  gap: var(--bracket-gap);
   overflow-x: auto;
   padding-bottom: 8px;
   scrollbar-width: thin;
@@ -48,6 +49,11 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* a coluna estica até a altura da mais cheia: é a régua que alinha as fatias */
+.bracket-stage .bracket-ties {
+  flex: 1;
 }
 
 .bracket-stage-name {
@@ -75,16 +81,87 @@
   letter-spacing: 0.1em;
 }
 
+/*
+ * A geometria da chave.
+ *
+ * Cada confronto ocupa uma FATIA de altura igual (`flex: 1`), e a fase seguinte
+ * tem metade das fatias — logo a fatia dobra, e seu centro cai exatamente no
+ * meio dos dois confrontos que a alimentam. Daí as linhas ligarem sozinhas, sem
+ * medida nenhuma em JS.
+ *
+ * O respiro entre cartões é `padding` na fatia, nunca `gap`: padding é simétrico
+ * e não move o centro. Um `gap` empurraria as fatias de forma diferente em cada
+ * coluna e as linhas sairiam tortas.
+ */
 .bracket-ties {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
   margin: 0;
   padding: 0;
 }
 
+.bracket-slot {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 3px 0;
+}
+
+/* ---------- as linhas ---------- */
+
+/*
+ * Meia-linha para fora (à direita) e meia-linha para dentro (à esquerda) se
+ * encontram no meio do vão entre colunas, onde fica a barra vertical que junta
+ * o par. Três traços simples desenham a chave inteira.
+ */
+.bracket-slot::before,
+.bracket-slot::after {
+  content: '';
+  position: absolute;
+  border-color: var(--line);
+  border-style: solid;
+  border-width: 0;
+  pointer-events: none;
+}
+
+/* saída: do cartão até o meio do vão */
+.bracket-slot::after {
+  top: 50%;
+  right: calc(var(--bracket-gap) / -2);
+  width: calc(var(--bracket-gap) / 2);
+  border-top-width: 1px;
+}
+
+/* entrada: do meio do vão anterior até o cartão */
+.bracket-slot::before {
+  top: 50%;
+  left: calc(var(--bracket-gap) / -2);
+  width: calc(var(--bracket-gap) / 2);
+  border-top-width: 1px;
+}
+
+/*
+ * A barra vertical que junta o par. Sai do centro da fatia ímpar e desce uma
+ * fatia inteira — que é justamente a distância até o centro da fatia par, já
+ * que todas têm a mesma altura. O meio dela encosta na entrada do confronto
+ * seguinte.
+ */
+.bracket-slot:nth-child(odd)::after {
+  height: 100%;
+  border-right-width: 1px;
+}
+
+/* a final não leva a lugar nenhum, e a primeira fase não vem de lugar nenhum */
+.bracket-stage:last-child .bracket-slot::after,
+.bracket-stage:first-child .bracket-slot::before {
+  display: none;
+}
+
 .bracket-tie {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -154,4 +231,31 @@
   .bracket-stage {
     min-width: 152px;
   }
+}
+
+
+/* ---------- vaga ainda sem dono ---------- */
+
+/*
+ * A chave mostra as fases inteiras desde o primeiro dia, com as vagas vazias
+ * à espera. Preencher com um palpite — o que acontecia — fazia a competição
+ * parecer decidida antes de a bola rolar.
+ */
+.bracket-tie-open {
+  border-style: dashed;
+  background: none;
+}
+
+.bracket-side-tbd {
+  color: var(--steel);
+  font-style: italic;
+  opacity: 0.6;
+}
+
+/* o buraco do escudo mantém o alinhamento das colunas sem inventar um time */
+.bracket-crest-hole {
+  width: 18px;
+  height: 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
 }

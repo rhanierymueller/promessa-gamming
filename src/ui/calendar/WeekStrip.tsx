@@ -70,7 +70,7 @@ export const WeekStrip = ({ save, onSaveChange }: WeekStripProps) => {
     <div className="card card-wide week-strip">
       <div className="week-strip-head">
         <span className="card-label">
-          {MONTH_SHORT[save.currentDate.month]} · ano {save.careerYear}
+          {MONTH_SHORT[save.currentDate.month]} · {save.currentDate.year}
         </span>
         <span className="week-strip-countdown">
           {remaining === null

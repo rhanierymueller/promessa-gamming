@@ -1,3 +1,4 @@
+import { seasonYearFor } from '../../engine/career/calendar'
 import { useMemo, useState } from 'react'
 import { Bracket } from '../Bracket'
 import { libertadosBracket } from '../../engine/libertados/bracket'
@@ -108,7 +109,7 @@ export const LibertadosTab = ({ save }: LibertadosTabProps) => {
         <div>
           <strong>{LIBERTADOS_NAME}</strong>
           <p className="muted">
-            {club ? clubDisplayName(save, club.id) : `Temporada ${state.year}`} · {STAGE_NAMES[state.stage]}
+            {club ? clubDisplayName(save, club.id) : `Temporada ${seasonYearFor(state.year, save.startYear)}`} · {STAGE_NAMES[state.stage]}
           </p>
         </div>
       </div>

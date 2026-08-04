@@ -1,4 +1,4 @@
-import { stagePairs } from './copaBrasil'
+import { stageSlots } from './copaBrasil'
 import {
   KNOCKOUT_ORDER,
   STAGE_NAMES,
@@ -16,8 +16,9 @@ import {
  */
 
 export interface BracketTieView {
-  readonly homeId: string
-  readonly awayId: string
+  /** null = o classificado ainda não é conhecido. */
+  readonly homeId: string | null
+  readonly awayId: string | null
   readonly homeGoals?: number
   readonly awayGoals?: number
   readonly winnerId?: string
@@ -41,12 +42,16 @@ export const copaBrasilBracket = (state: CopaBrasilState): readonly BracketStage
   KNOCKOUT_ORDER.map((stage: CopaBrasilKnockoutStage) => ({
     id: stage,
     name: STAGE_NAMES[stage],
-    ties: stagePairs(state, stage).map((pair) => {
+    ties: stageSlots(state, stage).map((pair) => {
+      // lado indefinido: nem placar, nem vencedor — a fase ainda vai se formar
+      if (pair[0] === null || pair[1] === null) {
+        return { homeId: pair[0], awayId: pair[1] }
+      }
       const played = state.results.filter(
         (result) =>
           result.stage === stage &&
-          pair.includes(result.homeId) &&
-          pair.includes(result.awayId),
+          (pair as readonly string[]).includes(result.homeId) &&
+          (pair as readonly string[]).includes(result.awayId),
       )
       // o confronto só está decidido com os DOIS jogos na conta
       if (played.length < 2) {

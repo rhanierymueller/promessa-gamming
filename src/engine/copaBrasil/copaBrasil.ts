@@ -128,6 +128,41 @@ const tieWinner = (
  * sorteio; nas fases seguintes, os vencedores da fase anterior — sempre
  * mantendo o lado da chave, que é o que faz o caminho ser previsível.
  */
+/**
+ * Os confrontos de uma fase ADMITINDO lacunas: `null` onde o classificado
+ * ainda não é conhecido.
+ *
+ * `stagePairs` assume o primeiro do par quando o confronto anterior não
+ * terminou — o que serve ao motor, que só olha a fase corrente, mas faz a
+ * chave inteira parecer definida na tela. Para exibir, o que falta precisa
+ * aparecer como falta.
+ */
+export const stageSlots = (
+  state: CopaBrasilState,
+  stage: CopaBrasilKnockoutStage,
+): readonly (readonly [string | null, string | null])[] => {
+  const stageIndex = KNOCKOUT_ORDER.indexOf(stage)
+  let teams: (string | null)[] = [...state.bracket]
+  for (let i = 0; i < stageIndex; i++) {
+    const previous = KNOCKOUT_ORDER[i]
+    const next: (string | null)[] = []
+    for (let j = 0; j + 1 < teams.length; j += 2) {
+      const home = teams[j]
+      const away = teams[j + 1]
+      // um lado indefinido já impede saber quem passa
+      next.push(
+        home !== null && away !== null
+          ? tieWinner(state, previous, [home, away] as const)
+          : null,
+      )
+    }
+    teams = next
+  }
+  const pairs: (readonly [string | null, string | null])[] = []
+  for (let i = 0; i + 1 < teams.length; i += 2) pairs.push([teams[i], teams[i + 1]] as const)
+  return pairs.slice(0, teamsInStage(stage) / 2)
+}
+
 export const stagePairs = (
   state: CopaBrasilState,
   stage: CopaBrasilKnockoutStage,

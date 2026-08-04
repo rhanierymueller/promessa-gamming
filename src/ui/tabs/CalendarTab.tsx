@@ -48,7 +48,7 @@ export const CalendarTab = ({ save }: CalendarTabProps) => {
       <MonthGrid
         save={save}
         schedule={schedule}
-        year={seasonYearFor(save.careerYear)}
+        year={seasonYearFor(save.careerYear, save.startYear)}
         month={month}
         onMonthChange={setMonth}
         next={next}

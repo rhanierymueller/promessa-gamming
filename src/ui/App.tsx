@@ -925,6 +925,7 @@ export const App = () => {
       {libertadosCeremony && save.libertados && (
         <LibertadosIntro
           state={save.libertados}
+          startYear={save.startYear}
           clubName={club.name}
           playerName={save.playerName}
           onDone={finishLibertadosCeremony}

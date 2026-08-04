@@ -813,6 +813,49 @@ describe('persistSave e loadSave', () => {
     expect(loadSave(storage)!.savedAt).toBe(2000)
   })
 
+  test('carreira nova nasce no ano de verdade, não num 2026 de fábrica', () => {
+    // Act
+    const save = createSave({ playerName: 'Craque', clubId: 'real-vila' }, fixedRoll())!
+
+    // Assert: quem cria hoje joga o ano de hoje
+    const anoAtual = new Date().getFullYear()
+    expect(save.startYear).toBe(anoAtual)
+    expect(save.currentDate.year).toBe(anoAtual)
+  })
+
+  test('save antigo, sem ano de abertura, mantém o calendário com que foi jogado', () => {
+    /*
+     * O ano ficou gravado justamente por isto: derivar do relógio do mundo
+     * empurraria a carreira inteira de quem voltasse a jogar numa virada de ano
+     * — jogo marcado para março de 2026 apareceria em março de 2028.
+     */
+    // Arrange
+    const storage = fakeStorage()
+    const save = createSave({ playerName: 'Craque', clubId: 'real-vila' }, fixedRoll())!
+    const { startYear: _semAno, ...antigo } = save
+    storage.setItem('promessa.save', JSON.stringify({ ...antigo, currentDate: { year: 2026, month: 2, day: 2 } }))
+
+    // Act
+    const carregado = loadSave(storage)!
+
+    // Assert
+    expect(carregado.startYear).toBe(2026)
+    expect(carregado.currentDate).toEqual({ year: 2026, month: 2, day: 2 })
+  })
+
+  test('a virada de temporada avança um ano de verdade no relógio', () => {
+    // Arrange
+    const save = createSave({ playerName: 'Craque', clubId: 'real-vila', startYear: 2030 }, fixedRoll())!
+    expect(save.currentDate.year).toBe(2030)
+
+    // Act
+    const proxima = startNewSeason(save)
+
+    // Assert
+    expect(proxima.careerYear).toBe(2)
+    expect(proxima.currentDate.year).toBe(2031)
+  })
+
   test('save antigo, sem carimbo, carrega com zero e perde para qualquer um', () => {
     // Arrange: formato anterior à sincronização
     const storage = fakeStorage()

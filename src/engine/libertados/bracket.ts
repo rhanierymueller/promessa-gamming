@@ -1,4 +1,4 @@
-import { knockoutPairs } from './fixtures'
+import { knockoutSlots } from './fixtures'
 import {
   KNOCKOUT_ORDER,
   STAGE_NAMES,
@@ -15,8 +15,9 @@ import {
  */
 
 export interface LibertadosBracketTie {
-  readonly homeId: string
-  readonly awayId: string
+  /** null = o classificado ainda não é conhecido. */
+  readonly homeId: string | null
+  readonly awayId: string | null
   readonly homeGoals?: number
   readonly awayGoals?: number
   readonly winnerId?: string
@@ -41,12 +42,16 @@ export const libertadosBracket = (
   KNOCKOUT_ORDER.map((stage) => ({
     id: stage,
     name: STAGE_NAMES[stage],
-    ties: knockoutPairs(state, stage).map((pair) => {
+    ties: knockoutSlots(state, stage).map((pair) => {
+      // lado indefinido: a fase ainda vai se formar
+      if (pair[0] === null || pair[1] === null) {
+        return { homeId: pair[0], awayId: pair[1] }
+      }
       const played = state.results.filter(
         (result) =>
           result.stage === stage &&
-          pair.includes(result.homeId) &&
-          pair.includes(result.awayId),
+          (pair as readonly string[]).includes(result.homeId) &&
+          (pair as readonly string[]).includes(result.awayId),
       )
       // ida e volta: sem os dois jogos o confronto ainda está aberto
       if (played.length < 2) return { homeId: pair[0], awayId: pair[1] }

@@ -11,8 +11,17 @@ export interface CalendarDate {
   readonly day: number
 }
 
-/** Ano real do primeiro ano de carreira. */
+/**
+ * Ano real do primeiro ano de carreira, quando o save não diz qual é.
+ *
+ * Carreira nova nasce no ano de VERDADE (veja `currentRealYear`); esta constante
+ * atende os saves antigos, que foram jogados inteiros em cima dela e não podem
+ * ter o calendário deslocado só porque o mundo virou o ano.
+ */
 export const BASE_SEASON_YEAR = 2026
+
+/** O ano em que estamos agora — de onde uma carreira nova começa a contar. */
+export const currentRealYear = (): number => new Date().getFullYear()
 
 /**
  * Dias de calendário antes da primeira rodada. A carreira não abre no dia do
@@ -66,8 +75,9 @@ export const leagueWeekdayFor = (careerYear: number, round = 0): number =>
 export const cupWeekdayFor = (careerYear: number, index = 0): number =>
   pickOffset(CUP_OFFSETS, careerYear, index) === MONDAY_OFFSET.wed ? 3 : 4
 
-export const seasonYearFor = (careerYear: number): number =>
-  BASE_SEASON_YEAR + careerYear - 1
+/** Ano real da temporada `careerYear` de uma carreira aberta em `startYear`. */
+export const seasonYearFor = (careerYear: number, startYear = BASE_SEASON_YEAR): number =>
+  startYear + careerYear - 1
 
 /** Primeira ocorrência de um dia da semana no mês (0=domingo). */
 const firstWeekdayOf = (year: number, month: number, weekday: number): CalendarDate => {
@@ -94,8 +104,12 @@ export const compareDates = (a: CalendarDate, b: CalendarDate): number =>
  * cada competição escolhe só o DIA dentro da semana, então liga e copas nunca
  * saem de sincronia por mais que os dias variem.
  */
-const seasonWeekStart = (careerYear: number, week: number): CalendarDate => {
-  const firstMonday = firstWeekdayOf(seasonYearFor(careerYear), OPENING_MONTH, 1)
+const seasonWeekStart = (
+  careerYear: number,
+  week: number,
+  startYear: number,
+): CalendarDate => {
+  const firstMonday = firstWeekdayOf(seasonYearFor(careerYear, startYear), OPENING_MONTH, 1)
   return addDays(firstMonday, week * WEEK_DAYS)
 }
 
@@ -108,9 +122,13 @@ export const roundDate = (
   careerYear: number,
   round: number,
   inLibertados = false,
+  startYear = BASE_SEASON_YEAR,
 ): CalendarDate => {
   const week = round * (inLibertados ? 2 : 1)
-  return addDays(seasonWeekStart(careerYear, week), pickOffset(LEAGUE_OFFSETS, careerYear, round))
+  return addDays(
+    seasonWeekStart(careerYear, week, startYear),
+    pickOffset(LEAGUE_OFFSETS, careerYear, round),
+  )
 }
 
 /**
@@ -123,17 +141,20 @@ export const roundDate = (
  * do outro) alinhava por sorte: a distância entre as âncoras muda de ano para
  * ano e, fora do ano de estreia, nenhum jogo caía perto de uma rodada.
  */
-export const libertadosDate = (careerYear: number, matchIndex: number): CalendarDate => {
-  return addDays(
-    seasonWeekStart(careerYear, libertadosWeek(careerYear, matchIndex)),
+export const libertadosDate = (
+  careerYear: number,
+  matchIndex: number,
+  startYear = BASE_SEASON_YEAR,
+): CalendarDate =>
+  addDays(
+    seasonWeekStart(careerYear, libertadosWeek(careerYear, matchIndex, startYear), startYear),
     pickOffset(CUP_OFFSETS, careerYear, matchIndex),
   )
-}
 
 /** Primeira semana da temporada que já caiu em abril — onde a edição abre. */
-const firstWeekInMonth = (careerYear: number, month: number): number => {
+const firstWeekInMonth = (careerYear: number, month: number, startYear: number): number => {
   let week = 0
-  while (seasonWeekStart(careerYear, week).month < month && week < 60) week++
+  while (seasonWeekStart(careerYear, week, startYear).month < month && week < 60) week++
   return week
 }
 
@@ -143,8 +164,12 @@ const firstWeekInMonth = (careerYear: number, month: number): number => {
  * que a Copa do Brasil joga, para um clube nas duas nunca ter dois jogos de
  * meio de semana seguidos.
  */
-export const libertadosWeek = (careerYear: number, matchIndex: number): number => {
-  const first = firstWeekInMonth(careerYear, LIBERTADOS_MONTH)
+export const libertadosWeek = (
+  careerYear: number,
+  matchIndex: number,
+  startYear = BASE_SEASON_YEAR,
+): number => {
+  const first = firstWeekInMonth(careerYear, LIBERTADOS_MONTH, startYear)
   // a liga quinzenal joga nas semanas PARES: a edição se alinha a elas para o
   // jogo continental ser sempre o meio da semana que antecede uma rodada
   const aligned = first % 2 === 0 ? first : first + 1
@@ -156,13 +181,20 @@ export const libertadosWeek = (careerYear: number, matchIndex: number): number =
  * as que a Libertados deixa livres. Um clube nas duas competições joga meio de
  * semana toda semana, mas nunca duas vezes na mesma.
  */
-export const copaBrasilWeek = (careerYear: number, matchIndex: number): number =>
-  libertadosWeek(careerYear, 0) + 1 + matchIndex * 2
+export const copaBrasilWeek = (
+  careerYear: number,
+  matchIndex: number,
+  startYear = BASE_SEASON_YEAR,
+): number => libertadosWeek(careerYear, 0, startYear) + 1 + matchIndex * 2
 
 /** Data real de um jogo da Copa do Brasil: quarta ou quinta, quinzenal. */
-export const copaBrasilDate = (careerYear: number, matchIndex: number): CalendarDate =>
+export const copaBrasilDate = (
+  careerYear: number,
+  matchIndex: number,
+  startYear = BASE_SEASON_YEAR,
+): CalendarDate =>
   addDays(
-    seasonWeekStart(careerYear, copaBrasilWeek(careerYear, matchIndex)),
+    seasonWeekStart(careerYear, copaBrasilWeek(careerYear, matchIndex, startYear), startYear),
     // a semente muda para o dia não copiar o da Libertados da semana vizinha
     pickOffset(CUP_OFFSETS, careerYear, matchIndex + 500),
   )
@@ -180,8 +212,10 @@ const TOURNAMENT_MONTH = 11
 const TOURNAMENT_MATCH_DAYS = 3
 
 /** Data real da ABERTURA do torneio de seleções (primeiro domingo de dezembro). */
-export const tournamentDate = (careerYear: number): CalendarDate =>
-  firstSundayOf(seasonYearFor(careerYear), TOURNAMENT_MONTH)
+export const tournamentDate = (
+  careerYear: number,
+  startYear = BASE_SEASON_YEAR,
+): CalendarDate => firstSundayOf(seasonYearFor(careerYear, startYear), TOURNAMENT_MONTH)
 
 /**
  * Dia do jogo `matchIndex` da copa de seleções — o par de `libertadosDate`.
@@ -189,5 +223,8 @@ export const tournamentDate = (careerYear: number): CalendarDate =>
  * Sem isto o torneio inteiro cabia num único dia do calendário: dava para ver
  * QUE existe uma Copa em dezembro, mas não os jogos dela.
  */
-export const tournamentMatchDate = (careerYear: number, matchIndex: number): CalendarDate =>
-  addDays(tournamentDate(careerYear), matchIndex * TOURNAMENT_MATCH_DAYS)
+export const tournamentMatchDate = (
+  careerYear: number,
+  matchIndex: number,
+  startYear = BASE_SEASON_YEAR,
+): CalendarDate => addDays(tournamentDate(careerYear, startYear), matchIndex * TOURNAMENT_MATCH_DAYS)

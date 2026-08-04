@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import agenteUrl from '../assets/npcs/agente.jpg'
 import coachUrl from '../assets/npcs/coach.jpg'
 import olheiroUrl from '../assets/npcs/olheiro.jpg'
@@ -23,6 +23,30 @@ const PORTRAITS: Partial<Record<NewsSource, string>> = {
 
 const AUTO_ADVANCE_MS = 6000
 
+/**
+ * Qual cartão está sob os olhos, dada a posição da rolagem.
+ *
+ * É o que mantém os pontinhos e o autoavanço em dia com quem arrastou a mão:
+ * sem isso o carrossel andava por conta e voltava ao cartão antigo no próximo
+ * tique, desfazendo o gesto do jogador.
+ */
+export const nearestIndex = (offsets: readonly number[], scrollLeft: number): number => {
+  let best = 0
+  let bestDistance = Number.POSITIVE_INFINITY
+  offsets.forEach((offset, index) => {
+    const distance = Math.abs(offset - scrollLeft)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      best = index
+    }
+  })
+  return best
+}
+
+/** Onde cada cartão começa dentro da trilha. */
+const cardOffsets = (track: HTMLElement): number[] =>
+  [...track.children].map((child) => (child as HTMLElement).offsetLeft - track.offsetLeft)
+
 interface NewsCarouselProps {
   readonly save: PlayerSave
   readonly club: Club
@@ -33,25 +57,92 @@ export const NewsCarousel = ({ save, club }: NewsCarouselProps) => {
   const trackRef = useRef<HTMLDivElement>(null)
   const [index, setIndex] = useState(0)
   const pausedRef = useRef(false)
+  /* espelho do índice: os handlers de ponteiro leem o valor do momento, e não
+     o que estava congelado no fechamento quando o gesto começou */
+  const indexRef = useRef(0)
+  /* trocou de cartão porque o JOGADOR arrastou — então não rolar de volta */
+  const fromScrollRef = useRef(false)
+  const dragRef = useRef<{ pointerId: number; startX: number; startScroll: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
 
   // autoavanço: passa a manchete sozinho; pausa com o ponteiro em cima
   useEffect(() => {
     if (news.length < 2) return
     const interval = setInterval(() => {
       if (pausedRef.current) return
-      setIndex((current) => (current + 1) % news.length)
+      const next = (indexRef.current + 1) % news.length
+      indexRef.current = next
+      setIndex(next)
     }, AUTO_ADVANCE_MS)
     return () => clearInterval(interval)
   }, [news.length])
 
   useEffect(() => {
+    // veio do arrasto: o cartão JÁ está no lugar, mexer seria brigar com a mão
+    if (fromScrollRef.current) {
+      fromScrollRef.current = false
+      return
+    }
     const track = trackRef.current
     if (!track) return
-    const card = track.children[index] as HTMLElement | undefined
-    if (card) track.scrollTo({ left: card.offsetLeft - track.offsetLeft, behavior: 'smooth' })
+    const offset = cardOffsets(track)[index]
+    if (offset !== undefined) track.scrollTo({ left: offset, behavior: 'smooth' })
   }, [index])
 
   if (news.length === 0) return null
+
+  /** A rolagem manda: os pontinhos seguem o dedo, não o contrário. */
+  const syncFromScroll = () => {
+    const track = trackRef.current
+    if (!track) return
+    const next = nearestIndex(cardOffsets(track), track.scrollLeft)
+    if (next === indexRef.current) return
+    fromScrollRef.current = true
+    indexRef.current = next
+    setIndex(next)
+  }
+
+  const startDrag = (event: PointerEvent<HTMLDivElement>) => {
+    // o toque já arrasta sozinho, com inércia — sequestrá-lo pioraria o gesto
+    if (event.pointerType === 'touch') return
+    const track = trackRef.current
+    if (!track || news.length < 2) return
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScroll: track.scrollLeft,
+    }
+    setDragging(true)
+    pausedRef.current = true
+    track.setPointerCapture(event.pointerId)
+  }
+
+  const moveDrag = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current
+    const track = trackRef.current
+    if (!drag || !track) return
+    track.scrollLeft = drag.startScroll - (event.clientX - drag.startX)
+  }
+
+  const endDrag = () => {
+    const drag = dragRef.current
+    const track = trackRef.current
+    if (!drag || !track) return
+    if (track.hasPointerCapture(drag.pointerId)) track.releasePointerCapture(drag.pointerId)
+    dragRef.current = null
+    setDragging(false)
+    // solta no cartão mais perto: o encaixe do CSS fica desligado no arrasto
+    const next = nearestIndex(cardOffsets(track), track.scrollLeft)
+    fromScrollRef.current = true
+    indexRef.current = next
+    setIndex(next)
+    track.scrollTo({ left: cardOffsets(track)[next] ?? 0, behavior: 'smooth' })
+  }
+
+  const goTo = (target: number) => {
+    indexRef.current = target
+    setIndex(target)
+  }
 
   const portraitFor = (entry: NewsItem): string | null => {
     // entrevista: o rosto é o de quem falou, o mesmo das cartas do elenco
@@ -66,10 +157,15 @@ export const NewsCarousel = ({ save, club }: NewsCarouselProps) => {
     <section className="news-center" aria-label="Central de notícias">
       <span className="card-label">Central de notícias</span>
       <div
-        className="news-track"
+        className={`news-track${dragging ? ' news-track-dragging' : ''}`}
         ref={trackRef}
+        onScroll={syncFromScroll}
         onPointerEnter={() => { pausedRef.current = true }}
         onPointerLeave={() => { pausedRef.current = false }}
+        onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
       >
         {news.map((entry) => {
           const portrait = portraitFor(entry)
@@ -111,7 +207,7 @@ export const NewsCarousel = ({ save, club }: NewsCarouselProps) => {
               aria-selected={index === dotIndex}
               aria-label={`Notícia ${dotIndex + 1}`}
               className={`news-dot${index === dotIndex ? ' news-dot-active' : ''}`}
-              onClick={() => setIndex(dotIndex)}
+              onClick={() => goTo(dotIndex)}
             />
           ))}
         </div>

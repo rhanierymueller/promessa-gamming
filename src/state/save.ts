@@ -1,6 +1,8 @@
 import { clubById, type Club } from '../data/clubs'
 import {
   addDays,
+  BASE_SEASON_YEAR,
+  currentRealYear,
   PRESEASON_DAYS,
   roundDate,
   type CalendarDate,
@@ -76,7 +78,7 @@ import { isOffensiveName } from './moderation'
  * (nacionalidade padrão Brasil + temporada nova).
  */
 
-export const SAVE_VERSION = 23
+export const SAVE_VERSION = 24
 const SAVE_KEY = 'promessa.save'
 export const MAX_PLAYER_NAME = 16
 const DEFAULT_SHIRT_NUMBER = 10
@@ -175,6 +177,13 @@ export interface PlayerSave {
   readonly shirtNumber: number
   /** Ano da carreira (temporada 1, 2, 3…) — define o torneio do calendário. */
   readonly careerYear: number
+  /**
+   * Ano REAL em que a carreira começou. Fica gravado porque tudo o que é data
+   * nasce dele: uma carreira aberta em 2027 joga 2027, 2028… e continua nesses
+   * anos mesmo se for retomada muito depois. Recalcular pelo relógio do mundo
+   * empurraria o calendário inteiro de um save antigo a cada virada de ano.
+   */
+  readonly startYear: number
   /** O dia em que a carreira está — o relógio que o botão de avançar move. */
   readonly currentDate: CalendarDate
   /** Já disputou o torneio de seleções desta temporada. */
@@ -362,6 +371,8 @@ export interface CreateSaveInput {
    * trocar no meio da carreira reescreveria tudo isso.
    */
   readonly gender?: PlayerGender
+  /** Ano real de abertura da carreira. Só os testes passam isto — o jogo usa o relógio. */
+  readonly startYear?: number
   /** Aceite dos termos registrado no cadastro. */
   readonly consent?: ConsentRecord | null
   readonly account?: SaveAccount | null
@@ -383,6 +394,7 @@ export const createSave = (
   if (!isValidCreateAttributes(attributes)) return null
 
   const divisions = initialDivisions()
+  const startYear = input.startYear ?? currentRealYear()
   const teamName = input.teamName?.trim().slice(0, MAX_CLUB_NAME) ?? ''
   let clubId = input.clubId ?? ''
   let customClubNames: Readonly<Record<string, string>> = {}
@@ -408,8 +420,10 @@ export const createSave = (
     nationalityId,
     shirtNumber: DEFAULT_SHIRT_NUMBER,
     careerYear: 1,
+    // carreira nova começa no ano de verdade: quem cria em 2027 joga 2027
+    startYear,
     // a pré-temporada dá alguns dias de calendário antes do primeiro jogo
-    currentDate: addDays(roundDate(1, 0), -PRESEASON_DAYS),
+    currentDate: addDays(roundDate(1, 0, false, startYear), -PRESEASON_DAYS),
     tournamentPlayed: false,
     tournament: null,
     libertados: null,
@@ -1207,6 +1221,7 @@ const normalizeCurrentDate = (
   careerYear: number,
   season: SeasonState,
   inLibertados: boolean,
+  startYear: number,
 ): CalendarDate => {
   const raw = value as Partial<CalendarDate> | undefined
   if (
@@ -1222,7 +1237,7 @@ const normalizeCurrentDate = (
     return { year: raw.year, month: raw.month, day: raw.day }
   }
   const round = Math.min(season.currentRound, SEASON_ROUNDS - 1)
-  return roundDate(careerYear, round, inLibertados)
+  return roundDate(careerYear, round, inLibertados, startYear)
 }
 
 const normalizeAppearance = (value: unknown): PlayerAppearance => {
@@ -1498,7 +1513,10 @@ export const startNewSeason = (base: PlayerSave, roll: RandomRoll = Math.random)
     // o relógio volta para a pré-temporada do ano novo. Sem isto a carreira
     // continuaria no dezembro que acabou de passar, com todos os jogos do ano
     // seguinte na traseira do calendário e o avanço de dias sem destino.
-    currentDate: addDays(roundDate(nextYear, 0, nextQualified), -PRESEASON_DAYS),
+    currentDate: addDays(
+      roundDate(nextYear, 0, nextQualified, save.startYear),
+      -PRESEASON_DAYS,
+    ),
     // playerAge é a idade de CRIAÇÃO e não muda: currentPlayerAge já soma as
     // temporadas por cima dela. Somar aqui também envelhecia dois anos por ano.
     tournamentPlayed: false,
@@ -1726,12 +1744,19 @@ const parseCurrent = (candidate: Record<string, unknown>): PlayerSave | null => 
       typeof candidate.careerYear === 'number' && candidate.careerYear >= 1
         ? Math.floor(candidate.careerYear)
         : 1,
+    /* save sem `startYear` foi jogado inteiro em cima do ano-base: adotá-lo
+       preserva o calendário dele. Usar o ano atual moveria toda a carreira. */
+    startYear:
+      typeof candidate.startYear === 'number' && candidate.startYear >= 1900
+        ? Math.floor(candidate.startYear)
+        : BASE_SEASON_YEAR,
     tournamentPlayed: candidate.tournamentPlayed === true,
     currentDate: normalizeCurrentDate(
       candidate.currentDate,
       typeof candidate.careerYear === 'number' ? candidate.careerYear : 1,
       season,
       isValidLibertados(candidate.libertados),
+      typeof candidate.startYear === 'number' ? candidate.startYear : BASE_SEASON_YEAR,
     ),
     savedAt: typeof candidate.savedAt === 'number' ? candidate.savedAt : 0,
     consent: parseConsent(candidate.consent),
@@ -1827,6 +1852,7 @@ export const parseSave = (raw: string | null): PlayerSave | null => {
       candidate.version === 20 ||
       candidate.version === 21 ||
       candidate.version === 22 ||
+      candidate.version === 23 ||
       candidate.version === SAVE_VERSION
     ) {
       return parseCurrent(fixInflatedAge(candidate))
