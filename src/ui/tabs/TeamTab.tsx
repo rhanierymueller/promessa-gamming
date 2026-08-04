@@ -189,7 +189,7 @@ export const TeamTab = ({ save, club, onSaveChange }: TeamTabProps) => {
         </div>
       </div>
 
-      <TrophyRoom trophies={save.trophies} />
+      <TrophyRoom trophies={save.trophies} startYear={save.startYear} />
       </>
       )}
 

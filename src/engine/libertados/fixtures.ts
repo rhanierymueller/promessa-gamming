@@ -139,6 +139,34 @@ export const knockoutPairs = (
   return pairs
 }
 
+/**
+ * Os confrontos de uma fase ADMITINDO lacunas: `null` onde o classificado
+ * ainda não saiu.
+ *
+ * `knockoutPairs` devolve lista vazia quando a fase anterior não terminou —
+ * serve ao motor, mas some da tela: o jogador não vê que existe uma final à
+ * frente. Aqui a vaga aparece como vaga.
+ */
+export const knockoutSlots = (
+  state: LibertadosState,
+  stage: LibertadosKnockoutStage,
+): readonly (readonly [string | null, string | null])[] => {
+  const previous = stageBefore(stage)
+  let teams: readonly (string | null)[]
+  if (previous === null) {
+    teams = seededQualifiers(state)
+  } else {
+    teams = knockoutSlots(state, previous).map((pair) =>
+      pair[0] !== null && pair[1] !== null
+        ? tieWinner(state, previous, [pair[0], pair[1]] as const)
+        : null,
+    )
+  }
+  const pairs: (readonly [string | null, string | null])[] = []
+  for (let i = 0; i + 1 < teams.length; i += 2) pairs.push([teams[i], teams[i + 1]] as const)
+  return pairs
+}
+
 /** Vencedores já decididos de uma fase, na ordem da chave. */
 export const stageWinners = (
   state: LibertadosState,

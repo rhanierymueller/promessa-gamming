@@ -1,3 +1,4 @@
+import { seasonYearFor } from '../../engine/career/calendar'
 import { BadgeDollarSign, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { NATIONS } from '../../data/nations'
@@ -221,7 +222,7 @@ export const MarketTab = ({ save, onSaveChange }: MarketTabProps) => {
 
       <div className="card card-wide">
         <div className="market-header">
-          <span className="card-label">Contratações da temporada · ano {save.careerYear}</span>
+          <span className="card-label">Contratações da temporada · {seasonYearFor(save.careerYear, save.startYear)}</span>
           {seasonSignings.length > 0 && (
             <span className="market-budget">Investido: <strong>{formatMoney(seasonSpent)}</strong></span>
           )}

@@ -1,3 +1,4 @@
+import { seasonYearFor } from '../engine/career/calendar'
 import { useState } from 'react'
 import bootCopaAmerica from '../assets/awards/boot-copa-america.png'
 import bootCopaBrasil from '../assets/awards/boot-copa-brasil.png'
@@ -91,8 +92,14 @@ const awardArt = (award: Award): string =>
 /**
  * Agrupa por PEÇA, não por conquista: mesma chuteira em anos diferentes vira
  * uma entrada com todos os anos dentro.
+ *
+ * Os anos gravados são de CARREIRA (1, 2, 3…); a estante mostra o ano de
+ * verdade, que é como o jogador lembra do título.
  */
-export const groupAwards = (awards: readonly Award[]): readonly ShelfPiece[] => {
+export const groupAwards = (
+  awards: readonly Award[],
+  startYear: number,
+): readonly ShelfPiece[] => {
   const byPiece = new Map<string, ShelfPiece>()
   for (const award of awards) {
     const id = `${award.kind}-${award.competition}`
@@ -104,13 +111,18 @@ export const groupAwards = (awards: readonly Award[]): readonly ShelfPiece[] => 
       name: AWARD_NAMES[award.kind],
       detail: style?.name ?? award.competition,
       slug: style?.slug ?? 'liga',
-      years: [...(existing?.years ?? []), award.year].sort((a, b) => a - b),
+      years: [...(existing?.years ?? []), seasonYearFor(award.year, startYear)].sort(
+        (a, b) => a - b,
+      ),
     })
   }
   return [...byPiece.values()]
 }
 
-export const groupTrophies = (trophies: readonly Trophy[]): readonly ShelfPiece[] => {
+export const groupTrophies = (
+  trophies: readonly Trophy[],
+  startYear: number,
+): readonly ShelfPiece[] => {
   const byPiece = new Map<string, ShelfPiece>()
   for (const trophy of trophies) {
     const existing = byPiece.get(trophy.kind)
@@ -120,7 +132,9 @@ export const groupTrophies = (trophies: readonly Trophy[]): readonly ShelfPiece[
       name: 'Título',
       detail: TROPHY_NAMES[trophy.kind],
       slug: trophy.kind.startsWith('serie') ? 'liga' : trophy.kind,
-      years: [...(existing?.years ?? []), trophy.year].sort((a, b) => a - b),
+      years: [...(existing?.years ?? []), seasonYearFor(trophy.year, startYear)].sort(
+        (a, b) => a - b,
+      ),
     })
   }
   return [...byPiece.values()]
@@ -183,7 +197,7 @@ export const RoomShelf = ({ pieces, boardTop, label }: ShelfProps) => {
             </p>
             <ul className="room-detail-years">
               {open.years.map((year) => (
-                <li key={year}>ano {year}</li>
+                <li key={year}>{year}</li>
               ))}
             </ul>
             <button type="button" className="btn room-detail-close" onClick={() => setOpen(null)}>

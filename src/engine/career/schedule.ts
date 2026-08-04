@@ -100,7 +100,7 @@ const leagueMatches = (save: PlayerSave): readonly ScheduledMatch[] => {
       : null
     matches.push({
       competition: 'liga',
-      date: roundDate(save.careerYear, round, isInLibertados(save)),
+      date: roundDate(save.careerYear, round, isInLibertados(save), save.startYear),
       stageLabel: `Rodada ${round + 1}`,
       opponentId: fixture.homeId === save.clubId ? fixture.awayId : fixture.homeId,
       isHome: fixture.homeId === save.clubId,
@@ -148,7 +148,7 @@ const libertadosMatches = (save: PlayerSave): readonly ScheduledMatch[] => {
     const isHome = played ? played.homeId === clubId : index % 2 === 0
     matches.push({
       competition: 'libertados',
-      date: libertadosDate(save.careerYear, index),
+      date: libertadosDate(save.careerYear, index, save.startYear),
       stageLabel: libertadosStageLabel(index),
       opponentId: played ? (played.homeId === clubId ? played.awayId : played.homeId) : null,
       isHome,
@@ -192,7 +192,7 @@ const copaBrasilMatches = (save: PlayerSave): readonly ScheduledMatch[] => {
     const leg = index % 2 === 0 ? 'ida' : 'volta'
     matches.push({
       competition: 'copa-brasil',
-      date: copaBrasilDate(save.careerYear, index),
+      date: copaBrasilDate(save.careerYear, index, save.startYear),
       stageLabel: `${COPA_BRASIL_STAGES[stage]} · ${leg}`,
       opponentId: played
         ? played.homeId === clubId
@@ -259,7 +259,7 @@ const tournamentMatches = (save: PlayerSave): readonly ScheduledMatch[] => {
     return [
       {
         competition: kind,
-        date: tournamentMatchDate(save.careerYear, 0),
+        date: tournamentMatchDate(save.careerYear, 0, save.startYear),
         stageLabel: STAGE_NAMES.groups,
         opponentId: null,
         isHome: true,
@@ -286,7 +286,7 @@ const tournamentMatches = (save: PlayerSave): readonly ScheduledMatch[] => {
     const isHome = played ? played.homeId === state.playerNationId : true
     return {
       competition: kind,
-      date: tournamentMatchDate(save.careerYear, index),
+      date: tournamentMatchDate(save.careerYear, index, save.startYear),
       stageLabel: tournamentStageLabel(slot),
       // só o confronto ATUAL tem adversário conhecido — o resto da chave
       // depende de quem vencer antes

@@ -1,3 +1,4 @@
+import { seasonYearFor } from '../../engine/career/calendar'
 import { Flame, PartyPopper, Play, Trophy, TrendingDown, TrendingUp, X } from 'lucide-react'
 import { clubById, type Club } from '../../data/clubs'
 import { nationAsClub, nationById } from '../../data/nations'
@@ -315,7 +316,7 @@ export const HomeTab = ({
 
       {seasonOver && !isCupNext && !isCopaBrasilNext && !isNationalNext ? (
         <div className="card next-match">
-          <span className="card-label">Ano {save.careerYear} · temporada encerrada</span>
+          <span className="card-label">{seasonYearFor(save.careerYear, save.startYear)} · temporada encerrada</span>
           <p className="season-final">
             {position === 1 ? 'CAMPEÃO! Que campanha histórica!' : `Vocês terminaram em ${ordinal(position)}.`}
           </p>
@@ -329,7 +330,7 @@ export const HomeTab = ({
                 else onNewSeason()
               }}
             >
-              <Play size={15} aria-hidden="true" /> Encerrar temporada e começar o ano {save.careerYear + 1}
+              <Play size={15} aria-hidden="true" /> Encerrar temporada e começar {seasonYearFor(save.careerYear + 1, save.startYear)}
             </button>
           )}
         </div>
@@ -495,7 +496,7 @@ export const HomeTab = ({
               src={[trophySerieA, trophySerieB, trophySerieC, trophySerieD][divisionOf(save.divisions, save.clubId)]}
               alt="Troféu da divisão"
             />
-            <p className="champion-team">{club.name} · ano {save.careerYear}</p>
+            <p className="champion-team">{club.name} · {seasonYearFor(save.careerYear, save.startYear)}</p>
             <p className="champion-prize">
               Prêmio: <strong>{formatMoney(titlePrizeFor(divisionOf(save.divisions, save.clubId)))}</strong> + taça na estante
             </p>
@@ -506,7 +507,7 @@ export const HomeTab = ({
                 onNewSeason()
               }}
             >
-              Levantar a taça e começar o ano {save.careerYear + 1} ▸
+              Levantar a taça e começar {seasonYearFor(save.careerYear + 1, save.startYear)} ▸
             </button>
           </div>
         </div>

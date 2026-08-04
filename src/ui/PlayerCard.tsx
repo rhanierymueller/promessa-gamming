@@ -7,6 +7,7 @@ import { facePresentationFor } from '../game/faces'
 import { MAX_SQUAD_PLAYER_NAME } from '../state/save'
 import { OverallStars } from './OverallStars'
 import type { PlayerGender } from '../state/save'
+import { HintTip } from './HintTip'
 
 /** Carta de jogador estilo FIFA: retrato, overall + estrelas, posição e seis barras. */
 
@@ -131,14 +132,22 @@ export const PlayerCardModal = ({ player, clubName, isUser, userFaceUrl, renameS
       </div>
       {renameState === 'livre' && onRename && (
         <div className="player-rename">
-          <input
-            className="create-input player-rename-input"
-            type="text"
-            maxLength={MAX_SQUAD_PLAYER_NAME}
-            placeholder="Batizar jogador (vale UMA vez)"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-          />
+          {/* a dica fica DENTRO do campo, à direita: é dele que ela fala, e
+              fora dali virava mais um botão competindo com a ação */}
+          <div className="player-rename-field">
+            <input
+              className="create-input player-rename-input"
+              type="text"
+              maxLength={MAX_SQUAD_PLAYER_NAME}
+              placeholder="Batizar jogador"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+            />
+            <HintTip label="Como funciona batizar">
+              Dê o nome que quiser a este jogador. Vale <strong>uma vez só</strong>: depois
+              de batizado, o nome fica para o resto da carreira.
+            </HintTip>
+          </div>
           <button
             className="btn btn-secondary player-rename-btn"
             disabled={draft.trim().length === 0}

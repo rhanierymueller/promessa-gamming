@@ -1,3 +1,4 @@
+import { seasonYearFor } from '../engine/career/calendar'
 import { useEffect, useRef, useState } from 'react'
 import trophyLibertados from '../assets/trophies/libertados.png'
 import { clubById } from '../data/clubs'
@@ -26,6 +27,8 @@ type Phase = 'show' | 'dark' | 'reveal'
 
 interface LibertadosIntroProps {
   readonly state: LibertadosState
+  /** Ano real de abertura da carreira: a abertura anuncia o ano de verdade. */
+  readonly startYear: number
   readonly clubName: string
   readonly playerName: string
   readonly onDone: () => void
@@ -33,6 +36,7 @@ interface LibertadosIntroProps {
 
 export const LibertadosIntro = ({
   state,
+  startYear,
   clubName,
   playerName,
   onDone,
@@ -87,7 +91,7 @@ export const LibertadosIntro = ({
       <img className="libertados-trophy" src={trophyLibertados} alt="" aria-hidden="true" />
 
       <h2 className="libertados-word">{LIBERTADOS_NAME.toUpperCase()}</h2>
-      <p className="libertados-year">Temporada {state.year}</p>
+      <p className="libertados-year">Temporada {seasonYearFor(state.year, startYear)}</p>
 
       <p className="libertados-club">
         <strong>{clubName}</strong> está na fase de grupos.

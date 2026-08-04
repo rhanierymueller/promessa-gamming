@@ -1,3 +1,4 @@
+import { seasonYearFor } from '../engine/career/calendar'
 import trophyCopaAmerica from '../assets/trophies/copa-america.png'
 import trophyCopaBrasil from '../assets/trophies/copa-brasil.png'
 import trophyCopaMundo from '../assets/trophies/copa-mundo.png'
@@ -37,9 +38,11 @@ const TROPHY_LABELS: Record<TrophyKind, string> = {
 
 interface TrophyRoomProps {
   readonly trophies: readonly Trophy[]
+  /** Ano real de abertura da carreira: a estante mostra ano de verdade. */
+  readonly startYear: number
 }
 
-export const TrophyRoom = ({ trophies }: TrophyRoomProps) => (
+export const TrophyRoom = ({ trophies, startYear }: TrophyRoomProps) => (
   <div className="card card-wide trophy-room">
     <span className="card-label">Sala de troféus</span>
     {trophies.length === 0 ? (
@@ -50,7 +53,7 @@ export const TrophyRoom = ({ trophies }: TrophyRoomProps) => (
           <div key={`${trophy.kind}-${trophy.year}-${index}`} className={`trophy-item trophy-${trophy.kind}`}>
             <img className="trophy-img" src={TROPHY_IMAGES[trophy.kind]} alt="" aria-hidden="true" />
             <span className="trophy-name">{TROPHY_LABELS[trophy.kind]}</span>
-            <span className="trophy-year">Ano {trophy.year}</span>
+            <span className="trophy-year">{seasonYearFor(trophy.year, startYear)}</span>
           </div>
         ))}
       </div>

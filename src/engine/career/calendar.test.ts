@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import {
   compareDates,
   cupWeekdayFor,
+  LEAGUE_WEEKDAYS,
   leagueWeekdayFor,
   libertadosDate,
   roundDate,
@@ -32,6 +33,25 @@ describe('calendário real da temporada', () => {
   test('ano 1 da carreira é 2026; cada temporada avança um ano', () => {
     expect(seasonYearFor(1)).toBe(2026)
     expect(seasonYearFor(10)).toBe(2035)
+  })
+
+  test('a carreira conta a partir do ano em que foi aberta', () => {
+    // quem começou em 2031 joga 2031, 2032… e não os 2026 de fábrica
+    expect(seasonYearFor(1, 2031)).toBe(2031)
+    expect(seasonYearFor(5, 2031)).toBe(2035)
+  })
+
+  test('as datas seguem o ano de abertura, com os dias da semana daquele ano', () => {
+    /*
+     * Não basta trocar o número do ano na tela: o 4 de março de 2026 é quarta e
+     * o de 2031 é terça. Deslocar só o rótulo poria jogo de sábado numa
+     * terça-feira da grade.
+     */
+    for (const startYear of [2026, 2027, 2031]) {
+      const abertura = roundDate(1, 0, false, startYear)
+      expect(abertura.year).toBe(startYear)
+      expect(LEAGUE_WEEKDAYS).toContain(weekdayOf(abertura))
+    }
   })
 
   test('a liga joga sempre no fim de semana, ora sábado ora domingo', () => {

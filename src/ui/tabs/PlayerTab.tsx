@@ -62,8 +62,8 @@ export const PlayerTab = ({ save, onSaveChange }: PlayerTabProps) => {
   const club = clubById(save.clubId)
   const nation = nationById(save.nationalityId)
   const division = divisionOf(save.divisions, save.clubId)
-  const trophies = groupTrophies(save.trophies)
-  const awards = groupAwards(save.awards)
+  const trophies = groupTrophies(save.trophies, save.startYear)
+  const awards = groupAwards(save.awards, save.startYear)
 
   return (
     <div className="tab-panel player-room">

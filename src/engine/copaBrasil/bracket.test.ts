@@ -19,6 +19,44 @@ describe('chaveamento da Copa do Brasil', () => {
     expect(bracket[bracket.length - 1].ties).toHaveLength(1)
   })
 
+  test('as fases futuras nascem VAZIAS — a chave não se decide sozinha', () => {
+    /*
+     * Era o bug: o cálculo assumia o primeiro do par como classificado quando
+     * o confronto anterior não tinha terminado, e a chave inteira aparecia
+     * preenchida no primeiro dia da competição.
+     */
+    const bracket = copaBrasilBracket(edicao())
+
+    // os 16 avos têm os 32 sorteados; da fase seguinte em diante, ninguém
+    for (const tie of bracket[0].ties) {
+      expect(tie.homeId).not.toBeNull()
+      expect(tie.awayId).not.toBeNull()
+    }
+    for (const stage of bracket.slice(1)) {
+      for (const tie of stage.ties) {
+        expect(tie.homeId).toBeNull()
+        expect(tie.awayId).toBeNull()
+      }
+    }
+  })
+
+  test('vencer uma fase preenche só a vaga conquistada', () => {
+    // Arrange: ida e volta ganhas nos 16 avos
+    let state = edicao()
+    state = advanceCopaBrasil(state, 3, 0, createRng(2), true).value.state
+    state = advanceCopaBrasil(state, 2, 0, createRng(3), true).value.state
+
+    // Act
+    const oitavas = copaBrasilBracket(state)[1]
+
+    // Assert: eu estou lá; o resto da fase seguinte segue em aberto
+    const comigo = oitavas.ties.filter(
+      (tie) => tie.homeId === MEU || tie.awayId === MEU,
+    )
+    expect(comigo).toHaveLength(1)
+    expect(copaBrasilBracket(state)[2].ties.every((tie) => tie.homeId === null)).toBe(true)
+  })
+
   test('confronto não disputado não mostra placar nem vencedor', () => {
     const primeiro = copaBrasilBracket(edicao())[0].ties[0]
     expect(primeiro.homeGoals).toBeUndefined()
