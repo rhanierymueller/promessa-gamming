@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_ATTRIBUTES, type PlayerAttributes } from '../engine/career/attributes'
 import type { PerkId, ShotPerkContext } from '../engine/career/perks'
 import type { ShotOutcomeKind, Vec2 } from '../engine/shot/types'
+import { hasSeenOnboarding, markOnboardingSeen } from '../state/onboarding'
 import { DEFAULT_APPEARANCE, type PlayerAppearance } from '../state/save'
+import { ShotGestureHint } from './ShotGestureHint'
 import { applyAppearance } from './appearance'
 import { BACKGROUND_URL, loadGameSprites, tintSprite, type GameSprites } from './assets'
 import { initAudio, playStageEvent } from './audio'
@@ -109,6 +111,14 @@ export const ShotStage = ({
   onRoundEndRef.current = onRoundEnd
   const [uiPhase, setUiPhase] = useState<Phase>(autoStart && !defense ? 'ready' : 'intro')
   const [finalGoals, setFinalGoals] = useState(0)
+  /*
+   * A mãozinha do primeiro chute: a defesa tem briefing próprio, mas o chute
+   * na partida abre direto no "pronto" — quem nunca jogou não sabe do gesto.
+   * A demonstração repete até o primeiro chute SAIR; aí marca e nunca volta.
+   */
+  const [showGestureHint, setShowGestureHint] = useState(
+    () => !defense && !hasSeenOnboarding(localStorage, 'shot'),
+  )
 
   useEffect(() => {
     // defesa sempre abre com o briefing (o papel inverte — o jogador precisa saber)
@@ -300,6 +310,11 @@ export const ShotStage = ({
       stateRef.current = steerDefense(stateRef.current, dx, dy)
     } else if (drag.length >= 3) {
       stateRef.current = tryStartShot(stateRef.current, drag)
+      // o gesto foi aprendido quando o chute realmente parte
+      if (showGestureHint && stateRef.current.phase !== 'ready') {
+        markOnboardingSeen(localStorage, 'shot')
+        setShowGestureHint(false)
+      }
     }
   }
 
@@ -320,6 +335,7 @@ export const ShotStage = ({
         onPointerUp={onPointerUp}
         onPointerCancel={() => { dragRef.current = null }}
       />
+      {showGestureHint && uiPhase === 'ready' && <ShotGestureHint />}
       {uiPhase === 'intro' && !autoStart && !defense && (
         <div className="stage-overlay">
           <h2>{freeKick ? 'Cobrança de falta' : 'Treino de finalização'}</h2>

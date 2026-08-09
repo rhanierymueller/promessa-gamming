@@ -54,8 +54,13 @@ const goalsPerGame = (save: PlayerSave): string =>
 const swatchColor = (rgb: readonly [number, number, number] | null): string =>
   rgb ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : '#C08850'
 
-const SHELF_TOP = 17.8
-const SHELF_BOTTOM = 29.4
+/*
+ * Medido por amostragem de pixel na arte (1400×788): o topo da madeira fica
+ * em 16,2% e 27,2% da altura. As peças descem uns 0,3% além para a base
+ * "morder" a tábua em vez de flutuar sobre a linha clara da borda.
+ */
+const SHELF_TOP = 16.6
+const SHELF_BOTTOM = 27.5
 
 export const PlayerTab = ({ save, onSaveChange }: PlayerTabProps) => {
   const portrait = usePlayerPortrait(save.appearance)
