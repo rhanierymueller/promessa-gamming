@@ -1409,7 +1409,12 @@ h1 {
   transition: opacity 160ms ease;
 }
 
-.volume-control:hover .volume-slider,
+/*
+ * Aberta por ESTADO (classe), não por :hover: o React segura a barra por uns
+ * instantes depois que o ponteiro sai — o trajeto até o botão dela passa por
+ * fora do controle, e com :hover puro ela sumia na mão de quem ia usá-la.
+ */
+.volume-control-open .volume-slider,
 .volume-control:focus-within .volume-slider {
   opacity: 1;
   pointer-events: auto;

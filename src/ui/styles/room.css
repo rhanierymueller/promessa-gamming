@@ -125,10 +125,13 @@
   list-style: none;
   display: flex;
   align-items: flex-end;
-  justify-content: center;
+  /* a estante enche da esquerda para a direita, como se arruma de verdade:
+     centralizar deixava peça solta flutuando no meio da tábua */
+  justify-content: flex-start;
   gap: 4%;
   margin: 0;
-  padding: 0;
+  /* respiro para a primeira peça não encostar na borda da madeira */
+  padding: 0 0 0 1.5%;
 }
 
 .room-piece {
@@ -269,7 +272,13 @@
 
 /* ---------- clube e seleção ---------- */
 
-.room-badges {
+/*
+ * A classe dupla é proposital: .card também define flex-direction e pode vir
+ * DEPOIS deste arquivo no bundle (main.tsx importa o App antes do index.css).
+ * Sem ela, a coluna do .card vencia e o flex-basis de 160px dos crachás
+ * virava ALTURA — dois caixotes vazios no lugar de dois chips lado a lado.
+ */
+.card.room-badges {
   flex-direction: row;
   flex-wrap: wrap;
   gap: 12px;

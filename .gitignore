@@ -15,3 +15,6 @@ promessa-meus-dados*.json
 
 # mockups do brainstorm visual
 .superpowers/
+
+# instaladores nunca pertencem ao repo
+*.dmg

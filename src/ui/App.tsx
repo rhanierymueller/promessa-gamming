@@ -70,9 +70,12 @@ import {
   readPendingMatch,
 } from '../state/pendingMatch'
 import { isRecoveryHash, recoveryErrorMessage } from '../state/recoveryLink'
+import { hasSeenOnboarding, markOnboardingSeen, type OnboardingArea } from '../state/onboarding'
 import { currentSessionEmail, deleteAccount } from '../online/account'
 import { getClient, isOnlineAvailable } from '../online/leagues'
 import { AuthGate } from './AuthGate'
+import { HelpFaq } from './HelpFaq'
+import { HOME_TOUR_STEPS, MATCH_TOUR_STEPS, OnboardingTour } from './OnboardingTour'
 import { CharacterCreate } from './CharacterCreate'
 import { Landing } from './Landing'
 import { PasswordReset } from './PasswordReset'
@@ -206,15 +209,61 @@ interface VolumeControlProps {
   readonly onToggleMute: () => void
 }
 
+/** Quanto tempo a barra sobrevive depois que o ponteiro sai do controle. */
+const SLIDER_GRACE_MS = 400
+
 /**
  * Som da aplicação: o ícone liga/desliga e a barra ao lado ajusta o quanto
  * quiser. A barra só aparece quando o controle recebe atenção — no canto da
  * tela ela ficaria no caminho o tempo todo.
+ *
+ * A abertura é por estado com tolerância, não por :hover puro: a barra fica
+ * embaixo e à esquerda do ícone, e o caminho natural do ponteiro até ela sai
+ * da área do controle — com hover puro a barra sumia na mão de quem ia usá-la.
  */
 const VolumeControl = ({ volume, onChange, onToggleMute }: VolumeControlProps) => {
   const Icon = volumeIcon(volume)
+  const [isOpen, setOpen] = useState(false)
+  const hideTimerRef = useRef<number | undefined>(undefined)
+  const isHoveredRef = useRef(false)
+  const isDraggingRef = useRef(false)
+
+  const cancelHide = (): void => window.clearTimeout(hideTimerRef.current)
+  const hideAfterGrace = (): void => {
+    cancelHide()
+    hideTimerRef.current = window.setTimeout(() => setOpen(false), SLIDER_GRACE_MS)
+  }
+
+  useEffect(() => {
+    // soltar o arrasto FORA do controle: agora sim a barra pode se recolher
+    const release = (): void => {
+      if (!isDraggingRef.current) return
+      isDraggingRef.current = false
+      if (!isHoveredRef.current) hideAfterGrace()
+    }
+    window.addEventListener('pointerup', release)
+    return () => {
+      window.removeEventListener('pointerup', release)
+      window.clearTimeout(hideTimerRef.current)
+    }
+    // registra uma vez: os handlers só tocam refs e o setOpen estável
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
-    <div className="volume-control">
+    <div
+      className={`volume-control${isOpen ? ' volume-control-open' : ''}`}
+      onPointerEnter={() => {
+        isHoveredRef.current = true
+        cancelHide()
+        setOpen(true)
+      }}
+      onPointerLeave={() => {
+        isHoveredRef.current = false
+        // no meio do arrasto o ponteiro escapa da barra o tempo todo: segura
+        if (!isDraggingRef.current) hideAfterGrace()
+      }}
+    >
       <button
         className="mute-btn"
         onClick={onToggleMute}
@@ -230,6 +279,9 @@ const VolumeControl = ({ volume, onChange, onToggleMute }: VolumeControlProps) =
         max={MAX_VOLUME}
         step={VOLUME_STEP}
         value={volume}
+        onPointerDown={() => {
+          isDraggingRef.current = true
+        }}
         onChange={(event) => onChange(Number(event.target.value))}
         aria-label="Volume"
         title={volumeLabel(volume)}
@@ -295,6 +347,19 @@ export const App = () => {
   const [navigationRevision, setNavigationRevision] = useState(0)
   // semente do duelo de dados no treino: muda a cada lance resolvido
   const [diceSeed, setDiceSeed] = useState(() => Date.now() & 0xffffffff)
+  /*
+   * Tour de primeira vez: um por área (home e partida). Lido na montagem e
+   * marcado ao fechar — visto uma vez, não aparece nunca mais neste aparelho.
+   */
+  const [pendingTours, setPendingTours] = useState<readonly OnboardingArea[]>(() =>
+    (['home', 'match'] as const).filter((area) => !hasSeenOnboarding(localStorage, area)),
+  )
+
+  const finishTour = (area: OnboardingArea): void => {
+    markOnboardingSeen(localStorage, area)
+    setPendingTours((current) => current.filter((pending) => pending !== area))
+  }
+
   const [volume, setVolumeState] = useState<number>(() => {
     const stored = loadVolume()
     setVolume(stored)
@@ -730,8 +795,14 @@ export const App = () => {
                 ? LIBERTADOS_NAME
                 : `Rodada ${save.season.currentRound + 1}`}
           </span>
-          <h1 className="tabs-title">Dia de jogo</h1>
+          <div className="tabs-head-actions">
+            <h1 className="tabs-title">Dia de jogo</h1>
+            <HelpFaq />
+          </div>
         </header>
+        {pendingTours.includes('match') && (
+          <OnboardingTour steps={MATCH_TOUR_STEPS} onDone={() => finishTour('match')} />
+        )}
         <MatchScreen
           key={matchSetup.seed}
           seed={matchSetup.seed}
@@ -908,9 +979,15 @@ export const App = () => {
         <span className="tabs-brand">Promessa</span>
         <div className="tabs-head-actions">
           <h1 className="tabs-title">{TAB_ITEMS.find((item) => item.id === tab)!.label}</h1>
+          <HelpFaq />
           <VolumeControl volume={volume} onChange={applyVolume} onToggleMute={toggleMute} />
         </div>
       </header>
+
+      {/* primeira entrada no jogo: o tour apresenta as áreas antes de tudo */}
+      {pendingTours.includes('home') && (
+        <OnboardingTour steps={HOME_TOUR_STEPS} onDone={() => finishTour('home')} />
+      )}
 
       {callUpCeremony && nationById(save.nationalityId) && (
         <CallUpIntro
