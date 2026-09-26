@@ -1,9 +1,8 @@
-import { rolarAssistencia } from '../decision/assist'
 import { modificadoresPara, type ContextoDaJogada } from '../decision/context'
 import { sortearJogadas } from '../decision/draw'
 import type { Desfecho } from '../decision/outcomes'
 import { escolhaDoPerfil, type Perfil } from '../decision/profile'
-import { resolverDecisao } from '../decision/resolve'
+import { jogarDecisao } from '../decision/resolve'
 import { nextFloat, type RngResult, type RngState } from '../rng'
 import {
   advance,
@@ -82,28 +81,22 @@ export const simulateToEnd = (
         const menu = sortearJogadas(dice)
         dice = menu.next
         const jogada = escolhaDoPerfil(menu.value, decision.perfil)
-        const passo = resolverDecisao(jogada, modificadoresPara(jogada, decision.contexto), dice)
-        dice = passo.next
-
-        let convertida = false
-        if (passo.value.desfecho === 'chance') {
-          const assist = rolarAssistencia(decision.contexto.edges.attack, dice)
-          dice = assist.next
-          convertida = assist.value
-        }
+        const lance = jogarDecisao(jogada, modificadoresPara(jogada, decision.contexto), dice)
+        dice = lance.next
+        const { desfecho, notaDelta } = lance.value.resolucao
 
         current = applyDecisionResult(
           current,
-          passo.value.desfecho,
-          passo.value.notaDelta,
-          convertida,
+          desfecho,
+          notaDelta,
+          lance.value.assistConvertida,
           config,
         )
         events.push({
           kind: moment.kind,
           minute: moment.minute,
-          success: passo.value.desfecho === 'gol' || passo.value.desfecho === 'chance',
-          desfecho: passo.value.desfecho,
+          success: desfecho === 'gol' || desfecho === 'chance',
+          desfecho,
         })
         break
       }

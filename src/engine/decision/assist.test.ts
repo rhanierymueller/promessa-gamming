@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createRng } from '../rng'
-import { chanceDeConverter, rolarAssistencia } from './assist'
+import { chanceDeConverter, chanceDeTerminarEmGol, rolarAssistencia } from './assist'
+import { jogadaPorId } from './catalog'
+import { NEUTRO, distribuicao } from './weights'
 
 describe('conversão da chance criada', () => {
   it('converte menos de metade num confronto equilibrado', () => {
@@ -35,6 +37,23 @@ describe('conversão da chance criada', () => {
       if (roll.value) convertidas++
     }
     expect(convertidas / N).toBeCloseTo(chanceDeConverter(0.5), 2)
+  })
+
+  it('o número da tela desconta a conversão da chance criada', () => {
+    // "cavar a falta" no nível 3: GOL 2%, CRIA ~34%. Somar as duas colunas
+    // anunciaria 36% de gol quando o dado entrega gol + 34% × 42%.
+    const jogada = jogadaPorId('cavar-a-falta')
+    const dist = distribuicao(jogada, { ...NEUTRO, nivel: 3 })
+    const honesto = chanceDeTerminarEmGol(dist, 0)
+    expect(honesto).toBeCloseTo(dist.gol + dist.chance * 0.42, 12)
+    expect(honesto).toBeLessThan(dist.gol + dist.chance)
+    expect(honesto).toBeGreaterThan(dist.gol)
+  })
+
+  it('um elenco melhor faz a mesma jogada terminar mais em gol', () => {
+    const jogada = jogadaPorId('toque-de-primeira')
+    const dist = distribuicao(jogada, NEUTRO)
+    expect(chanceDeTerminarEmGol(dist, 0.8)).toBeGreaterThan(chanceDeTerminarEmGol(dist, -0.8))
   })
 
   it('é determinística e avança o rng', () => {

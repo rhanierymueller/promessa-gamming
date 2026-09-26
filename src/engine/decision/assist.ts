@@ -1,4 +1,5 @@
 import { nextFloat, type RngResult, type RngState } from '../rng'
+import type { Distribuicao } from './outcomes'
 
 /**
  * O desfecho `chance`: você criou, o TIME finaliza.
@@ -18,6 +19,18 @@ const MAX = 0.62
 
 export const chanceDeConverter = (edgeAtaque: number): number =>
   Math.min(MAX, Math.max(MIN, BASE + edgeAtaque * PESO_ATAQUE))
+
+/**
+ * Chance de a jogada TERMINAR em gol do seu time — seu ou do companheiro.
+ *
+ * É o número que a tela mostra. Ele não pode ser `gol + chance`: a chance
+ * criada só vira gol depois da rolagem do elenco, e somar as duas colunas
+ * anunciaria "cavar a falta" com 36% de gol quando o dado entrega ~16%. A
+ * tela e o sorteio têm que concordar, então a conversão entra aqui pela MESMA
+ * função que `rolarAssistencia` consome.
+ */
+export const chanceDeTerminarEmGol = (dist: Distribuicao, edgeAtaque: number): number =>
+  dist.gol + dist.chance * chanceDeConverter(edgeAtaque)
 
 export const rolarAssistencia = (
   edgeAtaque: number,
