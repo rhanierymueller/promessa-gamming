@@ -173,9 +173,21 @@ const KEEPER_GETUP_DELAY = 0.4
 /** Mergulho a partir daqui é VOO — corpo totalmente esticado. */
 const KEEPER_LONG_DIVE = 32
 
-const keeperPoseFor = (
-  state: StageState,
-): { pose: KeeperPose; x: number; lift: number; flip: boolean } => {
+export interface KeeperPlacement {
+  readonly pose: KeeperPose
+  /** Posição lógica dos pés. */
+  readonly x: number
+  /** Altura acima do gramado, em unidades lógicas. */
+  readonly lift: number
+  readonly flip: boolean
+}
+
+/**
+ * Onde e como o goleiro está neste quadro. Exportado porque o renderizador
+ * 3D lê a MESMA encenação: quem decide pose e posição é o estado do palco,
+ * não a tecnologia de desenho.
+ */
+export const keeperPoseFor = (state: StageState): KeeperPlacement => {
   const center = goalCenter(CFG)
   const lastResult = state.results[state.results.length - 1]
 
@@ -379,7 +391,13 @@ const drawKeeper = (
   drawSpriteAnchored(ctx, sp, x, CFG.goal.floorY - lift, w, h, angle, stretch, flip)
 }
 
-const strikerPoseFor = (state: StageState): { pose: StrikerPose; footX: number; footY: number } | null => {
+export interface StrikerPlacement {
+  readonly pose: StrikerPose
+  readonly footX: number
+  readonly footY: number
+}
+
+export const strikerPoseFor = (state: StageState): StrikerPlacement | null => {
   const startX = state.sim ? state.sim.flight.startX : state.ballX
   const startY = state.ballStartY
   switch (state.phase) {
@@ -420,20 +438,40 @@ export interface WallSprites {
   readonly jump: SpriteHolder
 }
 
-const drawWall = (ctx: CanvasRenderingContext2D, state: StageState, wallSprites: WallSprites): void => {
-  const wall = state.wall
-  if (!wall) return
-  const groundY = CFG.ballStartY + (CFG.goal.floorY - CFG.ballStartY) * wall.flightT
+export interface WallPlacement {
+  readonly centerX: number
+  /** Linha do chão da barreira no espaço lógico. */
+  readonly groundY: number
+  readonly jumping: boolean
+  /** Altura do pulo, em unidades lógicas. */
+  readonly lift: number
+}
 
+/** Onde a barreira está e se está pulando neste quadro — partilhado com o 3D. */
+export const wallPlacementFor = (state: StageState): WallPlacement | null => {
+  const wall = state.wall
+  if (!wall) return null
+  const groundY = CFG.ballStartY + (CFG.goal.floorY - CFG.ballStartY) * wall.flightT
   const jumpWindow =
     state.wallJumped &&
     state.phase === 'flying' &&
     state.flightT > wall.flightT - 0.15
   const progress = jumpWindow ? Math.min(1, (state.flightT - (wall.flightT - 0.15)) / 0.3) : 0
-  const sprite = jumpWindow ? wallSprites.jump : wallSprites.stand
+  return {
+    centerX: wall.centerX,
+    groundY,
+    jumping: jumpWindow,
+    lift: Math.sin(progress * Math.PI) * 6,
+  }
+}
+
+const drawWall = (ctx: CanvasRenderingContext2D, state: StageState, wallSprites: WallSprites): void => {
+  const wall = wallPlacementFor(state)
+  if (!wall) return
+  const { groundY, lift } = wall
+  const sprite = wall.jumping ? wallSprites.jump : wallSprites.stand
   if (!sprite.img) return
 
-  const lift = Math.sin(progress * Math.PI) * 6
   const scale = WALL_HEIGHT / wallSprites.stand.h
   const w = sprite.w * scale
   const h = sprite.h * scale
@@ -653,4 +691,43 @@ export const drawStage = (
 
   if (state.phase !== 'intro') drawHud(ctx, state, totalShots)
   ctx.restore()
+}
+
+/**
+ * Só a camada de interface: mira, régua, HUD, mensagens e confete.
+ *
+ * É o que o renderizador 3D desenha por cima da cena — o campo, o gol e os
+ * jogadores ficam com o WebGL, mas a régua e o rastro do dedo continuam no
+ * espaço lógico 180×320, porque o gesto do jogador é lido nesse espaço.
+ */
+export const drawOverlay = (
+  ctx: CanvasRenderingContext2D,
+  state: StageState,
+  drag: readonly Vec2[] | null,
+  totalShots: number,
+): void => {
+  ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT)
+
+  if (state.confetti) {
+    for (const c of state.confetti) {
+      if (!isConfettoVisible(c)) continue
+      ctx.globalAlpha = confettoAlpha(c)
+      px(ctx, c.x, c.y, 1.5, 3, c.color)
+    }
+    ctx.globalAlpha = 1
+  }
+
+  if (state.phase === 'ready' || state.phase === 'runup') {
+    drawAim(ctx, drag)
+    if (state.mode === 'shoot') {
+      const barT = state.phase === 'ready'
+        ? barTAt(state.time, state.barSweep)
+        : state.sim
+          ? state.sim.command.targetHeight / CFG.barMaxHeight
+          : 0
+      drawShotBar(ctx, barT)
+    }
+  }
+
+  if (state.phase !== 'intro') drawHud(ctx, state, totalShots)
 }

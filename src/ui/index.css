@@ -96,6 +96,43 @@ h1 {
   cursor: crosshair;
 }
 
+/* teste 3D: o WebGL fica por baixo e o canvas 2D vira só interface */
+.stage canvas.stage-gl {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  cursor: default;
+}
+
+.renderer-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(16, 12, 26, 0.6);
+  margin-bottom: 10px;
+}
+
+.renderer-toggle button {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.renderer-toggle button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #1a1428;
+}
+
 .stage-overlay {
   position: absolute;
   inset: 0;
