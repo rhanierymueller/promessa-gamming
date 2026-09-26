@@ -374,11 +374,9 @@ export const ShotStage = ({
 
   return (
     <div className={`stage${is3d ? ' stage-3d' : ''}`}>
-      {is3d ? (
-        <canvas ref={glCanvasRef} className="stage-gl" aria-hidden="true" />
-      ) : (
-        <img className="stage-bg" src={backgroundUrl} alt="" />
-      )}
+      {/* o cenário é o mesmo PNG nos dois modos; em 3D o WebGL transparente fica por cima */}
+      <img className="stage-bg" src={backgroundUrl} alt="" />
+      {is3d && <canvas ref={glCanvasRef} className="stage-gl" aria-hidden="true" />}
       <canvas
         ref={canvasRef}
         aria-label="Mini-game de chute ao gol"

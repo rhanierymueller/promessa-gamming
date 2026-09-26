@@ -107,24 +107,6 @@ const ballTexture = (): THREE.CanvasTexture =>
     }
   })
 
-/** Torcida: pontos coloridos sobre fundo escuro, vistos de longe. */
-const crowdTexture = (): THREE.CanvasTexture => {
-  const texture = canvasTexture(512, 128, (ctx) => {
-    ctx.fillStyle = '#26222f'
-    ctx.fillRect(0, 0, 512, 128)
-    // maioria em tons apagados; poucas cores vivas, como bandeiras espalhadas
-    const palette = ['#8e8a96', '#6f6b7a', '#a39d8f', '#5c5866', '#b7b2a6', '#d94b4b', '#f2c94c', '#3c6fd6']
-    for (let i = 0; i < 1500; i++) {
-      const vivid = Math.random() < 0.12
-      ctx.fillStyle = palette[vivid ? 5 + Math.floor(Math.random() * 3) : Math.floor(Math.random() * 5)]
-      ctx.fillRect(Math.random() * 512, Math.random() * 128, 3, 4)
-    }
-  })
-  texture.wrapS = THREE.RepeatWrapping
-  texture.repeat.set(3, 1)
-  return texture
-}
-
 // ─── rede ────────────────────────────────────────────────────────────────────
 
 interface NetPanel {
@@ -181,15 +163,15 @@ export class ShotScene3D {
 
   constructor(canvas: HTMLCanvasElement, colors: SceneColors) {
     this.colors = colors
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+    // fundo transparente: o cenário (torcida, céu) é o PNG do estádio por
+    // baixo do canvas, o mesmo do modo pixel — só o campo e os jogadores são 3D
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+    this.renderer.setClearColor(0x000000, 0)
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFShadowMap
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     this.renderer.toneMappingExposure = 1.05
-
-    this.scene.background = new THREE.Color('#7fb5ea')
-    this.scene.fog = new THREE.Fog('#9cc5ec', 22, 60)
 
     this.camera = new THREE.PerspectiveCamera(50, 9 / 16, 0.1, 120)
 
@@ -209,7 +191,6 @@ export class ShotScene3D {
     this.scene.add(sun)
 
     this.buildPitch()
-    this.buildStands()
     this.net = this.buildGoal()
 
     this.ballMaterial = new THREE.MeshStandardMaterial({
@@ -258,12 +239,16 @@ export class ShotScene3D {
   }
 
   private buildPitch(): void {
+    // o gramado 3D termina logo atrás da rede: dali para cima quem aparece é
+    // o PNG do estádio, com a torcida e o céu que o modo pixel já tinha
+    const far = GOAL_Z - NET_DEPTH_BOTTOM - 1.2
+    const near = 24
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(90, 130),
+      new THREE.PlaneGeometry(70, near - far),
       new THREE.MeshLambertMaterial({ map: grassTexture() }),
     )
     ground.rotation.x = -Math.PI / 2
-    ground.position.z = -20
+    ground.position.z = (near + far) / 2
     ground.receiveShadow = true
     this.scene.add(ground)
 
@@ -288,25 +273,6 @@ export class ShotScene3D {
     spot.rotation.x = -Math.PI / 2
     spot.position.set(0, 0.006, 0)
     this.scene.add(spot)
-  }
-
-  private buildStands(): void {
-    const crowd = new THREE.MeshLambertMaterial({ map: crowdTexture() })
-    const concrete = new THREE.MeshLambertMaterial({ color: '#3a3644' })
-    const stand = (w: number, x: number, z: number, rotY: number): void => {
-      const block = new THREE.Mesh(new THREE.BoxGeometry(w, 7, 6), [
-        concrete, concrete, concrete, concrete, crowd, concrete,
-      ])
-      block.position.set(x, 3.5, z)
-      block.rotation.y = rotY
-      this.scene.add(block)
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(w, 1.1, 0.3), concrete)
-      wall.position.set(0, -2.95, 3.1)
-      block.add(wall)
-    }
-    stand(60, 0, GOAL_Z - 12, 0)
-    stand(70, -30, GOAL_Z + 14, Math.PI / 2)
-    stand(70, 30, GOAL_Z + 14, -Math.PI / 2)
   }
 
   private buildGoal(): readonly NetPanel[] {
@@ -412,7 +378,9 @@ export class ShotScene3D {
       4.6 + (Math.random() - 0.5) * shake,
       ballZ + 9,
     )
-    this.camera.lookAt(0, 0.4, GOAL_Z + 1)
+    // inclinada para a linha do gol cair a ~44% da altura, onde o PNG do
+    // estádio põe o muro da torcida — a trave fica na frente da torcida
+    this.camera.lookAt(0, -0.85, GOAL_Z + 1)
   }
 
   private placeBall(state: StageState): void {
