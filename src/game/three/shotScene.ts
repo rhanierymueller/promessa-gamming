@@ -160,6 +160,8 @@ export class ShotScene3D {
   private readonly observer: ResizeObserver | null
   private colors: SceneColors
   private disposed = false
+  /** Relógio do palco no quadro anterior, para o passo das molas. */
+  private lastTime = -1
 
   constructor(canvas: HTMLCanvasElement, colors: SceneColors) {
     this.colors = colors
@@ -431,7 +433,12 @@ export class ShotScene3D {
     ballShadow.scale.setScalar(1 + lift * 0.35)
   }
 
-  private placeKeeper(state: StageState): void {
+  /** A bola, quando está em cena: é para onde goleiro e batedor olham. */
+  private ballTarget(): THREE.Vector3 | null {
+    return this.ball.visible ? this.ball.position : null
+  }
+
+  private placeKeeper(state: StageState, dt: number): void {
     const placement = keeperPoseFor(state)
     const center = goalCenter(CFG)
     const dir =
@@ -444,11 +451,13 @@ export class ShotScene3D {
             : placement.x < center
               ? -1
               : 1
-    this.keeper.pose(keeperPoseParams(placement.pose, dir, state.time))
+    const target = keeperPoseParams(placement.pose, dir, state.time)
+    this.keeper.lookAt(this.ballTarget())
+    this.keeper.pose(target.pose, dt, state.time, target.stiffness)
     this.keeper.group.position.set(worldX(placement.x), worldY(placement.lift), GOAL_Z + 0.5)
   }
 
-  private placeStriker(state: StageState): void {
+  private placeStriker(state: StageState, dt: number): void {
     const placement = strikerPoseFor(state)
     if (!placement) {
       this.striker.group.visible = false
@@ -457,7 +466,10 @@ export class ShotScene3D {
     this.striker.group.visible = true
     const bounce =
       placement.pose === 'celebrate' ? Math.abs(Math.sin(state.time * 9)) * 0.18 : 0
-    this.striker.pose(strikerPoseParams(placement.pose, state.flightT, state.time))
+    const target = strikerPoseParams(placement.pose, state.flightT, state.time, state.runP)
+    // antes do chute, o olhar vai para a bola; depois, para onde ela foi
+    this.striker.lookAt(this.ballTarget())
+    this.striker.pose(target.pose, dt, state.time, target.stiffness)
     // os deslocamentos laterais foram calibrados para a câmera do pixel; com a
     // câmera atrás do batedor, metade deles basta para ele não cobrir a régua
     const ballX = state.sim ? state.sim.flight.startX : state.ballX
@@ -467,13 +479,15 @@ export class ShotScene3D {
     this.striker.group.rotation.y = placement.pose.startsWith('run') ? 0.35 : 0
   }
 
-  private placeWall(state: StageState): void {
+  private placeWall(state: StageState, dt: number): void {
     const placement = wallPlacementFor(state)
+    const target = wallPoseParams(placement?.jumping ?? false)
     for (const [i, figure] of this.wall.entries()) {
       figure.group.visible = placement !== null
       if (!placement) continue
       const spacing = (i - 1) * 0.52
-      figure.pose(wallPoseParams(placement.jumping))
+      figure.lookAt(this.ballTarget())
+      figure.pose(target.pose, dt, state.time + i * 0.7, target.stiffness)
       figure.group.position.set(
         worldX(placement.centerX) + spacing,
         worldY(placement.lift),
@@ -487,10 +501,15 @@ export class ShotScene3D {
     this.setColors(colors)
     this.placeCamera(state)
     this.updateNet(state)
+    // passo das molas pelo relógio do palco; um relógio novo (outra rodada)
+    // ou o primeiro quadro contam como um quadro normal
+    const dt =
+      this.lastTime >= 0 && state.time >= this.lastTime ? state.time - this.lastTime : 1 / 60
+    this.lastTime = state.time
     this.placeBall(state)
-    this.placeKeeper(state)
-    this.placeStriker(state)
-    this.placeWall(state)
+    this.placeKeeper(state, dt)
+    this.placeStriker(state, dt)
+    this.placeWall(state, dt)
     this.renderer.render(this.scene, this.camera)
   }
 
