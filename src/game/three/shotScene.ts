@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { goalCenter } from '../../engine/shot/config'
-import type { KeeperPose, StrikerPose } from '../assets'
 import { keeperPoseFor, strikerPoseFor, wallPlacementFor } from '../render'
+import { Figure, keeperPoseParams, strikerPoseParams, wallPoseParams } from './figure'
 import { ballFlightPosition, CFG, type StageState } from '../stage'
 
 /**
@@ -125,169 +125,6 @@ const crowdTexture = (): THREE.CanvasTexture => {
   return texture
 }
 
-// ─── boneco articulado ───────────────────────────────────────────────────────
-
-interface FigurePose {
-  /** Tombo lateral do corpo (rad). Positivo cai para a esquerda do boneco. */
-  readonly roll?: number
-  /** Inclinação para a frente (rad). */
-  readonly lean?: number
-  /** 0 em pé, 1 agachado. */
-  readonly crouch?: number
-  /** Braços à frente (rad). */
-  readonly armL?: number
-  readonly armR?: number
-  /** Braços abertos/levantados para o lado (rad, π = braço no alto). */
-  readonly spreadL?: number
-  readonly spreadR?: number
-  /** Pernas à frente (rad). */
-  readonly legL?: number
-  readonly legR?: number
-  /** Cabeça baixa (rad). */
-  readonly head?: number
-}
-
-const limb = (
-  radius: number,
-  length: number,
-  material: THREE.Material,
-): THREE.Group => {
-  const pivot = new THREE.Group()
-  const mesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length, 4, 10), material)
-  mesh.position.y = -length / 2
-  mesh.castShadow = true
-  pivot.add(mesh)
-  return pivot
-}
-
-/**
- * Jogador low-poly: tronco, cabeça, braços e pernas com pivôs. Não tenta ser
- * realista — tenta ler bem a 11 metros, que é onde o lance acontece.
- */
-class Figure {
-  readonly group = new THREE.Group()
-  private readonly body = new THREE.Group()
-  private readonly kit: THREE.MeshLambertMaterial
-  private readonly hipL: THREE.Group
-  private readonly hipR: THREE.Group
-  private readonly shoulderL: THREE.Group
-  private readonly shoulderR: THREE.Group
-  private readonly head: THREE.Group
-
-  constructor(kitColor: string, skin = '#c98a5b', shorts = '#f2f2f2') {
-    this.kit = new THREE.MeshLambertMaterial({ color: kitColor })
-    const skinMat = new THREE.MeshLambertMaterial({ color: skin })
-    const shortsMat = new THREE.MeshLambertMaterial({ color: shorts })
-    const hairMat = new THREE.MeshLambertMaterial({ color: '#2b1d14' })
-
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.42, 4, 12), this.kit)
-    torso.position.y = 0.86
-    torso.castShadow = true
-
-    const trunks = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.15, 0.2, 12), shortsMat)
-    trunks.position.y = 0.58
-    trunks.castShadow = true
-
-    this.head = new THREE.Group()
-    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), skinMat)
-    skull.castShadow = true
-    const hair = new THREE.Mesh(
-      new THREE.SphereGeometry(0.125, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
-      hairMat,
-    )
-    hair.position.y = 0.01
-    this.head.add(skull, hair)
-    this.head.position.y = 1.32
-
-    this.hipL = limb(0.06, 0.46, skinMat)
-    this.hipR = limb(0.06, 0.46, skinMat)
-    this.hipL.position.set(-0.09, 0.5, 0)
-    this.hipR.position.set(0.09, 0.5, 0)
-
-    this.shoulderL = limb(0.045, 0.42, this.kit)
-    this.shoulderR = limb(0.045, 0.42, this.kit)
-    this.shoulderL.position.set(-0.2, 1.06, 0)
-    this.shoulderR.position.set(0.2, 1.06, 0)
-
-    this.body.add(torso, trunks, this.head, this.hipL, this.hipR, this.shoulderL, this.shoulderR)
-    this.group.add(this.body)
-    this.group.scale.setScalar(1.25)
-  }
-
-  setKit(color: string): void {
-    this.kit.color.set(color)
-  }
-
-  pose(p: FigurePose): void {
-    const crouch = p.crouch ?? 0
-    this.body.rotation.set(-(p.lean ?? 0), 0, p.roll ?? 0)
-    this.body.position.y = -crouch * 0.3
-    this.hipL.rotation.x = -(p.legL ?? 0) - crouch * 0.6
-    this.hipR.rotation.x = -(p.legR ?? 0) - crouch * 0.6
-    this.shoulderL.rotation.set(-(p.armL ?? 0), 0, -(p.spreadL ?? 0.1))
-    this.shoulderR.rotation.set(-(p.armR ?? 0), 0, p.spreadR ?? 0.1)
-    this.head.rotation.x = -(p.head ?? 0)
-  }
-}
-
-const keeperFigurePose = (pose: KeeperPose, dir: number, p: number): FigurePose => {
-  const roll = (amount: number): number => dir * amount
-  const reach = (amount: number): FigurePose =>
-    dir > 0 ? { spreadR: amount, spreadL: 0.3 } : { spreadL: amount, spreadR: 0.3 }
-  switch (pose) {
-    case 'crouch':
-    case 'step':
-      return { crouch: 0.6, lean: 0.35, armL: 0.5, armR: 0.5, spreadL: 0.5, spreadR: 0.5 }
-    case 'jump':
-      return { spreadL: 2.9, spreadR: 2.9, legL: 0.3, legR: 0.3 }
-    case 'takeoff':
-      return { roll: roll(0.6), lean: 0.2, ...reach(2.6), legL: 0.2, legR: -0.2 }
-    case 'diveL':
-    case 'diveR':
-      return { roll: roll(1.15), ...reach(2.8), legL: 0.1, legR: -0.1 }
-    case 'fly':
-      return { roll: roll(1.5), ...reach(3), legL: 0.05, legR: -0.05 }
-    case 'punch':
-    case 'tip':
-      return { roll: roll(1.0), spreadL: 2.8, spreadR: 2.8 }
-    case 'saved':
-      return { roll: roll(1.5), armL: 1.4, armR: 1.4, spreadL: 0.4, spreadR: 0.4, legL: 0.4, legR: 0.2 }
-    case 'getup':
-      return { roll: roll(0.45), crouch: 0.9, lean: 0.5, armL: 0.8, armR: 0.8 }
-    case 'sad':
-      return { head: 0.6, lean: 0.15, armL: -0.1, armR: -0.1 }
-    case 'idle':
-    default:
-      return { spreadL: 0.35, spreadR: 0.35, legL: Math.sin(p) * 0.05 }
-  }
-}
-
-const strikerFigurePose = (pose: StrikerPose, flightT: number, time: number): FigurePose => {
-  switch (pose) {
-    case 'run':
-      return { lean: 0.25, legL: 0.7, legR: -0.6, armL: -0.6, armR: 0.7 }
-    case 'run2':
-      return { lean: 0.25, legL: 0.1, legR: -0.1, armL: 0, armR: 0 }
-    case 'run3':
-      return { lean: 0.25, legL: -0.6, legR: 0.7, armL: 0.7, armR: -0.6 }
-    case 'run4':
-      return { lean: 0.25, legL: -0.1, legR: 0.1, armL: 0, armR: 0 }
-    case 'kick': {
-      const swing = Math.min(1, flightT / 0.14)
-      return { lean: -0.1, legR: -0.9 + swing * 1.9, legL: 0.1, armL: 0.6, armR: -0.5, spreadL: 0.5, spreadR: 0.3 }
-    }
-    case 'kick2':
-      return { lean: 0.15, legR: 0.7, legL: -0.1, armL: 0.2, armR: -0.4, spreadL: 0.5, spreadR: 0.3 }
-    case 'celebrate':
-      return { spreadL: 2.8, spreadR: 2.8, head: -0.3, legL: Math.sin(time * 9) * 0.3, legR: -Math.sin(time * 9) * 0.3 }
-    case 'lament':
-      return { armL: 1.9, armR: 1.9, spreadL: 1.6, spreadR: 1.6, head: 0.7, lean: 0.2 }
-    case 'back':
-    default:
-      return { spreadL: 0.2, spreadR: 0.2 }
-  }
-}
-
 // ─── rede ────────────────────────────────────────────────────────────────────
 
 interface NetPanel {
@@ -392,11 +229,11 @@ export class ShotScene3D {
     this.ballShadow.rotation.x = -Math.PI / 2
     this.scene.add(this.ballShadow)
 
-    this.keeper = new Figure(colors.keeper)
+    this.keeper = new Figure({ kit: colors.keeper, gloves: '#f4f4f4', number: '1' })
     this.keeper.group.rotation.y = Math.PI
-    this.striker = new Figure(colors.striker)
+    this.striker = new Figure({ kit: colors.striker, number: '10' })
     this.wall = [0, 1, 2].map(() => {
-      const figure = new Figure(colors.wall)
+      const figure = new Figure({ kit: colors.wall })
       figure.group.rotation.y = Math.PI
       figure.group.visible = false
       this.scene.add(figure.group)
@@ -639,7 +476,7 @@ export class ShotScene3D {
             : placement.x < center
               ? -1
               : 1
-    this.keeper.pose(keeperFigurePose(placement.pose, dir, state.time))
+    this.keeper.pose(keeperPoseParams(placement.pose, dir, state.time))
     this.keeper.group.position.set(worldX(placement.x), worldY(placement.lift), GOAL_Z + 0.5)
   }
 
@@ -652,7 +489,7 @@ export class ShotScene3D {
     this.striker.group.visible = true
     const bounce =
       placement.pose === 'celebrate' ? Math.abs(Math.sin(state.time * 9)) * 0.18 : 0
-    this.striker.pose(strikerFigurePose(placement.pose, state.flightT, state.time))
+    this.striker.pose(strikerPoseParams(placement.pose, state.flightT, state.time))
     // os deslocamentos laterais foram calibrados para a câmera do pixel; com a
     // câmera atrás do batedor, metade deles basta para ele não cobrir a régua
     const ballX = state.sim ? state.sim.flight.startX : state.ballX
@@ -668,7 +505,7 @@ export class ShotScene3D {
       figure.group.visible = placement !== null
       if (!placement) continue
       const spacing = (i - 1) * 0.52
-      figure.pose({ armL: 1.5, armR: 1.5, spreadL: 0.35, spreadR: 0.35, crouch: placement.jumping ? 0 : 0.1, legL: placement.jumping ? 0.25 : 0, legR: placement.jumping ? 0.25 : 0 })
+      figure.pose(wallPoseParams(placement.jumping))
       figure.group.position.set(
         worldX(placement.centerX) + spacing,
         worldY(placement.lift),
