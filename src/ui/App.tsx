@@ -41,6 +41,8 @@ import { stadiumBackgroundUrl } from '../game/assets'
 import { submitLeagueMatch } from '../online/leagues'
 import { MatchScreen } from '../game/MatchScreen'
 import { ShotStage } from '../game/ShotStage'
+import { readRenderer, type StageRenderer } from '../state/render3d'
+import { RendererToggle } from './RendererToggle'
 import { DiceDuelStage } from '../game/DiceDuelStage'
 import {
   applyLibertados,
@@ -339,6 +341,8 @@ export const App = () => {
   // automaticamente — a SENHA nunca é guardada); com ela, Jogar pula o login
   const [hasSession, setHasSession] = useState(false)
   const [screen, setScreen] = useState<Screen>(initialNavigation.screen)
+  // TESTE: pixel (PNG) ou 3D (Three.js) nos lances; a partida lê a mesma flag
+  const [stageRenderer, setStageRenderer] = useState<StageRenderer>(readRenderer)
   const [tab, setTab] = useState<Tab>(initialNavigation.tab)
   const [matchSetup, setMatchSetup] = useState<MatchSetup | null>(null)
   const [isDrawerOpen, setDrawerOpen] = useState(false)
@@ -890,7 +894,10 @@ export const App = () => {
           <h1>O Chute</h1>
         </header>
         <button className="btn btn-secondary btn-back" onClick={() => setScreen('tabs')}>← Voltar</button>
+        <RendererToggle value={stageRenderer} onChange={setStageRenderer} />
         <ShotStage
+          key={stageRenderer}
+          renderer={stageRenderer}
           backgroundUrl={homeStadiumUrl}
           attrs={save.attributes}
           celebrationId={save.celebrationId}
@@ -910,7 +917,10 @@ export const App = () => {
           <h1>Na Barreira</h1>
         </header>
         <button className="btn btn-secondary btn-back" onClick={() => setScreen('tabs')}>← Voltar</button>
+        <RendererToggle value={stageRenderer} onChange={setStageRenderer} />
         <ShotStage
+          key={stageRenderer}
+          renderer={stageRenderer}
           backgroundUrl={homeStadiumUrl}
           freeKick
           /* a barreira veste o próximo rival: o treino já ensaia o jogo que vem */
@@ -962,7 +972,10 @@ export const App = () => {
           <h1>O Paredão</h1>
         </header>
         <button className="btn btn-secondary btn-back" onClick={() => setScreen('tabs')}>← Voltar</button>
+        <RendererToggle value={stageRenderer} onChange={setStageRenderer} />
         <ShotStage
+          key={stageRenderer}
+          renderer={stageRenderer}
           backgroundUrl={homeStadiumUrl}
           shots={10}
           defense={{ skill: 0.3, kitColor: '#8A8F98' }}

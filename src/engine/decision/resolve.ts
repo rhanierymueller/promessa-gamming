@@ -1,4 +1,5 @@
 import { nextFloat, type RngResult, type RngState } from '../rng'
+import { rolarAssistencia } from './assist'
 import type { Jogada } from './catalog'
 import { notaDe } from './nota'
 import { DESFECHOS, type Desfecho, type Modificadores } from './outcomes'
@@ -40,6 +41,33 @@ export const resolverDecisao = (
     value: { desfecho: ultimo, notaDelta: notaDe(jogada.faixa, ultimo) },
     next: roll.next,
   }
+}
+
+export interface Lance {
+  readonly resolucao: Resolucao
+  /** Só faz sentido no desfecho `chance`: o time converteu? Fora dele é sempre false. */
+  readonly assistConvertida: boolean
+}
+
+/**
+ * O lance inteiro: sorteia o desfecho e, se você criou, rola a finalização do
+ * time. É o ÚNICO caminho que resolve uma decisão — a tela e o "Simular até o
+ * fim" chamam esta função. Antes cada um encadeava `resolverDecisao` com
+ * `rolarAssistencia` por conta própria, e dois caminhos que precisam concordar
+ * são um convite para divergirem.
+ */
+export const jogarDecisao = (
+  jogada: Jogada,
+  mod: Modificadores,
+  rng: RngState,
+): RngResult<Lance> => {
+  const passo = resolverDecisao(jogada, mod, rng)
+  if (passo.value.desfecho !== 'chance') {
+    return { value: { resolucao: passo.value, assistConvertida: false }, next: passo.next }
+  }
+  // você criou; agora é o ataque do time contra a defesa deles
+  const assist = rolarAssistencia(mod.edgeAtaque, passo.next)
+  return { value: { resolucao: passo.value, assistConvertida: assist.value }, next: assist.next }
 }
 
 /** O desfecho mexeu no placar? Para quem? */

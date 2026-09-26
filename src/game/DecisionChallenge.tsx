@@ -1,29 +1,32 @@
 import { useMemo, useRef } from 'react'
 import { jogadaLabel } from '../data/narration'
 import { ATTRIBUTE_ABBR, ATTRIBUTE_LABELS } from '../engine/career/attributes'
-import { rolarAssistencia } from '../engine/decision/assist'
+import { chanceDeTerminarEmGol } from '../engine/decision/assist'
 import type { Jogada } from '../engine/decision/catalog'
 import { modificadoresPara, type ContextoDaJogada } from '../engine/decision/context'
 import { sortearJogadas } from '../engine/decision/draw'
-import { resolverDecisao, type Resolucao } from '../engine/decision/resolve'
+import { jogarDecisao, type Resolucao } from '../engine/decision/resolve'
 import { distribuicao } from '../engine/decision/weights'
 import type { RngState } from '../engine/rng'
 
 /**
  * O lance de decisão: cinco jogadas, sem cronômetro, com o risco à vista.
  *
- * Mostra três números por jogada, e os três importam:
- *   GOL  — chance de você marcar
- *   CRIA — chance de deixar o companheiro em condição de marcar
- *   ⚠    — chance de perder a bola e tomar o contra-ataque
+ * Mostra dois números por jogada, e os dois importam:
+ *   GOL    — chance de a jogada terminar em gol do seu time, seu ou do
+ *            companheiro que você deixou na cara do gol
+ *   CONTRA — chance de perder a bola e tomar o contra-ataque
  *
- * CRIA não é enfeite: sem ela, "cavar a falta" aparece com GOL 2% e parece
- * lixo, ninguém escolhe, e as jogadas de armação morrem no catálogo. É o número
- * que torna a build de armador legível.
+ * Um número só para o lado bom da jogada. Quem decide em campo pensa "isso
+ * vira gol?", não "isso vira gol MEU ou dele?" — separar as duas colunas
+ * enchia a tela de porcentagem e deixava a escolha pesada. Mas a chance criada
+ * SÓ vira gol depois da rolagem do elenco, então o número não é `gol + chance`:
+ * é `gol + chance × conversão`, calculado por `chanceDeTerminarEmGol`. Somar as
+ * duas colunas mostrava 36% em "cavar a falta" quando o dado entregava ~16%.
  *
- * A porcentagem exibida sai de `distribuicao`, a MESMA função que
- * `resolverDecisao` consome para sortear. Não existe caminho onde o número da
- * tela difira do número do dado.
+ * A porcentagem exibida sai de `distribuicao` e de `chanceDeConverter`, as
+ * MESMAS funções que `jogarDecisao` consome para sortear. Não existe caminho
+ * onde o número da tela difira do número do dado.
  */
 
 export interface DecisionOutcome {
@@ -47,10 +50,14 @@ export const DecisionChallenge = ({ intro, rng, contexto, onResolved }: Decision
 
   const opcoes = useMemo(
     () =>
-      menu.value.map((jogada) => ({
-        jogada,
-        dist: distribuicao(jogada, modificadoresPara(jogada, contexto)),
-      })),
+      menu.value.map((jogada) => {
+        const dist = distribuicao(jogada, modificadoresPara(jogada, contexto))
+        return {
+          jogada,
+          gol: pct(chanceDeTerminarEmGol(dist, contexto.edges.attack)),
+          risco: pct(dist.contra),
+        }
+      }),
     [menu, contexto],
   )
 
@@ -63,17 +70,8 @@ export const DecisionChallenge = ({ intro, rng, contexto, onResolved }: Decision
     if (resolvidoRef.current) return
     resolvidoRef.current = true
 
-    const passo = resolverDecisao(jogada, modificadoresPara(jogada, contexto), menu.next)
-    if (passo.value.desfecho !== 'chance') {
-      onResolvedRef.current({ jogada, resolucao: passo.value, assistConvertida: false }, passo.next)
-      return
-    }
-    // você criou; agora é o ataque do time contra a defesa deles
-    const assist = rolarAssistencia(contexto.edges.attack, passo.next)
-    onResolvedRef.current(
-      { jogada, resolucao: passo.value, assistConvertida: assist.value },
-      assist.next,
-    )
+    const lance = jogarDecisao(jogada, modificadoresPara(jogada, contexto), menu.next)
+    onResolvedRef.current({ jogada, ...lance.value }, lance.next)
   }
 
   return (
@@ -94,16 +92,8 @@ export const DecisionChallenge = ({ intro, rng, contexto, onResolved }: Decision
         </span>
       </div>
       <div className="decision-options">
-        {opcoes.map(({ jogada, dist }) => {
+        {opcoes.map(({ jogada, gol, risco }) => {
           const label = jogadaLabel(jogada.id)
-          /*
-           * Um número só para o lado bom da jogada. Quem decide em campo pensa
-           * "isso vira gol?", não "isso vira gol MEU ou dele?" — separar as
-           * duas colunas enchia a tela de porcentagem e deixava a escolha
-           * pesada. Quem finaliza continua sendo sorteado no desfecho.
-           */
-          const gol = pct(dist.gol + dist.chance)
-          const risco = pct(dist.contra)
           return (
             <button
               key={jogada.id}

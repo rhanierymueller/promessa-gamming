@@ -63,11 +63,32 @@ export const NEUTRO: Modificadores = {
  */
 const CONTRA_PISO = 0.5
 
+const clamp = (valor: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, valor))
+
 /** 0 no nível mínimo, 1 no máximo. Nível fora da faixa é aparado. */
 const fatorNivel = (nivel: number): number =>
-  (Math.min(NIVEL_MAX, Math.max(NIVEL_MIN, nivel)) - NIVEL_MIN) / (NIVEL_MAX - NIVEL_MIN)
+  (clamp(nivel, NIVEL_MIN, NIVEL_MAX) - NIVEL_MIN) / (NIVEL_MAX - NIVEL_MIN)
 
-const pesosModificados = (pesos: Pesos, mod: Modificadores): Pesos => {
+/**
+ * Apara os modificadores contínuos à faixa que `Modificadores` documenta.
+ *
+ * Os produtores (setor, momentum, travamento) já aparam do lado deles, mas a
+ * distribuição é a ÚNICA fonte de probabilidade do sistema e não pode depender
+ * disso: um travamento de 5 ou uma vantagem de −3 virariam peso negativo, e um
+ * peso negativo quebra a soma 1, a monotonicidade e a honestidade de uma vez.
+ * Fora da faixa, o valor vale o extremo — a mesma regra do nível.
+ */
+const aparado = (mod: Modificadores): Modificadores => ({
+  ...mod,
+  momentum: clamp(mod.momentum, -0.5, 1),
+  edgeAtaque: clamp(mod.edgeAtaque, -1, 1),
+  edgeDefesa: clamp(mod.edgeDefesa, -1, 1),
+  travamento: clamp(mod.travamento, 0, 1),
+})
+
+const pesosModificados = (pesos: Pesos, bruto: Modificadores): Pesos => {
+  const mod = aparado(bruto)
   const f = fatorNivel(mod.nivel)
   const bom = (1 + f * GANHO_BOM) * mod.bonusBom
   const ruim = 1 - f * CORTE_RUIM

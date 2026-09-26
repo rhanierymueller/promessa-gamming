@@ -10,7 +10,9 @@ import { applyAppearance } from './appearance'
 import { BACKGROUND_URL, loadGameSprites, tintSprite, type GameSprites } from './assets'
 import { initAudio, playStageEvent } from './audio'
 import { mancheteFor, type MancheteMode } from './manchete'
-import { drawStage, type WallSprites, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './render'
+import { readRenderer, type StageRenderer } from '../state/render3d'
+import { drawOverlay, drawStage, type WallSprites, LOGICAL_HEIGHT, LOGICAL_WIDTH } from './render'
+import type { SceneColors, ShotScene3D } from './three/shotScene'
 import {
   beginRound,
   createDefenseStage,
@@ -63,8 +65,19 @@ interface ShotStageProps {
   readonly perks?: readonly PerkId[]
   /** Contexto do lance para perks situacionais (matador, craque de copa). */
   readonly perkContext?: ShotPerkContext
+  /**
+   * TESTE: `3d` desenha o lance com Three.js em vez dos PNGs. O motor e o
+   * gesto são os mesmos; só a camada de desenho muda. Sem valor, segue a
+   * flag persistida (`readRenderer`).
+   */
+  readonly renderer?: StageRenderer
   readonly onRoundEnd?: (summary: RoundSummary) => void
 }
+
+/** Uniforme padrão do craque quando o clube não define cor (tint amarelo do pixel). */
+const DEFAULT_KIT = '#FFD23F'
+/** Goleiro rival: cor fixa que contrasta com a maioria dos uniformes. */
+const RIVAL_KEEPER_KIT = '#F28C28'
 
 const mancheteModeFor = (isKeeper: boolean, isFreeKick: boolean): MancheteMode =>
   isKeeper ? 'goleiro' : isFreeKick ? 'falta' : 'finalizacao'
@@ -84,9 +97,19 @@ export const ShotStage = ({
   kitColor,
   perks = [],
   perkContext,
+  renderer,
   onRoundEnd,
 }: ShotStageProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // decidido uma vez por rodada: trocar de renderizador remonta o palco
+  const [is3d] = useState(() => (renderer ?? readRenderer()) === '3d')
+  const glCanvasRef = useRef<HTMLCanvasElement>(null)
+  const sceneRef = useRef<ShotScene3D | null>(null)
+  const sceneColorsRef = useRef<SceneColors>({
+    striker: defense ? defense.kitColor : kitColor ?? DEFAULT_KIT,
+    keeper: defense ? kitColor ?? DEFAULT_KIT : RIVAL_KEEPER_KIT,
+    wall: wallColor ?? '#8A8F98',
+  })
   const stateRef = useRef<StageState>(
     defense
       ? createDefenseStage(Date.now() & 0xffffffff, defense.skill, attrs, shots, perks)
@@ -260,12 +283,37 @@ export const ShotStage = ({
         !defense && celebration?.img
           ? { ...sprites, striker: { ...striker, celebrate: celebration } }
           : { ...sprites, striker }
-      drawStage(ctx, next, drawSprites, dragRef.current, next.totalShots, wallSpritesRef.current)
+      if (is3d) {
+        // a cena 3D cuida do campo e dos jogadores; o canvas 2D vira só interface
+        sceneRef.current?.render(next, sceneColorsRef.current)
+        drawOverlay(ctx, next, dragRef.current, next.totalShots)
+      } else {
+        drawStage(ctx, next, drawSprites, dragRef.current, next.totalShots, wallSpritesRef.current)
+      }
       rafId = requestAnimationFrame(loop)
     }
     rafId = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(rafId)
   }, [])
+
+  // Three.js entra por import dinâmico: quem joga em pixel não baixa a lib
+  useEffect(() => {
+    if (!is3d) return
+    const canvas = glCanvasRef.current
+    if (!canvas) return
+    let cancelled = false
+    let scene: ShotScene3D | null = null
+    import('./three/shotScene').then(({ ShotScene3D }) => {
+      if (cancelled) return
+      scene = new ShotScene3D(canvas, sceneColorsRef.current)
+      sceneRef.current = scene
+    })
+    return () => {
+      cancelled = true
+      sceneRef.current = null
+      scene?.dispose()
+    }
+  }, [is3d])
 
   const toCanvas = (event: React.PointerEvent<HTMLCanvasElement>): Vec2 => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -325,8 +373,10 @@ export const ShotStage = ({
   }
 
   return (
-    <div className="stage">
+    <div className={`stage${is3d ? ' stage-3d' : ''}`}>
+      {/* o cenário é o mesmo PNG nos dois modos; em 3D o WebGL transparente fica por cima */}
       <img className="stage-bg" src={backgroundUrl} alt="" />
+      {is3d && <canvas ref={glCanvasRef} className="stage-gl" aria-hidden="true" />}
       <canvas
         ref={canvasRef}
         aria-label="Mini-game de chute ao gol"

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CATALOGO } from './catalog'
 import { DESFECHOS, type Modificadores } from './outcomes'
-import { NEUTRO, distribuicao } from './weights'
+import { NEUTRO, distribuicao, saldoEsperado } from './weights'
 
 const soma = (d: Record<string, number>): number =>
   DESFECHOS.reduce((acc, desfecho) => acc + d[desfecho], 0)
@@ -138,6 +138,31 @@ describe('distribuição de desfechos', () => {
     const sem = distribuicao(ousada, protegido).contra
     const com = distribuicao(ousada, { ...protegido, cortaContra: 0.75 }).contra
     expect(sem - com).toBeGreaterThan(0.01)
+  })
+
+  it('apara momentum, setor e travamento fora da faixa em vez de gerar peso negativo', () => {
+    const jogada = CATALOGO[0]
+    const absurdo = { ...NEUTRO, momentum: 40, edgeAtaque: -9, edgeDefesa: 9, travamento: 5 }
+    const d = distribuicao(jogada, absurdo)
+    for (const desfecho of DESFECHOS) {
+      expect(Number.isFinite(d[desfecho]), desfecho).toBe(true)
+      expect(d[desfecho], desfecho).toBeGreaterThan(0)
+      expect(d[desfecho], desfecho).toBeLessThan(1)
+    }
+    expect(soma(d)).toBeCloseTo(1, 12)
+    // fora da faixa vale o extremo: é a mesma regra do nível
+    expect(d).toEqual(
+      distribuicao(jogada, { ...NEUTRO, momentum: 1, edgeAtaque: -1, edgeDefesa: 1, travamento: 1 }),
+    )
+    expect(distribuicao(jogada, { ...NEUTRO, momentum: -3, travamento: -2 })).toEqual(
+      distribuicao(jogada, { ...NEUTRO, momentum: -0.5, travamento: 0 }),
+    )
+  })
+
+  it('o saldo esperado é gol menos contra', () => {
+    const jogada = CATALOGO[0]
+    const d = distribuicao(jogada, comNivel(5))
+    expect(saldoEsperado(jogada, comNivel(5))).toBeCloseTo(d.gol - d.contra, 12)
   })
 
   it('a jogada ousada tem saldo pior para o novato e melhor para o craque', () => {
